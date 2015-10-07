@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf8 -*-
 
 from __future__ import division
@@ -14,7 +14,6 @@ class DEL: pass
 et = etcd.Client()
 
 APPNAME="etcd-tree"
-APPVERSION="0.1"
 
 class AssocUI(object):
 	tree_index = None
@@ -24,8 +23,11 @@ class AssocUI(object):
 		#self._init_acctcache()
 
 		#gnome.init(APPNAME, APPVERSION)
+		from pkg_resources import Requirement, resource_filename
+		filename = resource_filename(Requirement.parse("moatree"),os.path.join("viewer",APPNAME+".glade"))
+
 		self.widgets = Gtk.Builder()
-		self.widgets.add_from_file(APPNAME+".glade")
+		self.widgets.add_from_file(filename)
 
 		d = AssocUI.__dict__.copy()
 		for k in d.keys():
@@ -48,7 +50,6 @@ class AssocUI(object):
 			pass # revert?
 		else:
 			v.get_column(colnr).set_sort_column_id(0)
-			import pdb;pdb.set_trace()
 			m.set_sort_column_id(colnr,Gtk.SortType.ASCENDING)
 
 	def init_tree(self):
@@ -139,7 +140,7 @@ class AssocUI(object):
 			na = nr['key'][nr['key'].rindex('/')+1:]
 			v = nr.get('value','-dir-')
 			p = m.append(it,row=[na,v])
-			print("add",na,v,str(m.get_path(p)))
+			#print("add",na,v,str(m.get_path(p)))
 			d[na] = nd = {'_node':p, '_value':v}
 			if nr.get('dir',False):
 				for r in nr['nodes']:
