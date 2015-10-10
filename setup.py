@@ -59,14 +59,14 @@ to know how to talk to everything. (You can still do that, though.)
     author = 'Matthias Urlichs',
     author_email = 'matthias@urlichs.de',
     url = 'https://github.com/m-o-a-t/moatree',
-	download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=moatree.git;a=snapshot;h=master',
+    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=moatree.git;a=snapshot;h=master',
     license = 'GPL',
 
-	zip_safe = False, 
+    zip_safe = False, 
     packages = ('moatree',),
-	package_data = { '': ['*.glade']},
+    package_data = { '': ['*.glade']},
     scripts = ('viewer/etcd-tree.py',),
-	install_requires = """\
+    install_requires = """\
 gi >= 3.12
 """,
     )
