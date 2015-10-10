@@ -52,7 +52,7 @@ et = Client(**args)
 for r in et.eternal_watch(opts.root, recursive=True):
 	if r.dir:
 		print(r.action,r.key[len(opts.root):])
-	elif r.action != 'delete' and hasattr(r,'value'):
+	elif r.action not in {'delete','expire'} and hasattr(r,'value'):
 		print(r.action,r.key[len(opts.root):],r.value)
 	else:
 		print(r.action,r.key[len(opts.root):],r._prev_node.value)
