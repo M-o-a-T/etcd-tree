@@ -19,11 +19,22 @@ object will not be visible immediately. You will, however, get an exception
 if it could not be applied to the etcd tree. All changes will include etcd's 
 modification index, thus overwriting unrelated changes won't happen.
 
+-----
+Tools
+-----
+
+There's a little GTK program to show your etcd tree in real time.
+You can also monitor things from the command line.
+
+A couple of scripts dump etcd data to YAML, and vice versa.
+
 -------
 Testing
 -------
 
 I'm aiming for 100% test coverage.
+
+Yes, for real.
 
 Helper scripts
 --------------
