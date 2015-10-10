@@ -2,3 +2,6 @@
 __pycache__
 *.swp
 *~
+/test.cfg
+/build
+/.coverage
