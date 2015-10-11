@@ -334,6 +334,7 @@ class mtRoot(mtDir):
 	def __init__(self,conn,watcher, **kw):
 		self._conn = conn
 		self._watcher = watcher
+		self._path = watcher.key if watcher else ''
 		super(mtRoot,self).__init__(**kw)
 
 	def __repr__(self):

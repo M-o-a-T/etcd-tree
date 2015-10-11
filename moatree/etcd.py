@@ -115,8 +115,7 @@ class EtcClient(object):
 		if res:
 			return res
 			
-		key = self._extkey(key)
-		res = self.client.read(key, recursive=immediate)
+		res = self.client.read(self._extkey(key), recursive=immediate)
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
 		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex)
 
@@ -154,13 +153,14 @@ class EtcWatcher(object):
 		Runs a watcher on a (sub)tree.
 
 		@conn: the EtcClient to monitor.
-		@key: the (absolute) path to monitor.
+		@key: the path to monitor, relative to conn.
 		@seq: etcd_index to start monitoring from.
 		"""
 	writer = None
 	def __init__(self, conn,key,seq):
 		self.conn = conn
 		self.key = key
+		self.extkey = self.conn._extkey(key)
 		self.q = Queue()
 		self.last_read = seq
 		self.last_seen = seq
@@ -223,9 +223,10 @@ def _watch_read(self,last_read,**kw):
 		"""
 	logger.info("READER started")
 	conn = Client(**kw)
+	key = self.extkey
 	try:
 		while True:
-			for x in conn.eternal_watch(self.key, index=self.last_read+1, recursive=True):
+			for x in conn.eternal_watch(key, index=self.last_read+1, recursive=True):
 				logger.debug("IN: %s",repr(x.__dict__))
 				try:
 					self.q.put(x)
@@ -269,8 +270,8 @@ def _watch_write(self):
 
 			try:
 				logger.debug("RUN: %s",repr(x.__dict__))
-				assert x.key.startswith(self.key), (x.key,self.key, x.modifiedIndex)
-				key = x.key[len(self.key):]
+				assert x.key.startswith(self.extkey), (x.key,self.key, x.modifiedIndex)
+				key = x.key[len(self.extkey):]
 				assert key[0] == '/'
 				key = tuple(k for k in key.split('/') if k != '')
 				if x.action in {'delete','expire'}:
