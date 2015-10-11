@@ -1,6 +1,7 @@
 /etctree.egg-info/
 __pycache__
 *.swp
+*.pyc
 *~
 /test.cfg
 /build
