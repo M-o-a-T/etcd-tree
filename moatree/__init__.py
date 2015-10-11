@@ -33,3 +33,5 @@ VERSION = "0.1"
 
 TESTING = "MOAT_TEST" in os.environ
 
+import warnings
+warnings.filterwarnings('ignore', category=ResourceWarning)
