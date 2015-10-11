@@ -39,7 +39,7 @@ class EtcClient(object):
 		self.client = Client(**args)
 
 	def __del__(self):
-		self.client.close()
+		del self.client
 
 	def _extkey(self, key):
 		key = str(key)
