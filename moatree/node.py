@@ -73,7 +73,7 @@ class mtBase(object):
 			self._root = weakref.ref(self)
 		self._seq = seq
 	
-	def __repr__(self):
+	def __repr__(self): ## pragma: no cover
 		try:
 			return "<{} @{}>".format(self.__class__.__name__,self._path)
 		except Exception as e:
@@ -98,7 +98,7 @@ class mtBase(object):
 		self._parent()._ext_del_node(self)
 		
 	@classmethod
-	def _x_add(cls, root,path, data):
+	def _x_add(cls, root,path, data): # pragma: no cover
 		raise NotImplementedError
 
 class mtValue(mtBase):
@@ -167,12 +167,22 @@ class mtDir(mtBase, metaclass=mtTyped):
 	_types = None
 	_final = None
 
-	def __init__(self, **kw):
+	def __init__(self, value=None, **kw):
+		assert value is None
 		super().__init__(**kw)
 		self._data = {}
 
 	def __iter__(self):
 		return self._data.items()
+
+	@classmethod
+	def _load(cls,value):
+		assert value is None
+		return None
+	@classmethod
+	def _dump(cls,value):
+		assert value is None
+		return None
 
 	def __getattr__(self, key):
 		if key[0] == '_':
@@ -183,9 +193,24 @@ class mtDir(mtBase, metaclass=mtTyped):
 		return res
 
 	@classmethod
-	def _register(cls, name, sub):
-		"""Teach this node that a sub-node named @name is to be of type @sub"""
-		cls._types[name] = sub
+	def _register(cls, name, sub=None):
+		"""\
+			Teach this node that a sub-node named @name is to be of type @sub.
+			Can be used as a class decorator:
+				class myRoot(mtRoot):
+					pass
+				@myRoot._register("con")
+				class myConn(mtDir):
+					pass
+				myConn._register("port",mtInteger)
+			"""
+		def defi(sub):
+			cls._types[name] = sub
+			return sub
+		if sub is None:
+			return defi
+		else:
+			return defi(sub)
 
 	def __setattr__(self, key,val):
 		"""\
@@ -224,7 +249,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 			return False
 		return self._data == other._data
 
-	def _ext_lookup(self, name, cls=None, dir=None, **kw):
+	def _ext_lookup(self, name, cls=None, dir=None, value=None, **kw):
 		"""\
 			Do a node lookup.
 			
@@ -257,7 +282,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 					return
 				cls = mtDir if dir else mtValue
 
-		obj = cls(parent=self,name=name, **kw)
+		obj = cls(parent=self,name=name, value=cls._load(value), **kw)
 		self._data[name] = obj
 		return obj
 	
@@ -322,5 +347,7 @@ class mtRoot(mtDir):
 	def __del__(self):
 		self._kill()
 	def _kill(self):
-		self._watcher._kill()
+		w,self._watcher = self._watcher,None
+		if w is not None:
+			w._kill()
 	

@@ -26,28 +26,35 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import pytest
 import etcd
 from dabroker.util import attrdict
-from moatree.node import mtRoot
+from moatree.node import mtRoot,mtDir,mtInteger
 
 from .util import cfg,client
 
 def test_basic_watch(client):
+    class rRoot(mtRoot):
+        pass
+    @rRoot._register("two")
+    class rTwo(mtDir):
+        pass
+    rTwo._register("vier",mtInteger)
     d=attrdict
     t = client
-    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf"),x="y")
+    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="5"),x="y")
     client._f(d1)
     w = client.tree("/two",mtRoot, immediate=False, static=True)
     assert w.zwei.und == "drei"
-    assert w.vier == "fünf"
+    assert w.vier == "5"
     with pytest.raises(KeyError):
         w.x
     w2 = client.tree("/two",mtRoot, immediate=True, static=True)
     assert w2.zwei.und == "drei"
+    assert w.vier == "5"
     assert w == w2
     client._f(d(two=d(sechs="sieben")))
-    w3 = client.tree("/two",mtRoot, static=True)
-    assert w3.vier == "fünf"
-    assert w3.sechs=="sieben"
-    assert not w3 == w2
+    w3 = client.tree("/",rRoot, static=True)
+    assert w3.two.vier == 5
+    assert w3.two.sechs=="sieben"
+    assert not w3.two == w2
 
 def test_update_watch(client):
     d=attrdict
