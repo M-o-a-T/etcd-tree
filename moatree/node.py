@@ -135,9 +135,13 @@ class mtValue(mtBase):
 	def _ext_update(self, value, seq=None):
 		"""\
 			An updated value arrives.
+			(It may be late.)
 			"""
+		if seq and self._seq and self._seq >= seq: # pragma: no cover
+			return
 		self._value = self._load(value)
-		self._seq = seq
+		if seq:
+			self._seq = seq
 		self._updated()
 
 mtString = mtValue

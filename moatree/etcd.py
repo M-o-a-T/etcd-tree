@@ -295,7 +295,7 @@ def _watch_write(self):
 				else:
 					for n,k in enumerate(key):
 						r = r._ext_lookup(k, dir=n<len(key)-1)
-					r._ext_update(x.value)
+					r._ext_update(x.value, seq=x.modifiedIndex)
 
 				with self.uptodate:
 					self.last_seen = x.modifiedIndex
