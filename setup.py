@@ -61,7 +61,7 @@ with bi-directional updates.
     zip_safe = False, 
     packages = ('etctree',),
     package_data = { '': ['*.glade']},
-    scripts = ('viewer/etcd-tree.py',),
+    scripts = ('viewer/etcd-tree',),
     install_requires = """\
 gi >= 3.12
 etcd >= 0.4.2
