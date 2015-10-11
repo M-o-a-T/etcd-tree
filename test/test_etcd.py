@@ -26,6 +26,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import pytest
 import etcd
 from dabroker.util import attrdict
+from moatree.node import mtDir
 
 from .util import cfg
 
@@ -109,6 +110,23 @@ def test_feeding(client):
     client._f("nix",subtree="/two/zero")
     assert client._d() == d(two=d(zero="nix"),one=d(a="b"),x="y")
 
-
+def test_watch(client):
+    d=attrdict
+    t = client
+    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf"),x="y")
+    client._f(d1)
+    w = client.watch("/two",mtDir, immediate=False)
+    assert w.zwei.und == "drei"
+    assert w.vier == "fünf"
+    with pytest.raises(KeyError):
+        w.x
+    w2 = client.watch("/two",mtDir, immediate=True)
+    assert w2.zwei.und == "drei"
+    assert w == w2
+    client._f(d(two=d(sechs="sieben")))
+    w3 = client.watch("/two",mtDir)
+    assert w3.vier == "fünf"
+    assert w3.sechs=="sieben"
+    assert not w3 == w2
 
 

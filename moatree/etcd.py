@@ -28,6 +28,8 @@ This is the etcd interface.
 """
 
 from etcd.client import Client
+from .node import mtBase,mtValue,mtDir
+import weakref
 
 class _NOTGIVEN: pass
 
@@ -81,7 +83,39 @@ class EtcClient(object):
 			If @immediate is set, run a recursive query and grab everything now.
 			Otherwise fill the tree in the background.
 			"""
-		root = cls()
+
+		key = self._extkey(key)
+		if immediate:
+			res = self.client.read(key, recursive=True)
+			root = cls(parent=self, name=None, seq=res.modifiedIndex)
+			def d_add(tree, res):
+				for t in tree:
+					n = t['key']
+					n = n[n.rindex('/')+1:]
+					if t.get('dir',False):
+						sd = res._ext_lookup(n, dir=True)
+						d_add(t['nodes'],sd)
+					else:
+						res._ext_lookup(n, dir=False, value=t['value'])
+				res._set_up()
+			d_add(res._children,root)
+		else:
+			res = self.client.read(key)
+			root = cls(parent=self, name=None, seq=res.modifiedIndex)
+			def d_get(node, res):
+				for c in res.children:
+					n = c.key
+					n = n[n.rindex('/')+1:]
+					if c.dir:
+						sd = node._ext_lookup(n,dir=True)
+						d_get(sd,self.client.read(c.key))
+					else:
+						node._ext_lookup(n,dir=False, value=c.value)
+				node._set_up()
+			d_get(root, res)
+
+
+
 		return root
 		
 
