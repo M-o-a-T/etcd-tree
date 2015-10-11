@@ -126,7 +126,7 @@ class mtValue(mtBase):
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		self._root()._conn.write(self._path,self._dump(_value), index=self._seq)
+		self._root()._conn.set(self._path,self._dump(value), index=self._seq)
 	def _del_value(self):
 		self._root()._conn.delete(self._path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
@@ -216,8 +216,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 			res = self._data[key]
 		except KeyError:
 			# new node
-			t = self.types.get(key, mtDir if not isinstance(t,dict) else mtValue)
-			self._root().conn.write(self._path+'/'+key, t._dump(_value), prevExist=False)
+			t = self._types.get(key, mtDir if isinstance(val,dict) else mtValue)
+			self._root()._conn.set(self._path+'/'+key, t._dump(val), prevExist=False)
 		else:
 			if isinstance(res,mtValue):
 				res.value = val
