@@ -189,6 +189,9 @@ class mtDir(mtBase, metaclass=mtTyped):
 			return res.value
 		return res
 
+	def __contains__(self,key):
+		return key in self._data
+
 	@classmethod
 	def _register(cls, name, sub=None):
 		"""\
