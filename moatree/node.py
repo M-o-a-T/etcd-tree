@@ -292,14 +292,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 		for v in self._data.values():
 			v._freeze()
 
-	def _all_attrs(self):
-		"""Called by etcd after all non-directory nodes have been filled"""
-		pass
-
-	def _all_nodes(self):
-		"""Called by etcd after all directory nodes have been filled also"""
-		pass
-
 	# for easier access to variably-named nodes
 	__getitem__ = __getattr__
 	__setitem__ = __setattr__
