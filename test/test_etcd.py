@@ -32,7 +32,7 @@ from .util import cfg
 @pytest.fixture
 def client():
     """An interface to a clean etcd subtree"""
-    kw = cfg.config.test.etcd.copy()
+    kw = cfg.config.etcd.copy()
     r = kw.pop('root','/moatree/test')
 
     from moatree.etcd import EtcClient
@@ -57,7 +57,7 @@ def test_basic_etcd(client):
     pass
 
 def test_invalid_etcd():
-    kw = cfg.config.test.etcd.copy()
+    kw = cfg.config.etcd.copy()
     r = kw.pop('root','/moatree/test')
     from moatree.etcd import EtcClient
     with pytest.raises(AssertionError):

@@ -1,6 +1,6 @@
 config:
-  test:
-    etcd:
-      host: localhost
-      port: 2379
-      root: /moatree/test
+  etcd:
+    host: localhost
+    port: 2379
+    root: /test/moatree
+  config: /config

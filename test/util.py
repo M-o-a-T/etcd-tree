@@ -59,7 +59,7 @@ if __name__ == "__main__":
     # quick&dirty test
     cfg = load_cfg("test.cfg.sample")
     d = attrdict
-    d = d(config=d(test=d(etcd=d(host='localhost',port=2379,root='/moatree/test'))))
+    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/moatree'),config='/config'))
     assert cfg == d, (cfg,d)
 else:
     cfg = load_cfg(os.environ.get('MOATREE_TEST_CFG',"test.cfg"))
