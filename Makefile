@@ -26,7 +26,7 @@ install:
 
 test: all test.cfg
 	$(PYTHON) test/util.py
-	py.test-3 --cov-report term-missing --cov=moatree test/
+	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=moatree test/
 
 test.cfg:
 	@echo "You need to create a configuration file for testing." >&2
