@@ -78,7 +78,9 @@ def test_get_set(client):
         client.set("/foo","bar",prev="guzk")
     with pytest.raises(etcd.EtcdCompareFailed):
         client.set("/foo","bar",index=v.etcd_index+100)
-    client.set("/foo","bar",prev="dud")
+    x=client.set("/foo","bari",prev="dud")
+    assert client._d() == d(foo="bari",what="ever")
+    client.set("/foo","bar",index=x.modifiedIndex)
     assert client._d() == d(foo="bar",what="ever")
     assert client.get("/foo").value == "bar"
     v=client.read("/foo")
