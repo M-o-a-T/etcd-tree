@@ -66,7 +66,7 @@ def test_update_watch(client):
     w = client.tree("/two",mtRoot, immediate=False, static=False)
     assert w.sechs=="sieben"
     assert w.acht.neun=="zehn"
-    d2=d(two=d(zwei=d(und="mehr"),vier=d(oder="fünfe")))
+    d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
     mod = client._f(d2,delete=True)
     w._watcher.sync(mod)
     assert w.zwei.und=="mehr"
@@ -75,4 +75,18 @@ def test_update_watch(client):
         w.sechs
     with pytest.raises(KeyError):
         w.acht
+    with pytest.raises(NotImplementedError): # TODO
+        del w.vier
+    del w.vier.oder
+    w._watcher.sync()
+    w.vier
+    w.vier.auch
+    with pytest.raises(KeyError):
+        w.vier.oder
+    del w.vier.auch
+    w._watcher.sync()
+    with pytest.raises(KeyError):
+        w.vier.auch
+
+
     
