@@ -177,12 +177,12 @@ class mtDir(mtBase, metaclass=mtTyped):
 		assert value is None
 		return None
 	@classmethod
-	def _dump(cls,value):
+	def _dump(cls,value): # pragma: no cover
 		assert value is None
 		return None
 
 	def __getattr__(self, key):
-		if key[0] == '_':
+		if key[0] == '_': # pragma: no cover
 			return super(mtDir,self).__getattr__(key)
 		res = self._data[key]
 		if isinstance(res,mtValue):
@@ -272,16 +272,16 @@ class mtDir(mtBase, metaclass=mtTyped):
 		assert name != ""
 		obj = self._data.get(name,None)
 		if obj is not None:
-			if cls is not None:
+			if cls is not None: # pragma: no cover
 				assert isinstance(obj,cls)
 			if dir is not None:
 				assert isinstance(obj,mtDir if dir else mtValue)
 			return obj
 
-		if self._frozen:
+		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path+'/'+name)
 		if cls is None:
-			if dir is None:
+			if dir is None: # pragma: no cover
 				raise AttributeError(name)
 			cls = self._types.get(name, None)
 			if cls is None:
@@ -330,7 +330,7 @@ class mtRoot(mtDir):
 		self._path = watcher.key if watcher else ''
 		super(mtRoot,self).__init__(**kw)
 
-	def __repr__(self):
+	def __repr__(self): # pragma: no cover
 		try:
 			return "<{} @{}>".format(self.__class__.__name__,self._conn.root)
 		except Exception as e:
