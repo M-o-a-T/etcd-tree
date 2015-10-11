@@ -97,10 +97,6 @@ class mtBase(object):
 	def _ext_delete(self, seq=None):
 		self._parent()._ext_del_node(self)
 		
-	@classmethod
-	def _x_add(cls, root,path, data): # pragma: no cover
-		raise NotImplementedError
-
 class mtValue(mtBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
@@ -142,10 +138,6 @@ class mtValue(mtBase):
 		self._value = self._load(value)
 		self._seq = seq
 		self._updated()
-
-	@classmethod
-	def _x_add(cls, root,path, data):
-		root.conn.set(path, cls._dump(data))
 
 mtString = mtValue
 class mtInteger(mtValue):
@@ -298,14 +290,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 		super(mtDir,self)._freeze()
 		for v in self._data.values():
 			v._freeze()
-
-	@classmethod
-	def _x_add(cls, root,path, data):
-		for k,v in data.items():
-			m = self._types.get(name, None)
-			if m is None:
-				m = mtDir if isinstance(data,dict) else mtValue
-			m._x_add(self._root(), self._path+'/'+k,v)
 
 	def _all_attrs(self):
 		"""Called by etcd after all non-directory nodes have been filled"""
