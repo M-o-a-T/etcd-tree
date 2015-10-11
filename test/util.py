@@ -77,7 +77,18 @@ def load_cfg(cfg):
         raise RuntimeError("Config file '%s' not found" % (cfg,))
 
     with open(cfg) as f:
-        return safe_load(f)
+        cfg = safe_load(f)
+
+    kw = cfg.config.etcd.copy()
+    r = kw.pop('root')
+
+    from etcd.client import Client
+    c = Client(**kw)
+    try:
+        c.delete(r, recursive=True)
+    except etcd.EtcdKeyNotFound:
+        pass
+    return cfg
 
 
 if __name__ == "__main__":
