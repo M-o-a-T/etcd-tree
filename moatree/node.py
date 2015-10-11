@@ -165,7 +165,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 		self._data = {}
 
 	def __iter__(self):
-		return self._data.items()
+		return iter(self._data.items())
 
 	@classmethod
 	def _load(cls,value):
