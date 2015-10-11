@@ -28,32 +28,8 @@ import etcd
 from dabroker.util import attrdict
 from moatree.node import mtDir
 
-from .util import cfg
+from .util import cfg,client
 
-@pytest.fixture
-def client():
-    """An interface to a clean etcd subtree"""
-    kw = cfg.config.etcd.copy()
-    r = kw.pop('root','/moatree/test')
-
-    from moatree.etcd import EtcClient
-    c = EtcClient(root=r, **kw)
-    try:
-        c.client.delete(c.root, recursive=True)
-    except etcd.EtcdKeyNotFound:
-        pass
-    c.client.write(c.root, dir=True, value=None)
-    def dumper(client):
-        from moatree.test import from_etcd
-        return from_etcd(client.client,client.root)
-    def feeder(client,data, delete=False,subtree=""):
-        from moatree.test import to_etcd
-        return to_etcd(client.client,client.root+subtree,data, delete=delete)
-    type(c)._d = dumper
-    type(c)._f = feeder
-
-    return c
-    
 def test_basic_etcd(client):
     pass
 
@@ -109,24 +85,4 @@ def test_feeding(client):
     # An entry that is in the way should get deleted
     client._f("nix",subtree="/two/zero")
     assert client._d() == d(two=d(zero="nix"),one=d(a="b"),x="y")
-
-def test_watch(client):
-    d=attrdict
-    t = client
-    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf"),x="y")
-    client._f(d1)
-    w = client.watch("/two",mtDir, immediate=False)
-    assert w.zwei.und == "drei"
-    assert w.vier == "fünf"
-    with pytest.raises(KeyError):
-        w.x
-    w2 = client.watch("/two",mtDir, immediate=True)
-    assert w2.zwei.und == "drei"
-    assert w == w2
-    client._f(d(two=d(sechs="sieben")))
-    w3 = client.watch("/two",mtDir)
-    assert w3.vier == "fünf"
-    assert w3.sechs=="sieben"
-    assert not w3 == w2
-
 

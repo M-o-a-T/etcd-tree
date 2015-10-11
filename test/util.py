@@ -27,9 +27,34 @@ from dabroker.util import attrdict
 import os
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
+import pytest
 
 __ALL__ = ('cfg',)
 
+@pytest.fixture
+def client():
+    """An interface to a clean etcd subtree"""
+    kw = cfg.config.etcd.copy()
+    r = kw.pop('root','/moatree/test')
+
+    from moatree.etcd import EtcClient
+    c = EtcClient(root=r, **kw)
+    try:
+        c.client.delete(c.root, recursive=True)
+    except etcd.EtcdKeyNotFound:
+        pass
+    c.client.write(c.root, dir=True, value=None)
+    def dumper(client):
+        from moatree.test import from_etcd
+        return from_etcd(client.client,client.root)
+    def feeder(client,data, delete=False,subtree=""):
+        from moatree.test import to_etcd
+        return to_etcd(client.client,client.root+subtree,data, delete=delete)
+    type(c)._d = dumper
+    type(c)._f = feeder
+
+    return c
+    
 # monkeypatch YAML to return attrdicts
 def construct_yaml_attrmap(self, node):
     data = attrdict()
