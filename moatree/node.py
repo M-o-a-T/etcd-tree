@@ -237,8 +237,9 @@ class mtDir(mtBase, metaclass=mtTyped):
 
 	# used for testing
 	def __eq__(self, other):
-		if type(self) != type(other):
-			return False
+		## don't check that, non-leaves might be OK
+		#if type(self) != type(other):
+		#	return False
 		return self._data == other._data
 
 	def _ext_lookup(self, name, cls=None, dir=None, value=None, **kw):
