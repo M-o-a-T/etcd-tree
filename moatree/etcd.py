@@ -164,11 +164,12 @@ class EtcWatcher(object):
 		self.q = Queue()
 		self.last_read = seq
 		self.last_seen = seq
-		self.reader = Process(target=self._read, args=(self.last_read,), kwargs=conn.args, name="Watch "+key)
+		self.reader = Process(target=_watch_read, args=(weakref.proxy(self),self.last_read,), kwargs=conn.args, name="Watch "+key)
 		self.reader.start()
 		self.uptodate = Condition()
 
 	def __del__(self):
+		logger.debug("W_DEL")
 		self._kill(abnormal=False)
 
 	def _kill(self, abnormal=True):
@@ -196,92 +197,10 @@ class EtcWatcher(object):
 			except Exception as e:
 				logger.exception(e)
 
-	def _read(self,last_read,**kw):
-		"""\
-			Task which reads from etcd and queues the events received.
-
-			This *needs* to be a separate process because the actual HTTP
-			connection the reader ends up waiting for is not stored in any
-			object, thus we can't close it, thus we can't terminate the
-			thread, thus our program will hang forever.
-			"""
-		logger.info("READER started")
-		conn = Client(**kw)
-		try:
-			while True:
-				for x in conn.eternal_watch(self.key, index=self.last_read+1, recursive=True):
-					logger.debug("IN: %s",repr(x.__dict__))
-					try:
-						self.q.put(x)
-					except BrokenPipeError:
-						return
-					self.last_read = x.modifiedIndex
-		except BaseException as e:
-			try:
-				self.q.put(e)
-			except BrokenPipeError:
-				pass
-			self.q = None
-			logger.exception(e)
-			raise
-		finally:
-			logger.info("READER ended")
-
-	def _write(self):
-		"""\
-			Task which processes the event queue.
-
-			This task is easier: it waits on the queue, which we can send a
-			terminating token into from both sides. It also wants to update
-			our objects, so ...
-			"""
-		logger.info("WRITER started")
-		try:
-			while True:
-				x = self.q.get()
-				root = r = self.root()
-				if x is None or r is None or isinstance(x,BaseException):
-					if r is not None:
-						r._freeze()
-					self._kill()
-					return
-
-				try:
-					logger.debug("RUN: %s",repr(x.__dict__))
-					assert x.key.startswith(self.key), (x.key,self.key, x.modifiedIndex)
-					key = x.key[len(self.key):]
-					assert key[0] == '/'
-					key = tuple(k for k in key.split('/') if k != '')
-					if x.action in {'delete','expire'}:
-						try:
-							for k in key:
-								r = r._ext_lookup(k)
-							r._ext_delete()
-						except (KeyError,AttributeError):
-							pass
-					elif x.dir:
-						for k in key:
-							r = r._ext_lookup(k, dir=True)
-					else:
-						for n,k in enumerate(key):
-							r = r._ext_lookup(k, dir=n<len(key)-1)
-						r._ext_update(x.value)
-
-					with self.uptodate:
-						self.last_seen = x.modifiedIndex
-						self.uptodate.notify_all()
-						logger.debug("DONE %d",x.modifiedIndex)
-
-				except Exception as e:
-					logger.exception(e)
-					self._kill()
-					raise
-		finally:
-			logger.info("WRITER ended")
 		
 	def run(self, root):
 		self.root = weakref.ref(root)
-		self.writer = Thread(target=self._write, name="Update "+self.key)
+		self.writer = Thread(target=_watch_write, args=(weakref.proxy(self),), name="Update "+self.key)
 		self.writer.start()
 		
 	def sync(self, mod=None):
@@ -294,3 +213,90 @@ class EtcWatcher(object):
 		logger.debug("Syncing, done, at %d",self.last_seen)
 
 
+def _watch_read(self,last_read,**kw):
+	"""\
+		Task which reads from etcd and queues the events received.
+
+		This *needs* to be a separate process because the actual HTTP
+		connection the reader ends up waiting for is not stored in any
+		object, thus we can't close it, thus we can't terminate the
+		thread, thus our program will hang forever.
+		"""
+	logger.info("READER started")
+	conn = Client(**kw)
+	try:
+		while True:
+			for x in conn.eternal_watch(self.key, index=self.last_read+1, recursive=True):
+				logger.debug("IN: %s",repr(x.__dict__))
+				try:
+					self.q.put(x)
+				except BrokenPipeError:
+					return
+				self.last_read = x.modifiedIndex
+	except BaseException as e:
+		try:
+			self.q.put(e)
+		except BrokenPipeError:
+			pass
+		self.q = None
+		logger.exception(e)
+		raise
+	finally:
+		logger.info("READER ended")
+
+def _watch_write(self):
+	"""\
+		Task which processes the event queue.
+
+		This task is easier: it waits on the queue, which we can send a
+		terminating token into from both sides. It also wants to update
+		our objects, so ...
+		"""
+	logger.info("WRITER started")
+	try:
+		while True:
+			x = self.q.get()
+			root = r = self.root()
+			if x is None or r is None or isinstance(x,BaseException):
+				if r is not None:
+					r._freeze()
+				self._kill()
+				return
+
+			try:
+				logger.debug("RUN: %s",repr(x.__dict__))
+				assert x.key.startswith(self.key), (x.key,self.key, x.modifiedIndex)
+				key = x.key[len(self.key):]
+				assert key[0] == '/'
+				key = tuple(k for k in key.split('/') if k != '')
+				if x.action in {'delete','expire'}:
+					try:
+						for k in key:
+							r = r._ext_lookup(k)
+						r._ext_delete()
+					except (KeyError,AttributeError):
+						pass
+				elif x.dir:
+					for k in key:
+						r = r._ext_lookup(k, dir=True)
+				else:
+					for n,k in enumerate(key):
+						r = r._ext_lookup(k, dir=n<len(key)-1)
+					r._ext_update(x.value)
+
+				with self.uptodate:
+					self.last_seen = x.modifiedIndex
+					self.uptodate.notify_all()
+					logger.debug("DONE %d",x.modifiedIndex)
+
+			except Exception as e:
+				logger.exception(e)
+				self._kill()
+				raise
+
+			finally:
+				# Drop references so that termination works
+				r = None
+				root = None
+	finally:
+		logger.info("WRITER ended")
