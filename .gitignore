@@ -5,3 +5,4 @@ __pycache__
 /test.cfg
 /build
 /.coverage
+.nfs*
