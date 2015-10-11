@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaT, the Master of all Things.
+##  This file is part of etcTree, a dynamic and Pythonic view of
+##  whatever information you tend to store in etcd.
 ##
-##  MoaT is Copyright © 2007-2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  etcTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -21,6 +22,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##  This header is auto-generated and may self-destruct at any time,
 ##  courtesy of "make update". The original is in ‘scripts/_boilerplate.py’.
 ##  Thus, do not remove the next line, or insert any blank lines above.
+##
+import logging
+logger = logging.getLogger(__name__)
 ##BP
 
 from dabroker.util import attrdict
@@ -38,7 +42,7 @@ def client():
     kw = cfg.config.etcd.copy()
     r = kw.pop('root')
 
-    from moatree.etcd import EtcClient
+    from etctree.etcd import EtcClient
     c = EtcClient(root=r, **kw)
     try:
         c.client.delete(c.root, recursive=True)
@@ -46,10 +50,10 @@ def client():
         pass
     c.client.write(c.root, dir=True, value=None)
     def dumper(client):
-        from moatree.test import from_etcd
+        from etctree.test import from_etcd
         return from_etcd(client.client,client.root)
     def feeder(client,data, delete=False,subtree=""):
-        from moatree.test import to_etcd
+        from etctree.test import to_etcd
         return to_etcd(client.client,client.root+subtree,data, delete=delete)
     type(c)._d = dumper
     type(c)._f = feeder
@@ -91,13 +95,12 @@ def load_cfg(cfg):
         pass
     return cfg
 
-
 if __name__ == "__main__":
     # quick&dirty test
     cfg = load_cfg("test.cfg.sample")
     d = attrdict
-    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/moatree')))
+    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
     assert cfg == d, (cfg,d)
 else:
-    cfg = load_cfg(os.environ.get('MOATREE_TEST_CFG',"test.cfg"))
+    cfg = load_cfg(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))
 

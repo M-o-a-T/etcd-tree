@@ -1,5 +1,5 @@
 ===========
-The MoaTree
+The etcTree
 ===========
 
 This subproject implements access to etcd. Specifically, it auto-generates
@@ -14,7 +14,7 @@ to set up and its data can be controlled with simple HTTP requests. On the
 downside, there's no atomicity and no structured data. To help with the
 first shortcoming, some advisory locking is planned.
 
-The asynchronous nature of etcd updates means that any change to a MoaTree
+The asynchronous nature of etcd updates means that any change to a etcTree
 object will not be visible immediately. You will, however, get an exception
 if it could not be applied to the etcd tree. All changes will include etcd's 
 modification index, thus overwriting unrelated changes won't happen.

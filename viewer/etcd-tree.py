@@ -24,7 +24,7 @@ class AssocUI(object):
 
 		#gnome.init(APPNAME, APPVERSION)
 		from pkg_resources import Requirement, resource_filename
-		filename = resource_filename(Requirement.parse("moatree"),os.path.join("viewer",APPNAME+".glade"))
+		filename = resource_filename(Requirement.parse("etctree"),os.path.join("viewer",APPNAME+".glade"))
 
 		self.widgets = Gtk.Builder()
 		self.widgets.add_from_file(filename)

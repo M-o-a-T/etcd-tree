@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaTree, the Master of all Things' etcd support.
+##  This file is part of etcTree, a dynamic and Pythonic view of
+##  whatever information you tend to store in etcd.
 ##
-##  MoaTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  etcTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -212,7 +213,6 @@ class EtcWatcher(object):
 			while self.writer and self.last_seen < mod:
 				self.uptodate.wait(10)
 		logger.debug("Syncing, done, at %d",self.last_seen)
-
 
 def _watch_read(self,last_read,**kw): # pragma: no cover
 	"""\

@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-export PYBUILD_NAME=moatree
+export PYBUILD_NAME=etctree
 %:
 	dh $@ --with python3 --buildsystem=pybuild
 

@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaTree, the Master of all Things.
+##  This file is part of etcTree, a dynamic and Pythonic view of
+##  whatever information you tend to store in etcd.
 ##
-##  MoaTree is Copyright © 2007-2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  etcTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -22,19 +23,22 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##  This header is auto-generated and may self-destruct at any time,
 ##  courtesy of "make update". The original is in ‘scripts/_boilerplate.py’.
 ##  Thus, do not remove the next line, or insert any blank lines above.
+##
+import logging
+logger = logging.getLogger(__name__)
 ##BP
 
 #
-# setup.py for MoaTree
+# setup.py for etcTree
 
 from sys import version
 import os
-from moatree import VERSION
+from etctree import VERSION
 
 #from distutils.core import setup
 from setuptools import setup
 
-name='moatree'
+name='etctree'
 
 if version < '3.4':
     sys.exit('Error: Python-3.4 or newer is required. Current version:\n %s'
@@ -43,27 +47,19 @@ if version < '3.4':
 setup(
     name = name,
     version = VERSION,
-    description = 'State tree for home automation',
+    description = 'Dynamic etcd state',
     long_description = '''\
-MoaTree is a coherent config and status database, originally intended for home automation.
-Needless to say, it *can* be used for other things.
-
-MoaTree features an object interface based on etcd and good intentions.
-
-There's clear separation of physical devices, logical state, transient
-information (errors and pings) which facilitates using many small programs
-which do one thing well, rather than home automation behemoths which need
-to know how to talk to everything. (You can still do that, though.)
-
+etcTree is a dynamic, object-oriented view of an etcd (sub)tree
+with bi-directional updates.
 ''',
     author = 'Matthias Urlichs',
     author_email = 'matthias@urlichs.de',
-    url = 'https://github.com/m-o-a-t/moatree',
-    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=moatree.git;a=snapshot;h=master',
+    url = 'https://github.com/m-o-a-t/etctree',
+    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=etctree.git;a=snapshot;h=master',
     license = 'GPL',
 
     zip_safe = False, 
-    packages = ('moatree',),
+    packages = ('etctree',),
     package_data = { '': ['*.glade']},
     scripts = ('viewer/etcd-tree.py',),
     install_requires = """\

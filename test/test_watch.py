@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaTree
+##  This file is part of etcTree, a dynamic and Pythonic view of
+##  whatever information you tend to store in etcd.
 ##
-##  MoaT is Copyright © 2007-2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  etcTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -21,6 +22,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##  This header is auto-generated and may self-destruct at any time,
 ##  courtesy of "make update". The original is in ‘scripts/_boilerplate.py’.
 ##  Thus, do not remove the next line, or insert any blank lines above.
+##
 import logging
 logger = logging.getLogger(__name__)
 ##BP
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 import pytest
 import etcd
 from dabroker.util import attrdict
-from moatree.node import mtRoot,mtDir,mtInteger
+from etctree.node import mtRoot,mtDir,mtInteger
 
 from .util import cfg,client
 

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaTree, the Master of all Things' etcd support.
+##  This file is part of etcTree, a dynamic and Pythonic view of
+##  whatever information you tend to store in etcd.
 ##
-##  MoaTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  etcTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 ##BP
 
 """\
-This declares nodes for the basic MoaTree structure.
+This declares nodes for the basic etcTree structure.
 """
 
 import weakref
