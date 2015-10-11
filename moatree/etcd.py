@@ -127,7 +127,7 @@ class EtcClient(object):
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
 						sd = node._ext_lookup(n, dir=True, seq=res.etcd_index)
-						d_add(t['nodes'],sd)
+						d_add(t.get('nodes',()),sd)
 					else:
 						node._ext_lookup(n, dir=False, value=t['value'], seq=res.etcd_index)
 				node._set_up()
