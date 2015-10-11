@@ -254,8 +254,13 @@ def _watch_write(self):
 	logger.info("WRITER started")
 	try:
 		while True:
+			# Drop references so that termination works
+			root = r = None
 			x = self.q.get()
-			root = r = self.root()
+			try:
+				root = r = self.root()
+			except ReferenceError:
+				pass
 			if x is None or r is None or isinstance(x,BaseException):
 				if r is not None:
 					r._freeze()
@@ -292,10 +297,5 @@ def _watch_write(self):
 				logger.exception(e)
 				self._kill()
 				raise
-
-			finally:
-				# Drop references so that termination works
-				r = None
-				root = None
 	finally:
 		logger.info("WRITER ended")
