@@ -68,5 +68,11 @@ to know how to talk to everything. (You can still do that, though.)
     scripts = ('viewer/etcd-tree.py',),
     install_requires = """\
 gi >= 3.12
+etcd >= 0.4.2
+""",
+    setup_requires = """\
+coverage
+pytest
+pytest-cov
 """,
     )
