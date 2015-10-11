@@ -1,0 +1,21 @@
+Source: moatree
+Maintainer: Matthias Urlichs <matthias@urlichs.de>
+Section: python
+Priority: optional
+Build-Depends: python3-setuptools, python3-all, debhelper (>= 9)
+Standards-Version: 3.9.1
+
+Package: python3-moatree
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}
+Description: State tree for home automation
+ MoaTree is a coherent config and status database, originally intended for home automation.
+ Needless to say, it *can* be used for other things.
+ .
+ MoaTree features an object interface based on etcd and good intentions.
+ .
+ There's clear separation of physical devices, logical state, transient
+ information (errors and pings) which facilitates using many small programs
+ which do one thing well, rather than home automation behemoths which need
+ to know how to talk to everything. (You can still do that, though.)
+
