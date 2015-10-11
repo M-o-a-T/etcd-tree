@@ -26,8 +26,13 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from etcd.client import Client
 from yaml import safe_dump
+from yaml.representer import SafeRepresenter
 from moatree.test import from_etcd
+from dabroker.util import attrdict
 import sys
+
+SafeRepresenter.add_representer(attrdict,
+        SafeRepresenter.represent_dict)
 
 from optparse import OptionParser
 parser = OptionParser(conflict_handler="resolve")
