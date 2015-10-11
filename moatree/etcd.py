@@ -180,22 +180,22 @@ class EtcWatcher(object):
 			r.terminate()
 			try:
 				r.join(timeout=10)
-			except Exception as e:
+			except Exception as e: # pragma: no cover
 				logger.exception(e)
 		if self.q is not None:
 			try:
 				self.q.put(None)
-			except BrokenPipeError:
+			except BrokenPipeError: # pragma: no cover
 				pass
 			self.q = None
 		w,self.writer = self.writer,None
 		if w:
 			try:
 				w.join(timeout=10)
-			except RuntimeError:
+			except RuntimeError: # pragma: no cover
 				# cleanup may happen from within this thread
 				pass
-			except Exception as e:
+			except Exception as e: # pragma: no cover
 				logger.exception(e)
 
 		
@@ -214,7 +214,7 @@ class EtcWatcher(object):
 		logger.debug("Syncing, done, at %d",self.last_seen)
 
 
-def _watch_read(self,last_read,**kw):
+def _watch_read(self,last_read,**kw): # pragma: no cover
 	"""\
 		Task which reads from etcd and queues the events received.
 
@@ -222,6 +222,9 @@ def _watch_read(self,last_read,**kw):
 		connection the reader ends up waiting for is not stored in any
 		object, thus we can't close it, thus we can't terminate the
 		thread, thus our program will hang forever.
+
+		TODO: Coverage supports multiprocessing with version 4, which 
+		      is not yet packaged for Debian.
 		"""
 	logger.info("READER started")
 	conn = Client(**kw)
@@ -262,12 +265,15 @@ def _watch_write(self):
 			try:
 				x = self.q.get()
 				root = r = self.root()
-			except ReferenceError:
+			except ReferenceError: # pragma: no cover
 				pass
 			if x is None or r is None or isinstance(x,BaseException):
 				if r is not None:
 					r._freeze()
-				self._kill()
+				try:
+					self._kill()
+				except ReferenceError: # pragma: no cover
+					pass
 				return
 
 			try:
@@ -281,7 +287,7 @@ def _watch_write(self):
 						for k in key:
 							r = r._ext_lookup(k)
 						r._ext_delete()
-					except (KeyError,AttributeError):
+					except (KeyError,AttributeError): # pragma: no cover
 						pass
 				elif x.dir:
 					for k in key:
@@ -296,7 +302,7 @@ def _watch_write(self):
 					self.uptodate.notify_all()
 					logger.debug("DONE %d",x.modifiedIndex)
 
-			except Exception as e:
+			except Exception as e: # pragma: no cover
 				logger.exception(e)
 				self._kill()
 				raise

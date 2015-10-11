@@ -120,9 +120,10 @@ class mtValue(mtBase):
 		return str(value)
 	
 	def _get_value(self):
-		if self._frozen:
+		# TODO: no cover
+		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path)
-		if self._value is _NOTGIVEN:
+		if self._value is _NOTGIVEN: # pragma: no cover
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
@@ -219,9 +220,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 			t = self._types.get(key, mtDir if isinstance(val,dict) else mtValue)
 			self._root()._conn.set(self._path+'/'+key, t._dump(val), prevExist=False)
 		else:
-			if isinstance(res,mtValue):
-				res.value = val
-		raise NotImplementedError
+			assert isinstance(res,mtValue)
+			res.value = val
 
 	def __delattr__(self, key):
 		"""\

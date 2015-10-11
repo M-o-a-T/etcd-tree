@@ -68,6 +68,6 @@ def from_etcd(conn, path):
 				res[n] = t['value']
 			else:
 				res[n] = sd = {}
-				d_add(t['nodes'],sd)
+				d_add(t.get('nodes',()),sd)
 	d_add(res._children,data)
 	return data

@@ -57,6 +57,12 @@ def test_basic_watch(client):
     assert w3.two.vier == 5
     assert w3.two.sechs=="sieben"
     assert not w3.two == w2
+    w4 = client.tree("/",mtRoot, static=True)
+    assert not w3 == w4
+    res=set()
+    for k,v in w3.two:
+        res.add(k)
+    assert res == {"zwei","vier","sechs"}
 
 def test_update_watch(client):
     d=attrdict
@@ -71,6 +77,12 @@ def test_update_watch(client):
     w._watcher.sync(mod)
     assert w.zwei.und=="mehr"
     assert w.vier.oder=="fünfe"
+    # Directly insert "deep" entries
+    client.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
+    mod = client.client.write(client._extkey('/two/three/four/fiver'),"what").modifiedIndex
+    w._watcher.sync(mod)
+    assert w.three.four.fiver == "what"
+    assert isinstance(w.three.four.five.six.seven, mtDir)
     with pytest.raises(KeyError):
         w.sechs
     with pytest.raises(KeyError):
@@ -87,6 +99,16 @@ def test_update_watch(client):
     w._watcher.sync()
     with pytest.raises(KeyError):
         w.vier.auch
+    w.vier.auch = "ja"
+    w.zwei.und = "weniger"
+    w1 = client.tree("/two",mtRoot, immediate=True)
+    assert w is w1
+    w2 = client.tree("/two",mtRoot, static=True)
+    assert w is not w2
+    assert w.zwei.und == "weniger"
+    assert w2.zwei.und == "weniger"
+    assert w.vier.auch == "ja"
+    assert w2.vier.auch == "ja"
 
 
     
