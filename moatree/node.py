@@ -223,9 +223,18 @@ class mtDir(mtBase, metaclass=mtTyped):
 		try:
 			res = self._data[key]
 		except KeyError:
-			# new node
-			t = self._types.get(key, mtDir if isinstance(val,dict) else mtValue)
-			self._root()._conn.set(self._path+'/'+key, t._dump(val), prevExist=False)
+			# new node. Send a "set" command for the data item.
+			# (or items if it's a dict)
+			def t_set(cls,path,key,val):
+				path += '/'+key
+				if isinstance(val,dict):
+					t = cls._types.get(key, mtDir)
+					for k,v in val.items():
+						t_set(t,path,k,v)
+				else:
+					t = cls._types.get(key, mtValue)
+					self._root()._conn.set(path, t._dump(val), prevExist=False)
+			t_set(type(self), self._path,key, val)
 		else:
 			assert isinstance(res,mtValue)
 			res.value = val
