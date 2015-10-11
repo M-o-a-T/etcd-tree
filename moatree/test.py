@@ -29,6 +29,7 @@ from etcd import EtcdNotFile,EtcdNotDir,EtcdKeyNotFound
 from dabroker.util import attrdict
 
 def to_etcd(conn, path, data, delete=False):
+	mod = None
 	if isinstance(data,dict):
 		if delete:
 			r = conn.read(path)
@@ -36,24 +37,25 @@ def to_etcd(conn, path, data, delete=False):
 				n = c.key
 				n = n[n.rindex('/')+1:]
 				if n not in data:
-					conn.delete(c.key,dir=c.dir,recursive=True)
+					mod = conn.delete(c.key,dir=c.dir,recursive=True).modifiedIndex
 		for k,v in data.items():
-			to_etcd(conn, path+"/"+k, v, delete=delete)
+			mod = to_etcd(conn, path+"/"+k, v, delete=delete)
 	else:
 		try:
 			cur = conn.read(path)
 		except EtcdNotDir as e:
-			conn.delete(e.payload['cause'],dir=False,recursive=False)
+			mod = conn.delete(e.payload['cause'],dir=False,recursive=False).modifiedIndex
 		except EtcdKeyNotFound:
 			pass
 		else:
 			if data == cur.value:
-				return
+				return mod
 		try:
-			conn.set(path,str(data))
+			mod = conn.set(path,str(data)).modifiedIndex
 		except EtcdNotFile:
 			conn.delete(path,dir=True,recursive=True)
-			conn.set(path,str(data))
+			mod = conn.set(path,str(data)).modifiedIndex
+	return mod
 
 def from_etcd(conn, path):
 	res = conn.read(path, recursive=True)

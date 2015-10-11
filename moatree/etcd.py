@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaT, the Master of all Things.
+##  This file is part of MoaTree, the Master of all Things' etcd support.
 ##
-##  MoaT is Copyright © 2007-2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  MoaTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -21,14 +21,21 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##  This header is auto-generated and may self-destruct at any time,
 ##  courtesy of "make update". The original is in ‘scripts/_boilerplate.py’.
 ##  Thus, do not remove the next line, or insert any blank lines above.
+##
+import logging
+logger = logging.getLogger(__name__)
 ##BP
 
 """\
 This is the etcd interface.
 """
 
+import etcd
 from etcd.client import Client
 from .node import mtBase,mtValue,mtDir
+from threading import Thread,Lock,Condition
+from multiprocessing import Process,Queue
+#from queue import Queue
 import weakref
 
 class _NOTGIVEN: pass
@@ -39,9 +46,18 @@ class EtcClient(object):
 		self.root = root
 		self.args = args
 		self.client = Client(**args)
+		self.watched = weakref.WeakValueDictionary()
+		try:
+			self.last_mod = self.client.read(root).etcd_index
+		except etcd.EtcdKeyNotFound:
+			self.last_mod = self.client.write(root, value=None, dir=True).etcd_index
 
 	def __del__(self):
-		del self.client
+		try:
+			del self.client
+		except AttributeError:
+			# already gone
+			pass
 
 	def _extkey(self, key):
 		key = str(key)
@@ -54,6 +70,11 @@ class EtcClient(object):
 	def read(self, key, **kw):
 		return self.client.read(self._extkey(key), **kw)
 	
+	def delete(self, key, **kw):
+		res = self.client.delete(self._extkey(key), **kw)
+		self.last_mod = res.modifiedIndex
+		return res
+	
 	def set(self, key, value, prev=_NOTGIVEN, index=None, **kw):
 		"""\
 			Either create or update a value.
@@ -65,6 +86,8 @@ class EtcClient(object):
 			@append: generate a new guaranteed-unique and sequential entry.
 
 			"""
+		key = self._extkey(key)
+		logger.debug("Write %s to %s with %s",value,key, repr(kw))
 		if prev is _NOTGIVEN and index is None:
 			kw['prevExists'] = True
 		elif not kw.get('append',False):
@@ -74,48 +97,200 @@ class EtcClient(object):
 			if prev is not _NOTGIVEN:
 				kw['prevValue'] = prev
 
-		return self.client.write(self._extkey(key), value=value, **kw)
+		res = self.client.write(key, value=value, **kw)
+		self.last_mod = res.modifiedIndex
+		logger.debug("written: index is %d", res.etcd_index)
+		return res
 
-	def watch(self, key, cls, immediate=True):
+	def tree(self, key, cls, immediate=True, static=False):
 		"""\
 			Generate an object tree, populate it, and update it.
 
 			If @immediate is set, run a recursive query and grab everything now.
 			Otherwise fill the tree in the background.
+			@static=True turns off the tree's auto-update.
 			"""
 
+		res = self.watched.get(key,None)
+		if res:
+			return res
+			
 		key = self._extkey(key)
+		res = self.client.read(key, recursive=immediate)
+		w = None if static else EtcWatcher(self,key,res.etcd_index)
+		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex)
+
 		if immediate:
-			res = self.client.read(key, recursive=True)
-			root = cls(parent=self, name=None, seq=res.modifiedIndex)
-			def d_add(tree, res):
+			def d_add(tree, node):
 				for t in tree:
 					n = t['key']
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
-						sd = res._ext_lookup(n, dir=True)
+						sd = node._ext_lookup(n, dir=True, seq=res.etcd_index)
 						d_add(t['nodes'],sd)
 					else:
-						res._ext_lookup(n, dir=False, value=t['value'])
-				res._set_up()
+						node._ext_lookup(n, dir=False, value=t['value'], seq=res.etcd_index)
+				node._set_up()
 			d_add(res._children,root)
 		else:
-			res = self.client.read(key)
-			root = cls(parent=self, name=None, seq=res.modifiedIndex)
 			def d_get(node, res):
 				for c in res.children:
 					n = c.key
 					n = n[n.rindex('/')+1:]
 					if c.dir:
-						sd = node._ext_lookup(n,dir=True)
+						sd = node._ext_lookup(n,dir=True, seq=res.etcd_index)
 						d_get(sd,self.client.read(c.key))
 					else:
-						node._ext_lookup(n,dir=False, value=c.value)
+						node._ext_lookup(n,dir=False, value=c.value, seq=res.etcd_index)
 				node._set_up()
 			d_get(root, res)
 
-
-
+		if w is not None:
+			w.run(root)
 		return root
 		
+class EtcWatcher(object):
+	"""\
+		Runs a watcher on a (sub)tree.
+
+		@conn: the EtcClient to monitor.
+		@key: the (absolute) path to monitor.
+		@seq: etcd_index to start monitoring from.
+		"""
+	writer = None
+	def __init__(self, conn,key,seq):
+		self.conn = conn
+		self.key = key
+		self.q = Queue()
+		self.last_read = seq
+		self.last_seen = seq
+		self.reader = Process(target=self._read, args=(self.last_read,), kwargs=conn.args, name="Watch "+key)
+		self.reader.start()
+		self.uptodate = Condition()
+
+	def __del__(self):
+		self._kill(abnormal=False)
+
+	def _kill(self, abnormal=True):
+		"""Tear down everything"""
+		r,self.reader = self.reader,None
+		if r:
+			r.terminate()
+			try:
+				r.join(timeout=10)
+			except Exception as e:
+				logger.exception(e)
+		if self.q is not None:
+			try:
+				self.q.put(None)
+			except BrokenPipeError:
+				pass
+			self.q = None
+		w,self.writer = self.writer,None
+		if w:
+			try:
+				w.join(timeout=10)
+			except RuntimeError:
+				# cleanup may happen from within this thread
+				pass
+			except Exception as e:
+				logger.exception(e)
+
+	def _read(self,last_read,**kw):
+		"""\
+			Task which reads from etcd and queues the events received.
+
+			This *needs* to be a separate process because the actual HTTP
+			connection the reader ends up waiting for is not stored in any
+			object, thus we can't close it, thus we can't terminate the
+			thread, thus our program will hang forever.
+			"""
+		logger.info("READER started")
+		conn = Client(**kw)
+		try:
+			while True:
+				for x in conn.eternal_watch(self.key, index=self.last_read+1, recursive=True):
+					logger.debug("IN: %s",repr(x.__dict__))
+					try:
+						self.q.put(x)
+					except BrokenPipeError:
+						return
+					self.last_read = x.modifiedIndex
+		except BaseException as e:
+			try:
+				self.q.put(e)
+			except BrokenPipeError:
+				pass
+			self.q = None
+			logger.exception(e)
+			raise
+		finally:
+			logger.info("READER ended")
+
+	def _write(self):
+		"""\
+			Task which processes the event queue.
+
+			This task is easier: it waits on the queue, which we can send a
+			terminating token into from both sides. It also wants to update
+			our objects, so ...
+			"""
+		logger.info("WRITER started")
+		try:
+			while True:
+				x = self.q.get()
+				root = r = self.root()
+				if x is None or r is None or isinstance(x,BaseException):
+					if r is not None:
+						r._freeze()
+					self._kill()
+					return
+
+				try:
+					logger.debug("RUN: %s",repr(x.__dict__))
+					assert x.key.startswith(self.key), (x.key,self.key, x.modifiedIndex)
+					key = x.key[len(self.key):]
+					assert key[0] == '/'
+					key = tuple(k for k in key.split('/') if k != '')
+					if x.action in {'delete','expire'}:
+						try:
+							for k in key:
+								r = r._ext_lookup(k)
+							r._ext_delete()
+						except (KeyError,AttributeError):
+							pass
+					elif x.dir:
+						for k in key:
+							r = r._ext_lookup(k, dir=True)
+					else:
+						for n,k in enumerate(key):
+							r = r._ext_lookup(k, dir=n<len(key)-1)
+						r._ext_update(x.value)
+
+					with self.uptodate:
+						self.last_seen = x.modifiedIndex
+						self.uptodate.notify_all()
+						logger.debug("DONE %d",x.modifiedIndex)
+
+				except Exception as e:
+					logger.exception(e)
+					self._kill()
+					raise
+		finally:
+			logger.info("WRITER ended")
+		
+	def run(self, root):
+		self.root = weakref.ref(root)
+		self.writer = Thread(target=self._write, name="Update "+self.key)
+		self.writer.start()
+		
+	def sync(self, mod=None):
+		if mod is None:
+			mod = self.conn.last_mod
+		logger.debug("Syncing, wait for %d",mod)
+		with self.uptodate:
+			while self.writer and self.last_seen < mod:
+				self.uptodate.wait(10)
+		logger.debug("Syncing, done, at %d",self.last_seen)
+
 

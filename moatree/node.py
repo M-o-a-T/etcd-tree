@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-##  This file is part of MoaT, the Master of all Things.
+##  This file is part of MoaTree, the Master of all Things' etcd support.
 ##
-##  MoaT is Copyright © 2007-2015 by Matthias Urlichs <matthias@urlichs.de>,
+##  MoaTree is Copyright © 2015 by Matthias Urlichs <matthias@urlichs.de>,
 ##  it is licensed under the GPLv3. See the file `README.rst` for details,
 ##  including optimistic statements by the author.
 ##
@@ -21,6 +21,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##  This header is auto-generated and may self-destruct at any time,
 ##  courtesy of "make update". The original is in ‘scripts/_boilerplate.py’.
 ##  Thus, do not remove the next line, or insert any blank lines above.
+##
+import logging
+logger = logging.getLogger(__name__)
 ##BP
 
 """\
@@ -30,6 +33,19 @@ This declares nodes for the basic MoaTree structure.
 import weakref
 
 class _NOTGIVEN:
+	pass
+
+class UnknownNodeError(RuntimeError):
+	"""\
+		This node does not accept this member.
+		"""
+	pass
+
+class FrozenError(RuntimeError):
+	"""\
+		This tree is no longer updated due to an error.
+		You cannot access any of its leaf elements any more.
+		"""
 	pass
 
 class mtBase(object):
@@ -44,16 +60,30 @@ class mtBase(object):
 		non-underscored names are potential etcd node names.
 		"""
 	_monitor = None
-	_root_cache = None
+	_frozen = False
 
-	def __init__(self, parent, name, seq=None):
-		self._parent = weakref.ref(parent)
-		self._name = name
-		if name is None:
-			# This is a root node, the parent is the actual watcher
-			self._root_cache = (self._parent,'')
+	def __init__(self, parent=None, name=None, seq=None):
+		if name:
+			self._parent = weakref.ref(parent)
+			self._root = parent._root
+			self._name = name
+			self._path = parent._path+'/'+name
+		else:
+			# This is a root node
+			self._root = weakref.ref(self)
 		self._seq = seq
 	
+	def __repr__(self):
+		try:
+			return "<{} @{}>".format(self.__class__.__name__,self._path)
+		except Exception as e:
+			logger.exception(e)
+			res = super(mtBase,self).__repr__()
+			return res[:-1]+" ?? "+res[-1]
+
+	def _freeze(self):
+		self._frozen = True
+
 	def _set_up(self):
 		"""Override this method to get notified when initial subtree set-up is completed"""
 		pass
@@ -64,33 +94,19 @@ class mtBase(object):
 		"""Override this method to get notified when this node gets dropped"""
 		pass
 
-	@property
-	def _root(self):
-		"""Return 'my' root"""
-		if self._root_cache is None:
-			r,p = self._parent()._root
-			p += '/'+self._name
-			self._root_cache = (r,p)
-		return self._root_cache[0]
-
-	@property
-	def _path(self):
-		"""Return the path from my root node to me"""
-		if self._root_cache is None:
-			r,p = self._parent()._root
-			p += '/'+self._name
-			self._root_cache = (r,p)
-		return self._root_cache[1]
-
 	def _ext_delete(self, seq=None):
 		self._parent()._ext_del_node(self)
 		
+	@classmethod
+	def _x_add(cls, root,path, data):
+		raise NotImplementedError
+
 class mtValue(mtBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
 
 	_seq = None
-	def __init__(self, value, **kw):
+	def __init__(self, value=_NOTGIVEN, **kw):
 		super().__init__(**kw)
 		self._value = value
 	
@@ -100,19 +116,23 @@ class mtValue(mtBase):
 			return False
 		return self.value == other.value
 
-	@staticmethod
-	def _load(value):
-		return self.type(value)
-	@staticmethod
-	def _dump(value):
+	@classmethod
+	def _load(cls,value):
+		return cls.type(value)
+	@classmethod
+	def _dump(cls,value):
 		return str(value)
 	
 	def _get_value(self):
+		if self._frozen:
+			raise FrozenError(self._path)
+		if self._value is _NOTGIVEN:
+			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		self._root.conn.write(self._path,self._dump(_value), index=self._seq)
+		self._root()._conn.write(self._path,self._dump(_value), index=self._seq)
 	def _del_value(self):
-		self._root.conn.delete(self._path,self._dump(_value), index=self._seq)
+		self._root()._conn.delete(self._path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 
 	def _ext_update(self, value, seq=None):
@@ -122,6 +142,10 @@ class mtValue(mtBase):
 		self._value = self._load(value)
 		self._seq = seq
 		self._updated()
+
+	@classmethod
+	def _x_add(cls, root,path, data):
+		root.conn.set(path, cls._dump(data))
 
 mtString = mtValue
 class mtInteger(mtValue):
@@ -151,6 +175,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 		return self._data.items()
 
 	def __getattr__(self, key):
+		if key[0] == '_':
+			return super(mtDir,self).__getattr__(key)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			return res.value
@@ -174,7 +200,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 		except KeyError:
 			# new node
 			t = self.types.get(key, mtDir if not isinstance(t,dict) else mtValue)
-			self._root.conn.write(self._path+'/'+key, t._dump(_value), prevExist=False)
+			self._root().conn.write(self._path+'/'+key, t._dump(_value), prevExist=False)
 		else:
 			if isinstance(res,mtValue):
 				res.value = val
@@ -218,6 +244,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 				assert isinstance(obj,mtDir if dir else mtValue)
 			return obj
 
+		if self._frozen:
+			raise FrozenError(self._path+'/'+name)
 		if cls is None:
 			if dir is None:
 				raise AttributeError(name)
@@ -238,6 +266,22 @@ class mtDir(mtBase, metaclass=mtTyped):
 		node = self._data.pop(child._name)
 		node._deleted()
 
+	def _add(self, **kw):
+		"""Convenience method to add (or update) the etcd tree"""
+
+	def _freeze(self):
+		super(mtDir,self)._freeze()
+		for v in self._data.values():
+			v._freeze()
+
+	@classmethod
+	def _x_add(cls, root,path, data):
+		for k,v in data.items():
+			m = self._types.get(name, None)
+			if m is None:
+				m = mtDir if isinstance(data,dict) else mtValue
+			m._x_add(self._root(), self._path+'/'+k,v)
+
 	def _all_attrs(self):
 		"""Called by etcd after all non-directory nodes have been filled"""
 		pass
@@ -250,3 +294,33 @@ class mtDir(mtBase, metaclass=mtTyped):
 	__getitem__ = __getattr__
 	__setitem__ = __setattr__
 	__delitem__ = __delattr__
+
+class mtRoot(mtDir):
+	"""\
+		Root node for a (watched) config tree.
+
+		@conn: the connection this is attached to
+		@watcher: the watcher that's talking to me
+		"""
+	_parent = None
+	_name = ''
+	_path = ''
+
+	def __init__(self,conn,watcher, **kw):
+		self._conn = conn
+		self._watcher = watcher
+		super(mtRoot,self).__init__(**kw)
+
+	def __repr__(self):
+		try:
+			return "<{} @{}>".format(self.__class__.__name__,self._conn.root)
+		except Exception as e:
+			logger.exception(e)
+			res = super(mtBase,self).__repr__()
+			return res[:-1]+" ?? "+res[-1]
+
+	def __del__(self):
+		self._kill()
+	def _kill(self):
+		self._watcher._kill()
+	

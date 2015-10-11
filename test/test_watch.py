@@ -26,7 +26,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import pytest
 import etcd
 from dabroker.util import attrdict
-from moatree.node import mtDir
+from moatree.node import mtRoot
 
 from .util import cfg,client
 
@@ -35,18 +35,37 @@ def test_basic_watch(client):
     t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf"),x="y")
     client._f(d1)
-    w = client.watch("/two",mtDir, immediate=False)
+    w = client.tree("/two",mtRoot, immediate=False, static=True)
     assert w.zwei.und == "drei"
     assert w.vier == "fünf"
     with pytest.raises(KeyError):
         w.x
-    w2 = client.watch("/two",mtDir, immediate=True)
+    w2 = client.tree("/two",mtRoot, immediate=True, static=True)
     assert w2.zwei.und == "drei"
     assert w == w2
     client._f(d(two=d(sechs="sieben")))
-    w3 = client.watch("/two",mtDir)
+    w3 = client.tree("/two",mtRoot, static=True)
     assert w3.vier == "fünf"
     assert w3.sechs=="sieben"
     assert not w3 == w2
 
-
+def test_update_watch(client):
+    d=attrdict
+    t = client
+    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
+    client._f(d1)
+    w = client.tree("/two",mtRoot, immediate=False, static=False)
+    assert w.sechs=="sieben"
+    assert w.acht.neun=="zehn"
+    d2=d(two=d(zwei=d(und="mehr"),vier=d(oder="fünfe")))
+    mod = client._f(d2,delete=True)
+    w._watcher.sync(mod)
+    assert w.zwei.und=="mehr"
+    assert w.vier.oder=="fünfe"
+    with pytest.raises(KeyError):
+        w.sechs
+    with pytest.raises(KeyError):
+        w.acht
+    w._watcher._kill()
+    del client
+    

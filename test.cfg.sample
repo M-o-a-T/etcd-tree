@@ -3,4 +3,3 @@ config:
     host: localhost
     port: 2379
     root: /test/moatree
-  config: /config

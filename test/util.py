@@ -35,7 +35,7 @@ __ALL__ = ('cfg',)
 def client():
     """An interface to a clean etcd subtree"""
     kw = cfg.config.etcd.copy()
-    r = kw.pop('root','/moatree/test')
+    r = kw.pop('root')
 
     from moatree.etcd import EtcClient
     c = EtcClient(root=r, **kw)
