@@ -111,9 +111,10 @@ class EtcClient(object):
 			@static=True turns off the tree's auto-update.
 			"""
 
-		res = self.watched.get(key,None)
-		if res:
-			return res
+		if not static:
+			res = self.watched.get(key,None)
+			if res:
+				return res
 			
 		res = self.client.read(self._extkey(key), recursive=immediate)
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
@@ -146,6 +147,7 @@ class EtcClient(object):
 
 		if w is not None:
 			w.run(root)
+			self.watched[key] = root
 		return root
 		
 class EtcWatcher(object):
