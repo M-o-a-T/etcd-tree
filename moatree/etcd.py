@@ -258,9 +258,9 @@ def _watch_write(self):
 	try:
 		while True:
 			# Drop references so that termination works
-			root = r = None
-			x = self.q.get()
+			root = r = x = None
 			try:
+				x = self.q.get()
 				root = r = self.root()
 			except ReferenceError:
 				pass
