@@ -164,8 +164,8 @@ class EtcWatcher(object):
 		self.q = Queue()
 		self.last_read = seq
 		self.last_seen = seq
-		self.reader = Process(target=_watch_read, args=(weakref.proxy(self),self.last_read,), kwargs=conn.args, name="Watch "+key)
-		self.reader.start()
+		self._reader = Process(target=_watch_read, args=(weakref.proxy(self),self.last_read,), kwargs=conn.args, name="Watch "+key)
+		self._reader.start()
 		self.uptodate = Condition()
 
 	def __del__(self):
@@ -173,7 +173,7 @@ class EtcWatcher(object):
 
 	def _kill(self, abnormal=True):
 		"""Tear down everything"""
-		r,self.reader = self.reader,None
+		r,self._reader = self._reader,None
 		if r:
 			r.terminate()
 			try:
