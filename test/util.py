@@ -28,6 +28,7 @@ import os
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
 import pytest
+import etcd
 
 __ALL__ = ('cfg',)
 
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     # quick&dirty test
     cfg = load_cfg("test.cfg.sample")
     d = attrdict
-    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/moatree'),config='/config'))
+    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/moatree')))
     assert cfg == d, (cfg,d)
 else:
     cfg = load_cfg(os.environ.get('MOATREE_TEST_CFG',"test.cfg"))
