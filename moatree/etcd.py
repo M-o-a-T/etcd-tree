@@ -169,7 +169,6 @@ class EtcWatcher(object):
 		self.uptodate = Condition()
 
 	def __del__(self):
-		logger.debug("W_DEL")
 		self._kill(abnormal=False)
 
 	def _kill(self, abnormal=True):
