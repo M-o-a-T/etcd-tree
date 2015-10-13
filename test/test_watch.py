@@ -31,7 +31,7 @@ import pytest
 import etcd
 import time
 from dabroker.util import attrdict
-from etctree.node import mtRoot,mtDir,mtInteger,mtString, UnknownNodeError
+from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError
 
 from .util import cfg,client
 
@@ -85,7 +85,9 @@ def test_basic_watch(client):
     # check basic node iterator
     res=set()
     for k,v in w3.two:
+        assert not isinstance(v,mtValue)
         res.add(k)
+
     assert res == {"zwei","vier","sechs"}
 
 def test_update_watch(client):

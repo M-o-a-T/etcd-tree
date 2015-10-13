@@ -202,7 +202,10 @@ class mtDir(mtBase, metaclass=mtTyped):
 		self._data = {}
 
 	def __iter__(self):
-		return iter(self._data.items())
+		for k,v in self._data.items():
+			if isinstance(v,mtValue):
+				v = v.value
+			yield k,v
 
 	@classmethod
 	def _load(cls,value):
