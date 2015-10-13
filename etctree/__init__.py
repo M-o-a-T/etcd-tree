@@ -39,3 +39,12 @@ TESTING = "MOAT_TEST" in os.environ
 
 import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)
+
+def client(cfg="/etc/etctree.cfg"):
+	if not isinstance(cfg,dict): # pragma: no branch
+		from .util import from_yaml
+		cfg = from_yaml(cfg)
+
+	from .etcd import EtcClient
+	return EtcClient(**cfg.config.etcd)
+
