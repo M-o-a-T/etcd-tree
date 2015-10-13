@@ -25,6 +25,7 @@ install:
 	$(PYTHON) setup.py install --root="$(PYDESTDIR)" --no-compile -O0 --install-layout=deb
 
 test: all test.cfg
+	@rm -f test.log
 	$(PYTHON) test/util.py
 	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etctree test/
 
