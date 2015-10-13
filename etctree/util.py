@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 # This feeds a simple recursive data structure to etcd.
 
+import os
+import yaml
 from etcd import EtcdNotFile,EtcdNotDir,EtcdKeyNotFound
 from dabroker.util import attrdict
 
@@ -75,3 +77,32 @@ def from_etcd(conn, path):
 				d_add(t.get('nodes',()),sd)
 	d_add(res._children,data)
 	return data
+
+# this reads our configuration from yaml
+
+from yaml import safe_load
+from yaml.constructor import SafeConstructor
+
+# monkeypatch YAML to return attrdicts
+def construct_yaml_attrmap(self, node):
+    data = attrdict()
+    yield data
+    value = self.construct_mapping(node)
+    data.update(value)
+SafeConstructor.add_constructor(
+        'tag:yaml.org,2002:map',
+        construct_yaml_attrmap)
+
+def from_yaml(path):
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+if __name__ == "__main__": # pragma: no cover
+    # quick&dirty test
+    cfg = from_yaml("test.cfg.sample")
+    d = attrdict
+    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
+    assert cfg == d, (cfg,d)
+else:
+	## only use for testing
+    cfg = from_yaml(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))

@@ -32,6 +32,7 @@ This declares nodes for the basic etcTree structure.
 """
 
 import weakref
+import time
 
 class _NOTGIVEN:
 	pass
@@ -63,7 +64,7 @@ class mtBase(object):
 	_monitor = None
 	_frozen = False
 
-	def __init__(self, parent=None, name=None, seq=None):
+	def __init__(self, parent=None, name=None, seq=None, ttl=None):
 		if name:
 			self._parent = weakref.ref(parent)
 			self._root = parent._root
@@ -73,6 +74,8 @@ class mtBase(object):
 			# This is a root node
 			self._root = weakref.ref(self)
 		self._seq = seq
+		self._xttl = ttl
+		self._timestamp = time.time()
 	
 	def __repr__(self): ## pragma: no cover
 		try:
@@ -81,6 +84,21 @@ class mtBase(object):
 			logger.exception(e)
 			res = super(mtBase,self).__repr__()
 			return res[:-1]+" ?? "+res[-1]
+
+	def _get_ttl(self):
+		if self._xttl is None:
+			return None
+		return self._xttl - (time.time()-self._timestamp)
+	def _set_ttl(self,ttl):
+		kw = {}
+		if self._is_dir:
+			kw['prev'] = None
+		else:
+			kw['index'] = self._seq
+		self._root()._conn.set(self._path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+	def _del_ttl(self):
+		self._set_ttl('')
+	_ttl = property(_get_ttl, _set_ttl, _del_ttl)
 
 	def _freeze(self):
 		self._frozen = True
@@ -98,9 +116,19 @@ class mtBase(object):
 	def _ext_delete(self, seq=None):
 		self._parent()._ext_del_node(self)
 		
+	def _ext_update(self, seq=None, ttl=_NOTGIVEN):
+		if seq and self._seq and self._seq >= seq: # pragma: no cover
+			return False
+		if seq: # pragma: no branch
+			self._seq = seq
+		if ttl is not _NOTGIVEN: # pragma: no branch
+			self._xttl = ttl
+		return True
+
 class mtValue(mtBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
+	_is_dir = False
 
 	_seq = None
 	def __init__(self, value=_NOTGIVEN, **kw):
@@ -133,16 +161,14 @@ class mtValue(mtBase):
 		self._root()._conn.delete(self._path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 
-	def _ext_update(self, value, seq=None):
+	def _ext_update(self, value, **kw):
 		"""\
 			An updated value arrives.
 			(It may be late.)
 			"""
-		if seq and self._seq and self._seq >= seq: # pragma: no cover
+		if not super(mtValue,self)._ext_update(**kw): # pragma: no cover
 			return
 		self._value = self._load(value)
-		if seq:
-			self._seq = seq
 		self._updated()
 
 mtString = mtValue
@@ -159,11 +185,16 @@ class mtDir(mtBase, metaclass=mtTyped):
 	"""\
 		A node with other nodes below it.
 
-		If @_final is set, un-registered entries will be ignored.
-		If true, an exception will be raised.
+		If @_final is set, you cannot add unknown entries.
+		If true, they also won't be added when the arrive from etcd.
+
+		Map lookup will return a leaf node's mtValue node.
+		Access by attribute will return the value directly.
 		"""
 	_types = None
 	_final = None
+	_value = None
+	_is_dir = True
 
 	def __init__(self, value=None, **kw):
 		assert value is None
@@ -184,11 +215,14 @@ class mtDir(mtBase, metaclass=mtTyped):
 
 	def __getattr__(self, key):
 		if key[0] == '_': # pragma: no cover
-			return super(mtDir,self).__getattr__(key)
+			return object.__getattribute__(self,key)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			return res.value
 		return res
+
+	def __getitem__(self, key):
+		return self._data[key]
 
 	def __contains__(self,key):
 		return key in self._data
@@ -228,12 +262,17 @@ class mtDir(mtBase, metaclass=mtTyped):
 			# (or items if it's a dict)
 			def t_set(cls,path,key,val):
 				path += '/'+key
+				t = cls._types.get(key, None)
+				if t is None and self._final is not None:
+					raise UnknownNodeError(key)
 				if isinstance(val,dict):
-					t = cls._types.get(key, mtDir)
+					if t is None: # pragma: no branch # missing test due to obviousness
+						t = mtDir
 					for k,v in val.items():
 						t_set(t,path,k,v)
 				else:
-					t = cls._types.get(key, mtValue)
+					if t is None:
+						t = mtValue
 					self._root()._conn.set(path, t._dump(val), prevExist=False)
 			t_set(type(self), self._path,key, val)
 		else:
@@ -286,9 +325,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 				raise AttributeError(name)
 			cls = self._types.get(name, None)
 			if cls is None:
-				if self._final is not None:
-					if self._final:
-						raise UnknownNodeError(self._path,name)
+				if self._final:
 					return
 				cls = mtDir if dir else mtValue
 
@@ -296,13 +333,15 @@ class mtDir(mtBase, metaclass=mtTyped):
 		self._data[name] = obj
 		return obj
 	
+	def _ext_update(self, value=None, **kw):
+		"""processed for doing a TTL update"""
+		assert value is None
+		super(mtDir,self)._ext_update(**kw)
+
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
 		node = self._data.pop(child._name)
 		node._deleted()
-
-	def _add(self, **kw):
-		"""Convenience method to add (or update) the etcd tree"""
 
 	def _freeze(self):
 		super(mtDir,self)._freeze()
@@ -310,7 +349,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 			v._freeze()
 
 	# for easier access to variably-named nodes
-	__getitem__ = __getattr__
 	__setitem__ = __setattr__
 	__delitem__ = __delattr__
 

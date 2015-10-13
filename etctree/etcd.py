@@ -33,7 +33,7 @@ This is the etcd interface.
 
 import etcd
 from etcd.client import Client
-from .node import mtBase,mtValue,mtDir
+from .node import mtBase,mtValue,mtDir,mtRoot
 from threading import Thread,Lock,Condition
 from multiprocessing import Process,Queue
 #from queue import Queue
@@ -48,6 +48,7 @@ class EtcClient(object):
 		self.args = args
 		self.client = Client(**args)
 		self.watched = weakref.WeakValueDictionary()
+		self.types = {}
 		try:
 			self.last_mod = self.client.read(root).etcd_index
 		except etcd.EtcdKeyNotFound:
@@ -90,20 +91,32 @@ class EtcClient(object):
 		key = self._extkey(key)
 		logger.debug("Write %s to %s with %s",value,key, repr(kw))
 		if prev is _NOTGIVEN and index is None:
-			kw['prevExists'] = True
+			kw['prevExist'] = False
 		elif not kw.get('append',False):
-			kw['prevExists'] = False
+			kw['prevExist'] = True
 			if index is not None:
 				kw['prevIndex'] = index
-			if prev is not _NOTGIVEN:
+			if prev not in (None,_NOTGIVEN):
 				kw['prevValue'] = prev
 
 		res = self.client.write(key, value=value, **kw)
 		self.last_mod = res.modifiedIndex
-		logger.debug("written: index is %d", res.etcd_index)
+		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	def tree(self, key, cls, immediate=True, static=False):
+	def register(self, name, sub=None):
+		"""\
+			Teach this node that a sub-node named @name is to be of type @sub.
+			"""
+		def defi(sub):
+			self.types[name] = sub
+			return sub
+		if sub is None:
+			return defi
+		else:
+			return defi(sub)
+
+	def tree(self, key, cls=None, immediate=True, static=False):
 		"""\
 			Generate an object tree, populate it, and update it.
 
@@ -112,14 +125,21 @@ class EtcClient(object):
 			@static=True turns off the tree's auto-update.
 			"""
 
+		assert key[0] == '/'
+
 		if not static:
 			res = self.watched.get(key,None)
-			if res:
+			if res is not None:
 				return res
 			
+		if cls is None:
+			from .node import mtRoot
+			cls = self.types.get(key,mtRoot)
+
 		res = self.client.read(self._extkey(key), recursive=immediate)
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
-		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex)
+		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex,
+			ttl=res.ttl if hasattr(res,'ttl') else None)
 
 		if immediate:
 			def d_add(tree, node):
@@ -127,10 +147,12 @@ class EtcClient(object):
 					n = t['key']
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
-						sd = node._ext_lookup(n, dir=True, seq=res.etcd_index)
+						sd = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
+							ttl=res.ttl if hasattr(res,'ttl') else None)
 						d_add(t.get('nodes',()),sd)
 					else:
-						node._ext_lookup(n, dir=False, value=t['value'], seq=res.etcd_index)
+						node._ext_lookup(n, dir=False, value=t['value'], seq=t['modifiedIndex'],
+							ttl=t['ttl'] if 'ttl' in t else None)
 				node._set_up()
 			d_add(res._children,root)
 		else:
@@ -139,10 +161,12 @@ class EtcClient(object):
 					n = c.key
 					n = n[n.rindex('/')+1:]
 					if c.dir:
-						sd = node._ext_lookup(n,dir=True, seq=res.etcd_index)
+						sd = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
+							ttl=res.ttl if hasattr(res,'ttl') else None)
 						d_get(sd,self.client.read(c.key))
 					else:
-						node._ext_lookup(n,dir=False, value=c.value, seq=res.etcd_index)
+						node._ext_lookup(n,dir=False, value=c.value, seq=res.modifiedIndex,
+							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node._set_up()
 			d_get(root, res)
 
@@ -176,6 +200,7 @@ class EtcWatcher(object):
 
 	def _kill(self, abnormal=True):
 		"""Tear down everything"""
+		logger.warn("_KILL")
 		r,self._reader = self._reader,None
 		if r:
 			r.terminate()
@@ -210,7 +235,7 @@ class EtcWatcher(object):
 			mod = self.conn.last_mod
 		logger.debug("Syncing, wait for %d",mod)
 		with self.uptodate:
-			while self.writer and self.last_seen < mod:
+			while self.writer is not None and self.last_seen < mod:
 				self.uptodate.wait(10)
 		logger.debug("Syncing, done, at %d",self.last_seen)
 
@@ -268,7 +293,7 @@ def _watch_write(self):
 			except ReferenceError: # pragma: no cover
 				pass
 			if x is None or r is None or isinstance(x,BaseException):
-				if r is not None:
+				if r is not None: # pragma: no branch
 					r._freeze()
 				try:
 					self._kill()
@@ -286,16 +311,22 @@ def _watch_write(self):
 					try:
 						for k in key:
 							r = r._ext_lookup(k)
-						r._ext_delete()
+							if r is None: # pragma: no cover
+								break
+						else:
+							r._ext_delete()
 					except (KeyError,AttributeError): # pragma: no cover
 						pass
-				elif x.dir:
-					for k in key:
-						r = r._ext_lookup(k, dir=True)
 				else:
 					for n,k in enumerate(key):
-						r = r._ext_lookup(k, dir=n<len(key)-1)
-					r._ext_update(x.value, seq=x.modifiedIndex)
+						r = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
+						if r is None:
+							break
+					else:
+						kw = {}
+						if hasattr(x,'ttl'): # pragma: no branch
+							kw['ttl'] = x.ttl
+						r._ext_update(x.value, seq=x.modifiedIndex, **kw)
 
 				with self.uptodate:
 					self.last_seen = x.modifiedIndex

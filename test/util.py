@@ -34,7 +34,9 @@ from yaml.constructor import SafeConstructor
 import pytest
 import etcd
 
-__ALL__ = ('cfg',)
+__ALL__ = ('cfg','cfgpath')
+
+cfgpath = None
 
 @pytest.fixture
 def client():
@@ -50,10 +52,10 @@ def client():
         pass
     c.client.write(c.root, dir=True, value=None)
     def dumper(client):
-        from etctree.test import from_etcd
+        from etctree.util import from_etcd
         return from_etcd(client.client,client.root)
     def feeder(client,data, delete=False,subtree=""):
-        from etctree.test import to_etcd
+        from etctree.util import to_etcd
         return to_etcd(client.client,client.root+subtree,data, delete=delete)
     type(c)._d = dumper
     type(c)._f = feeder
@@ -72,6 +74,7 @@ SafeConstructor.add_constructor(
 
 # load a config file
 def load_cfg(cfg):
+    global cfgpath
     if os.path.exists(cfg):
         pass
     elif os.path.exists(os.path.join("tests",cfg)):
@@ -81,6 +84,7 @@ def load_cfg(cfg):
     else:
         raise RuntimeError("Config file '%s' not found" % (cfg,))
 
+    cfgpath = cfg
     with open(cfg) as f:
         cfg = safe_load(f)
 
