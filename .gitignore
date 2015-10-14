@@ -8,3 +8,4 @@ __pycache__
 /.coverage
 .nfs*
 /test.log
+/htmlcov
