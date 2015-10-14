@@ -9,3 +9,4 @@ __pycache__
 .nfs*
 /test.log
 /.pybuild
+/htmlcov

@@ -1,3 +1,9 @@
+etctree (0.1.2-1) unstable; urgency=medium
+
+  * More tests lead to more bugs fixed.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 14 Oct 2015 16:14:52 +0200
+
 etctree (0.1-1) unstable; urgency=low
 
   * source package automatically created by stdeb 0.8.2
