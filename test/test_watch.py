@@ -58,35 +58,45 @@ def test_basic_watch(client):
     t.register("/two")(xRoot)
     w = t.tree("/two", immediate=False, static=True)
     assert isinstance(w,xRoot)
-    assert w.zwei.und == "drei"
-    assert w.vier == "5"
+    assert w['zwei']['und'] == "drei"
+    assert w['vier'] == "5"
     with pytest.raises(KeyError):
-        w.x
+        w['x']
     # basic access, read it all at once
     w2 = t.tree("/two",mtRoot, immediate=True, static=True)
-    assert w2.zwei.und == "drei"
-    assert w.vier == "5"
+    assert w2['zwei']['und'] == "drei"
+    assert w['vier'] == "5"
     assert w == w2
 
     t._f(d(two=d(sechs="sieben")))
     # use typed subtrees
     t.register("/",rRoot)
     w3 = t.tree("/", static=True)
-    assert w3.two.vier == 5
-    assert w3.two.sechs=="sieben"
-    assert not w3.two == w2
+    assert w3['two']['vier'] == 5
+    assert w3['two']['sechs'] == "sieben"
+    assert not w3['two'] == w2
     # which are different, but not because of the tree types
     w4 = t.tree("/",mtRoot, static=True)
     assert not w3 == w4
-    assert w3.x == w4.x
+    assert w3['x'] == w4['x']
     assert type(w3) is not type(w4)
 
-    # check basic node iterator
+    # check basic node iterators
     res=set()
-    for k,v in w3.two:
+    for v in w3['two']['zwei'].values():
         assert not isinstance(v,mtValue)
-        res.add(k)
+        res.add(v)
+    assert res == {"drei"}
 
+    res=set()
+    for k in w3['two'].keys():
+        res.add(k)
+    assert res == {"zwei","vier","sechs"}
+
+    res=set()
+    for k,v in w3['two'].items():
+        res.add(k)
+        assert v == w3['two'][k]
     assert res == {"zwei","vier","sechs"}
 
 def test_update_watch(client):
@@ -96,16 +106,16 @@ def test_update_watch(client):
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
     t._f(d1)
     w = t.tree("/two",mtRoot, immediate=False, static=False)
-    assert w.sechs=="sieben"
-    assert w.acht.neun=="zehn"
+    assert w['sechs'] =="sieben"
+    assert w['acht']['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
     mod = t._f(d2,delete=True)
     w._watcher.sync(mod)
-    assert w.zwei.und=="mehr"
-    assert w.vier.oder=="fünfe"
-    assert w.vier.auch=="xxx"
-    assert "oder" in w.vier
-    assert "oderr" not in w.vier
+    assert w['zwei']['und']=="mehr"
+    assert w['vier']['oder']=="fünfe"
+    assert w['vier']['auch']=="xxx"
+    assert "oder" in w['vier']
+    assert "oderr" not in w['vier']
 
     # Directly insert "deep" entries
     t.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
@@ -116,7 +126,7 @@ def test_update_watch(client):
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
-        w.sechs
+        w['sechs']
     with pytest.raises(KeyError):
         w['acht']
     # deleting a whole subtree is not yet implemented
@@ -148,6 +158,16 @@ def test_update_watch(client):
     w2 = t.tree("/two",mtRoot, static=True)
     assert w1 is not w2
     assert w1['zwei']['und'] == "weniger"
+    assert w1['zwei'].get('und') == "weniger"
+    assert w1['zwei']._get('und').value == "weniger"
+    assert w1['zwei'].get('und','nix') == "weniger"
+    assert w1['zwei']._get('und','nix').value == "weniger"
+    assert w1['zwei'].get('huhuhu','nixi') == "nixi"
+    assert w1['zwei']._get('huhuhu','nixo') == "nixo"
+    with pytest.raises(KeyError):
+        w1['zwei'].get('huhuhu')
+    with pytest.raises(KeyError):
+        w1['zwei']._get('huhuhu')
     assert w2['zwei']['und'] == "weniger"
     assert w1['zwei']['zehn']['zwanzig'] == "30"
     assert w2['zwei']['zehn']['zwanzig'] == "30"
@@ -158,38 +178,38 @@ def test_update_watch(client):
     # _final=false means I can't add new untyped nodes
     mtDir._register("new_a",mtString)
     mtDir._register("new_b",mtString)
-    w1.vier._final = False
+    w1._get('vier')._final = False
     mod = t._f(d2,delete=True)
     w1._watcher.sync(mod)
-    w1.vier.auch = "nein"
+    w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     with pytest.raises(UnknownNodeError):
-        w1.vier.nix = "da"
-    w1.vier.new_a = "e_a"
+        w1['vier']['nix'] = "da"
+    w1['vier']['new_a'] = "e_a"
     w1._watcher.sync()
-    assert w1.vier.auch == "nein"
+    assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
-        assert w1.vier.dud
-    assert w1.vier.new_a == "e_a"
+        assert w1['vier']['dud']
+    assert w1['vier']['new_a'] == "e_a"
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = t._f(d1)
     w1._watcher.sync(mod)
-    assert w1.vier.a == "b"
+    assert w1['vier']['a'] == "b"
     with pytest.raises(KeyError):
-        w1.vier.new_b
+        w1['vier']['new_b']
 
     # _final=true means external additions don't come through either
-    w1.vier._final = True
+    w1._get('vier')._final = True
     d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
     mod = t._f(d1)
     w1._watcher.sync(mod)
-    assert w1.vier.c == "x"
+    assert w1['vier']['c'] == "x"
     with pytest.raises(KeyError):
-        w1.vier.d
+        w1['vier']['d']
     with pytest.raises(UnknownNodeError):
-        w1.vier.nixy = "daz"
-    assert w1.vier.new_b == "z"
+        w1['vier']['nixy'] = "daz"
+    assert w1['vier']['new_b'] == "z"
 
 def test_update_ttl(client):
     d=dict

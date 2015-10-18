@@ -216,20 +216,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 		assert value is None
 		return None
 
-	def __getattr__(self, key):
-		if key[0] == '_': # pragma: no cover
-			return object.__getattribute__(self,key)
-		res = self._data[key]
-		if isinstance(res,mtValue):
-			return res.value
-		return res
-
-	def __getitem__(self, key):
-		res = self._data[key]
-		if isinstance(res,mtValue):
-			return res.value
-		return res
-	
 	def keys(self):
 		return self._data.keys()
 	def values(self):
@@ -239,9 +225,18 @@ class mtDir(mtBase, metaclass=mtTyped):
 			yield v
 	def items(self):
 		return self.__iter__()
+	def _get(self,key,default=_NOTGIVEN):
+		if default is _NOTGIVEN:
+			return self._data[key]
+		else:
+			return self._data.get(key,default)
 
-	def _get(self,key):
-		return self._data[key]
+	def get(self,key,default=_NOTGIVEN):
+		v = self._get(key,default)
+		if isinstance(v,mtValue):
+			v = v.value
+		return v
+	__getitem__ = get
 
 	def __contains__(self,key):
 		return key in self._data
@@ -266,14 +261,12 @@ class mtDir(mtBase, metaclass=mtTyped):
 		else:
 			return defi(sub)
 
-	def __setattr__(self, key,val):
+	def __setitem__(self, key,val):
 		"""\
 			Update a node.
 			This just tells etcd to update the value.
 			The actual update happens when the watcher sees it.
 			"""
-		if key[0] == '_':
-			return object.__setattr__(self, key,val)
 		try:
 			res = self._data[key]
 		except KeyError:
@@ -298,7 +291,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 			assert isinstance(res,mtValue)
 			res.value = val
 
-	def __delattr__(self, key):
+	def __delitem__(self, key):
 		"""\
 			Delete a node.
 			This just tells etcd to delete the key.
@@ -366,10 +359,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 		super(mtDir,self)._freeze()
 		for v in self._data.values():
 			v._freeze()
-
-	# for easier access to variably-named nodes
-	__setitem__ = __setattr__
-	__delitem__ = __delattr__
 
 class mtRoot(mtDir):
 	"""\
