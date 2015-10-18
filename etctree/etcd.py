@@ -116,9 +116,10 @@ class EtcClient(object):
 		else:
 			return defi(sub)
 
-	def tree(self, key, cls=None, immediate=True, static=False):
+	def tree(self, key, cls=None, immediate=True, static=False, create=None):
 		"""\
 			Generate an object tree, populate it, and update it.
+			if @create is True, create the directory node.
 
 			If @immediate is set, run a recursive query and grab everything now.
 			Otherwise fill the tree in the background.
@@ -136,7 +137,15 @@ class EtcClient(object):
 			from .node import mtRoot
 			cls = self.types.get(key,mtRoot)
 
-		res = self.client.read(self._extkey(key), recursive=immediate)
+		try:
+			res = self.client.read(self._extkey(key), recursive=immediate)
+		except etcd.EtcdKeyNotFound:
+			if create is False:
+				raise
+			res = self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+		else:
+			if create is True:
+				raise etcd.EtcdAlreadyExist(self._extkey(key))
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
 		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex,
 			ttl=res.ttl if hasattr(res,'ttl') else None)

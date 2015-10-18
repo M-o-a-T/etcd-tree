@@ -218,3 +218,16 @@ def test_update_ttl(client):
     assert w.nodes == "too"
     assert w['nodes']._ttl is None
 
+def test_create(client):
+    t = client
+    with pytest.raises(etcd.EtcdKeyNotFound):
+        t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
+    w1 = t.tree("/not/here",mtRoot, immediate=True, static=True, create=True)
+    w2 = t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
+
+    w2 = t.tree("/not/there",mtRoot, immediate=True, static=True)
+    w3 = t.tree("/not/there",mtRoot, immediate=True, static=True, create=False)
+    w4 = t.tree("/not/there",mtRoot, immediate=True, static=True)
+    with pytest.raises(etcd.EtcdAlreadyExist):
+        t.tree("/not/there",mtRoot, immediate=True, static=True, create=True)
+
