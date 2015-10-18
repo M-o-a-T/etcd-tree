@@ -31,8 +31,7 @@ logger = logging.getLogger(__name__)
 from etcd.client import Client
 from yaml import safe_dump
 from yaml.representer import SafeRepresenter
-from etctree.util import from_etcd
-from dabroker.util import attrdict
+from etctree.util import from_etcd, attrdict
 import sys
 
 SafeRepresenter.add_representer(attrdict,

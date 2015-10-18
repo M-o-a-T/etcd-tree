@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 import os
 import yaml
 from etcd import EtcdNotFile,EtcdNotDir,EtcdKeyNotFound
-from dabroker.util import attrdict
 
 def to_etcd(conn, path, data, delete=False):
 	mod = None
@@ -106,3 +105,24 @@ if __name__ == "__main__": # pragma: no cover
 else:
 	## only use for testing
     cfg = from_yaml(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))
+
+class attrdict(dict):
+	"""A dictionary which can be accessed via attributes, for convenience"""
+	def __init__(self,*a,**k):
+		super(attrdict,self).__init__(*a,**k)
+		self._done = set()
+
+	def __getattr__(self,a):
+		if a.startswith('_'):
+			return super(attrdict,self).__getattr__(a)
+		try:
+			return self[a]
+		except KeyError:
+			raise AttributeError(a)
+	def __setattr__(self,a,b):
+		if a.startswith("_"):
+			super(attrdict,self).__setattr__(a,b)
+		else:
+			self[a]=b
+	def __delattr__(self,a):
+		del self[a]

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 import pytest
 import etcd
 import time
-from dabroker.util import attrdict
+from etctree.util import attrdict
 from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError
 
 from .util import cfg,client

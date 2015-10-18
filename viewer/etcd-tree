@@ -7,7 +7,7 @@ from gi.repository import GObject, GLib
 import os
 
 import etcd
-from dabroker.util import attrdict
+from etctree.util import attrdict
 
 class DEL: pass
 

@@ -27,7 +27,7 @@ import logging
 logger = logging.getLogger(__name__)
 ##BP
 
-from dabroker.util import attrdict
+from etctree.util import attrdict
 import os
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
