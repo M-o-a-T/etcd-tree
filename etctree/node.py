@@ -225,17 +225,16 @@ class mtDir(mtBase, metaclass=mtTyped):
 		return res
 
 	def __getitem__(self, key):
+		res = self._data[key]
+		if isinstance(res,mtValue):
+			return res.value
+		return res
+	
+	def _get(self,key):
 		return self._data[key]
 
 	def __contains__(self,key):
 		return key in self._data
-
-	def items(self):
-		return self._data.items()
-	def keys(self):
-		return self._data.keys()
-	def values(self):
-		return self._data.values()
 
 	@classmethod
 	def _register(cls, name, sub=None):

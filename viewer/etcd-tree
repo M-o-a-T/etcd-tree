@@ -7,7 +7,6 @@ from gi.repository import GObject, GLib
 import os
 
 import etcd
-from etctree.util import attrdict
 
 class DEL: pass
 
@@ -132,7 +131,7 @@ class AssocUI(object):
 		v = self['dest_view']
 		m = v.get_model()
 		m.clear()
-		self.tree = attrdict()
+		self.tree = {}
 
 		res = et.read('/',recursive=True)
 

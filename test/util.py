@@ -27,7 +27,6 @@ import logging
 logger = logging.getLogger(__name__)
 ##BP
 
-from etctree.util import attrdict
 import os
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
@@ -43,7 +42,7 @@ cfgpath = None
 @pytest.fixture
 def client():
     """An interface to a clean etcd subtree"""
-    kw = cfg.config.etcd.copy()
+    kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
     from etctree.etcd import EtcClient
@@ -64,16 +63,6 @@ def client():
 
     return c
     
-# monkeypatch YAML to return attrdicts
-def construct_yaml_attrmap(self, node):
-    data = attrdict()
-    yield data
-    value = self.construct_mapping(node)
-    data.update(value)
-SafeConstructor.add_constructor(
-        'tag:yaml.org,2002:map',
-        construct_yaml_attrmap)
-
 # load a config file
 def load_cfg(cfg):
     global cfgpath
@@ -90,7 +79,7 @@ def load_cfg(cfg):
     with open(cfg) as f:
         cfg = safe_load(f)
 
-    kw = cfg.config.etcd.copy()
+    kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
     from etcd.client import Client
@@ -104,7 +93,7 @@ def load_cfg(cfg):
 if __name__ == "__main__":
     # quick&dirty test
     cfg = load_cfg("test.cfg.sample")
-    d = attrdict
+    d = dict
     d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
     assert cfg == d, (cfg,d)
 else:

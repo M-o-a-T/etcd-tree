@@ -64,7 +64,7 @@ def to_etcd(conn, path, data, delete=False):
 
 def from_etcd(conn, path):
 	res = conn.read(path, recursive=True)
-	data = attrdict()
+	data = {}
 	def d_add(tree, res):
 		for t in tree:
 			n = t['key']
@@ -82,16 +82,6 @@ def from_etcd(conn, path):
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
 
-# monkeypatch YAML to return attrdicts
-def construct_yaml_attrmap(self, node):
-    data = attrdict()
-    yield data
-    value = self.construct_mapping(node)
-    data.update(value)
-SafeConstructor.add_constructor(
-        'tag:yaml.org,2002:map',
-        construct_yaml_attrmap)
-
 def from_yaml(path):
     with open(path) as f:
         return yaml.safe_load(f)
@@ -99,30 +89,10 @@ def from_yaml(path):
 if __name__ == "__main__": # pragma: no cover
     # quick&dirty test
     cfg = from_yaml("test.cfg.sample")
-    d = attrdict
+    d = dict
     d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
     assert cfg == d, (cfg,d)
 else:
 	## only use for testing
     cfg = from_yaml(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))
 
-class attrdict(dict):
-	"""A dictionary which can be accessed via attributes, for convenience"""
-	def __init__(self,*a,**k):
-		super(attrdict,self).__init__(*a,**k)
-		self._done = set()
-
-	def __getattr__(self,a):
-		if a.startswith('_'):
-			return super(attrdict,self).__getattr__(a)
-		try:
-			return self[a]
-		except KeyError:
-			raise AttributeError(a)
-	def __setattr__(self,a,b):
-		if a.startswith("_"):
-			super(attrdict,self).__setattr__(a,b)
-		else:
-			self[a]=b
-	def __delattr__(self,a):
-		del self[a]

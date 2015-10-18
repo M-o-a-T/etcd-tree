@@ -46,5 +46,5 @@ def client(cfg="/etc/etctree.cfg"):
 		cfg = from_yaml(cfg)
 
 	from .etcd import EtcClient
-	return EtcClient(**cfg.config.etcd)
+	return EtcClient(**cfg['config']['etcd'])
 

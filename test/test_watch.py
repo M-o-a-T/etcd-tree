@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 import pytest
 import etcd
 import time
-from etctree.util import attrdict
 from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError
 
 from .util import cfg,client
@@ -49,7 +48,7 @@ def test_basic_watch(client):
     i = rTwo._register("vierixx")(mtInteger)
     assert i is mtInteger
 
-    d=attrdict
+    d=dict
     t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="5"),x="y")
     t._f(d1)
@@ -92,7 +91,7 @@ def test_basic_watch(client):
 
 def test_update_watch(client):
     """Testing auto-update, both ways"""
-    d=attrdict
+    d=dict
     t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
     t._f(d1)
@@ -113,30 +112,30 @@ def test_update_watch(client):
     mod = t.client.write(client._extkey('/two/three/four/fiver'),"what").modifiedIndex
     w._watcher.sync(mod)
     # and check that they're here
-    assert w.three.four.fiver == "what"
-    assert isinstance(w.three.four.five.six.seven, mtDir)
+    assert w['three']['four']['fiver'] == "what"
+    assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
         w.sechs
     with pytest.raises(KeyError):
-        w.acht
+        w['acht']
     # deleting a whole subtree is not yet implemented
     with pytest.raises(NotImplementedError): # TODO
-        del w.vier
-    del w.vier.oder
+        del w['vier']
+    del w['vier']['oder']
     w._watcher.sync()
-    w.vier
-    w.vier.auch
+    w['vier']
+    w['vier']['auch']
     with pytest.raises(KeyError):
-        w.vier.oder
-    del w.vier.auch
+        w['vier']['oder']
+    del w['vier']['auch']
     w._watcher.sync()
     with pytest.raises(KeyError):
-        w.vier.auch
+        w['vier']['auch']
     # Now test that adding a node does the right thing
-    w.vier.auch = "ja"
-    w.zwei.und = "weniger"
-    w.zwei.zehn = d(zwanzig=30,vierzig=d(fuenfzig=60))
+    w['vier']['auch'] = "ja"
+    w['zwei']['und'] = "weniger"
+    w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
 
     from etctree import client as rclient
     from .util import cfgpath
@@ -148,12 +147,12 @@ def test_update_watch(client):
     assert wx is w1
     w2 = t.tree("/two",mtRoot, static=True)
     assert w1 is not w2
-    assert w1.zwei.und == "weniger"
-    assert w2.zwei.und == "weniger"
-    assert w1.zwei.zehn.zwanzig == "30"
-    assert w2.zwei.zehn.zwanzig == "30"
-    assert w1.vier.auch == "ja"
-    assert w2.vier.auch == "ja"
+    assert w1['zwei']['und'] == "weniger"
+    assert w2['zwei']['und'] == "weniger"
+    assert w1['zwei']['zehn']['zwanzig'] == "30"
+    assert w2['zwei']['zehn']['zwanzig'] == "30"
+    assert w1['vier']['auch'] == "ja"
+    assert w2['vier']['auch'] == "ja"
     w1._watcher.sync()
 
     # _final=false means I can't add new untyped nodes
@@ -193,30 +192,30 @@ def test_update_watch(client):
     assert w1.vier.new_b == "z"
 
 def test_update_ttl(client):
-    d=attrdict
+    d=dict
     t = client
 
     mod = t._f(d(nice=d(timeout=d(of="data"),nodes="too")))
     w = t.tree("/nice")
-    assert w.timeout.of == "data"
-    assert w.timeout._ttl is None
-    assert w.nodes == "too"
-    assert w['nodes']._ttl is None
+    assert w['timeout']['of'] == "data"
+    assert w['timeout']._ttl is None
+    assert w['nodes'] == "too"
+    assert w._get('nodes')._ttl is None
     logger.warning("_SET_TTL")
-    w.timeout._ttl = 1
-    w['nodes']._ttl = 1
+    w._get('timeout')._ttl = 1
+    w._get('nodes')._ttl = 1
     logger.warning("_SYNC_TTL")
     w._watcher.sync()
     logger.warning("_GET_TTL")
-    assert w.timeout._ttl is not None
-    assert w.nodes == "too"
-    assert w['nodes']._ttl is not None
-    del w['nodes']._ttl
+    assert w._get('timeout')._ttl is not None
+    assert w['nodes'] == "too"
+    assert w._get('nodes')._ttl is not None
+    del w._get('nodes')._ttl
     time.sleep(2)
     with pytest.raises(KeyError):
-        w.timeout
-    assert w.nodes == "too"
-    assert w['nodes']._ttl is None
+        w['timeout']
+    assert w['nodes'] == "too"
+    assert w._get('nodes')._ttl is None
 
 def test_create(client):
     t = client

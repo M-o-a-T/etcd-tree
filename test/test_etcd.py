@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 import pytest
 import etcd
-from etctree.util import attrdict
 from etctree.node import mtDir
 
 from .util import cfg,client
@@ -38,7 +37,7 @@ def test_basic_etcd(client):
     pass
 
 def test_invalid_etcd():
-    kw = cfg.config.etcd.copy()
+    kw = cfg['config']['etcd'].copy()
     r = kw.pop('root','/etctree/test')
     from etctree.etcd import EtcClient
     with pytest.raises(AssertionError):
@@ -46,7 +45,7 @@ def test_invalid_etcd():
     
 def test_get_set(client):
     """Basic get/set stuff"""
-    d=attrdict
+    d=dict
     assert client._d() == d()
     client.set("/foo","dud")
     client.set("/what","ever")
@@ -75,7 +74,7 @@ def test_get_set(client):
 def test_feeding(client):
     """Feed data into etcd and check that they arrive."""
     # basic stuff
-    d=attrdict
+    d=dict
     d1=d(one="eins",two=d(zwei="drei",vier="fünf"),x="y")
     client._f(d1)
     assert client.get("/one").value == "eins"
