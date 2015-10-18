@@ -230,6 +230,16 @@ class mtDir(mtBase, metaclass=mtTyped):
 			return res.value
 		return res
 	
+	def keys(self):
+		return self._data.keys()
+	def values(self):
+		for v in self._data.values():
+			if isinstance(v,mtValue):
+				v = v.value
+			yield v
+	def items(self):
+		return self.__iter__()
+
 	def _get(self,key):
 		return self._data[key]
 
