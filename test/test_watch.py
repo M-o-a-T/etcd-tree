@@ -202,12 +202,12 @@ def test_update_ttl(client):
     assert w.timeout._ttl is None
     assert w.nodes == "too"
     assert w['nodes']._ttl is None
-    logger.warn("_SET_TTL")
+    logger.warning("_SET_TTL")
     w.timeout._ttl = 1
     w['nodes']._ttl = 1
-    logger.warn("_SYNC_TTL")
+    logger.warning("_SYNC_TTL")
     w._watcher.sync()
-    logger.warn("_GET_TTL")
+    logger.warning("_GET_TTL")
     assert w.timeout._ttl is not None
     assert w.nodes == "too"
     assert w['nodes']._ttl is not None

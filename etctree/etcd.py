@@ -200,7 +200,7 @@ class EtcWatcher(object):
 
 	def _kill(self, abnormal=True):
 		"""Tear down everything"""
-		logger.warn("_KILL")
+		#logger.warning("_KILL")
 		r,self._reader = self._reader,None
 		if r:
 			r.terminate()
