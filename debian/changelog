@@ -1,3 +1,9 @@
+etctree (0.1.4-1) unstable; urgency=medium
+
+  * Add .keys/values/items to mtDir
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 18 Oct 2015 15:13:20 +0200
+
 etctree (0.1.3-1) unstable; urgency=medium
 
   * Add "create" option to .tree
