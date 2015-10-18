@@ -31,6 +31,8 @@ from dabroker.util import attrdict
 import os
 from yaml import safe_load
 from yaml.constructor import SafeConstructor
+import warnings
+warnings.filterwarnings("ignore",category=PendingDeprecationWarning)
 import pytest
 import etcd
 
