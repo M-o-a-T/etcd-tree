@@ -26,8 +26,8 @@ install:
 
 test: all test.cfg
 	@rm -f test.log
-	$(PYTHON) test/util.py
-	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etctree test/
+	$(PYTHON) tests/util.py
+	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etctree tests/
 
 test.cfg:
 	@echo "You need to create a configuration file for testing." >&2
@@ -36,4 +36,4 @@ test.cfg:
 update:
 	scripts/update_boilerplate
 
-.PHONY: all install test update
+.PHONY: all install test tests update
