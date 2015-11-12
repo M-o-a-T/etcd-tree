@@ -33,6 +33,7 @@ This declares nodes for the basic etcTree structure.
 
 import weakref
 import time
+import asyncio
 
 class _NOTGIVEN:
 	pass
@@ -77,6 +78,16 @@ class mtBase(object):
 		self._xttl = ttl
 		self._timestamp = time.time()
 	
+	def _task(self,p,*a,**k):
+		f = asyncio.async(p(*a,**k))
+		f.args = (self,p,a,k)
+		self._root()._tasks.append(f)
+
+	@asyncio.coroutine
+	def _wait(self,mod=None,timeout=None):
+		yield from self._root()._wait(mod, timeout=timeout)
+	_wait._is_coroutine = True
+
 	def __repr__(self): ## pragma: no cover
 		try:
 			return "<{} @{}>".format(self.__class__.__name__,self._path)
@@ -95,7 +106,7 @@ class mtBase(object):
 			kw['prev'] = None
 		else:
 			kw['index'] = self._seq
-		self._root()._conn.set(self._path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		self._task(self._root()._conn.set,self._path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	_ttl = property(_get_ttl, _set_ttl, _del_ttl)
@@ -114,7 +125,13 @@ class mtBase(object):
 		pass
 
 	def _ext_delete(self, seq=None):
-		self._parent()._ext_del_node(self)
+		p = self._parent
+		if p is None:
+			return
+		p = p()
+		if p is None:
+			return
+		p._ext_del_node(self)
 		
 	def _ext_update(self, seq=None, ttl=_NOTGIVEN):
 		if seq and self._seq and self._seq >= seq: # pragma: no cover
@@ -156,10 +173,30 @@ class mtValue(mtBase):
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		self._root()._conn.set(self._path,self._dump(value), index=self._seq)
+		self._task(self._root()._conn.set,self._path,self._dump(value), index=self._seq)
 	def _del_value(self):
-		self._root()._conn.delete(self._path, index=self._seq)
+		self._task(self._root()._conn.delete,self._path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
+
+	@asyncio.coroutine
+	def set(self, value, sync=True):
+		root = self._root()
+		if root is None:
+			return
+		r = yield from root._conn.set(self._path,self._dump(value), index=self._seq)
+		if sync:
+			yield from root._watcher.sync(r.modifiedIndex)
+		return r.modifiedIndex
+
+	@asyncio.coroutine
+	def delete(self, sync=True):
+		root = self._root()
+		if root is None:
+			return
+		r = yield from root._conn.delete(self._path, index=self._seq)
+		if sync:
+			yield from root._watcher.sync(r.modifiedIndex)
+		return r.modifiedIndex
 
 	def _ext_update(self, value, **kw):
 		"""\
@@ -285,11 +322,48 @@ class mtDir(mtBase, metaclass=mtTyped):
 				else:
 					if t is None:
 						t = mtValue
-					self._root()._conn.set(path, t._dump(val), prevExist=False)
+					self._task(self._root()._conn.set,path, t._dump(val), prevExist=False)
 			t_set(type(self), self._path,key, val)
 		else:
 			assert isinstance(res,mtValue)
 			res.value = val
+
+	@asyncio.coroutine
+	def set(self, key,val, sync=True):
+		"""\
+			Update a node. This is the coroutine version of assignment.
+			"""
+		try:
+			res = self._data[key]
+		except KeyError:
+			# new node. Send a "set" command for the data item.
+			# (or items if it's a dict)
+			@asyncio.coroutine
+			def t_set(cls,path,key,val):
+				path += '/'+key
+				t = cls._types.get(key, None)
+				mod = None
+				if t is None and self._final is not None:
+					raise UnknownNodeError(key)
+				if isinstance(val,dict):
+					if t is None: # pragma: no branch # missing test due to obviousness
+						t = mtDir
+					for k,v in val.items():
+						r = yield from t_set(t,path,k,v)
+						if r is not None:
+							mod = r
+				else:
+					if t is None:
+						t = mtValue
+					r = yield from self._root()._conn.set(path, t._dump(val), prevExist=False)
+					mod = r.modifiedIndex
+				return mod
+			mod = yield from t_set(type(self), self._path,key, val)
+		else:
+			assert isinstance(res,mtValue)
+			mod = yield from res.set(val)
+		if sync and mod:
+			yield from self._root()._watcher.sync(mod)
 
 	def __delitem__(self, key):
 		"""\
@@ -302,6 +376,22 @@ class mtDir(mtBase, metaclass=mtTyped):
 			del res.value
 			return
 		raise NotImplementedError
+
+	def delete(self, key, sync=True):
+		"""\
+			Delete a node.
+			"""
+		res = self._data[key]
+		if isinstance(res,mtValue):
+			return res.delete(sync=sync)
+		raise NotImplementedError
+	delete._is_coroutine = True
+
+	def _ext_delete(self):
+		"""We vanished. Oh well."""
+		for d in list(self._data.values()):
+			d._ext_delete()
+		super()._ext_delete()
 
 	# used for testing
 	def __eq__(self, other):
@@ -375,7 +465,28 @@ class mtRoot(mtDir):
 		self._conn = conn
 		self._watcher = watcher
 		self._path = watcher.key if watcher else ''
+		self._tasks = []
 		super(mtRoot,self).__init__(**kw)
+
+	@asyncio.coroutine
+	def _wait(self, mod=None, timeout=None):
+		if self._tasks:
+			tasks,self._tasks = self._tasks,[]
+			done,tasks = yield from asyncio.wait(tasks, timeout=timeout)
+			self._tasks.extend(tasks)
+			while done:
+				t = done.pop()
+				try:
+					r = t.result()
+				except Exception as exc: # pragma: no cover
+					self._tasks.extend(done)
+					raise
+				if mod is None:
+					mod = self._conn.last_mod
+				r = getattr(r,'modifiedIndex',None)
+				if mod is None or (r is not None and mod < r):
+					mod = r
+		yield from self._watcher.sync(mod)
 
 	def __repr__(self): # pragma: no cover
 		try:

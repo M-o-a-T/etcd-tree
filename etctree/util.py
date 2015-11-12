@@ -31,48 +31,72 @@ logger = logging.getLogger(__name__)
 
 import os
 import yaml
+import asyncio
 from etcd import EtcdNotFile,EtcdNotDir,EtcdKeyNotFound
 
+@asyncio.coroutine
 def to_etcd(conn, path, data, delete=False):
 	mod = None
+	def modu(m):
+		nonlocal mod
+		if mod is None:
+			mod = m
+		elif m is None:
+			return
+		elif mod < m:
+			mod = m
 	if isinstance(data,dict):
 		if delete:
-			r = conn.read(path)
-			for c in r.children:
-				n = c.key
-				n = n[n.rindex('/')+1:]
-				if n not in data:
-					mod = conn.delete(c.key,dir=c.dir,recursive=True).modifiedIndex
+			try:
+				r = yield from conn.read(path)
+			except EtcdKeyNotFound:
+				pass
+			else:
+				for c in r.children:
+					n = c.key
+					n = n[n.rindex('/')+1:]
+					if n not in data:
+						modu((yield from conn.delete(c.key,dir=c.dir,recursive=True)).modifiedIndex)
 		for k,v in data.items():
-			mod = to_etcd(conn, path+"/"+k, v, delete=delete)
+			modu((yield from to_etcd(conn, path+"/"+k, v, delete=delete)))
 	else:
 		try:
-			cur = conn.read(path)
+			cur = yield from conn.read(path)
 		except EtcdNotDir as e:
-			mod = conn.delete(e.payload['cause'],dir=False,recursive=False).modifiedIndex
+			modu((yield from conn.delete(e.payload['cause'],dir=False,recursive=False)).modifiedIndex)
 		except EtcdKeyNotFound:
 			pass
 		else:
 			if data == cur.value:
+				modu(cur.modifiedIndex)
 				return mod
 		try:
-			mod = conn.set(path,str(data)).modifiedIndex
+			modu((yield from conn.set(path,str(data))).modifiedIndex)
 		except EtcdNotFile:
-			conn.delete(path,dir=True,recursive=True)
-			mod = conn.set(path,str(data)).modifiedIndex
+			yield from conn.delete(path,dir=True,recursive=True)
+			modu((yield from conn.set(path,str(data))).modifiedIndex)
 	return mod
 
-def from_etcd(conn, path):
-	res = conn.read(path, recursive=True)
+@asyncio.coroutine
+def from_etcd(conn, path, dump=False):
+	res = yield from conn.read(path, recursive=True)
 	data = {}
+
 	def d_add(tree, res):
 		for t in tree:
 			n = t['key']
 			n = n[n.rindex('/')+1:]
 			if 'value' in t:
-				res[n] = t['value']
+				if dump:
+					res[n] = t
+				else:
+					res[n] = t['value']
 			else:
-				res[n] = sd = {}
+				sd = {}
+				if dump:
+					sd['_'] = t.copy()
+					sd['_'].pop('nodes',None)
+				res[n] = sd
 				d_add(t.get('nodes',()),sd)
 	d_add(res._children,data)
 	return data

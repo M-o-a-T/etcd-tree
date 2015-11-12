@@ -42,50 +42,52 @@ def test_invalid_etcd():
     from etctree.etcd import EtcClient
     with pytest.raises(AssertionError):
         EtcClient(root="nix", **kw)
-    
+
+@pytest.mark.asyncio
 def test_get_set(client):
     """Basic get/set stuff"""
     d=dict
-    assert client._d() == d()
-    client.set("/foo","dud")
-    client.set("/what","ever")
-    assert client._d() == d(foo="dud",what="ever")
-    v=client.read("/foo")
+    assert (yield from client._d()) == d()
+    yield from client.set("/foo","dud")
+    yield from client.set("/what","ever")
+    assert (yield from client._d()) == d(foo="dud",what="ever")
+    v = yield from client.read("/foo")
     assert v.value == "dud"
 
     # don't replace things which somebody else changed behind your back
     with pytest.raises(etcd.EtcdCompareFailed):
-        client.set("/foo","bar",prev="guzk")
+        yield from client.set("/foo","bar",prev="guzk")
     with pytest.raises(etcd.EtcdCompareFailed):
-        client.set("/foo","bar",index=v.etcd_index+100)
-    x=client.set("/foo","bari",prev="dud")
-    assert client._d() == d(foo="bari",what="ever")
-    client.set("/foo","bar",index=x.modifiedIndex)
-    assert client._d() == d(foo="bar",what="ever")
-    assert client.get("/foo").value == "bar"
-    v=client.read("/foo")
+        yield from client.set("/foo","bar",index=v.etcd_index+100)
+    x=yield from client.set("/foo","bari",prev="dud")
+    assert (yield from client._d()) == d(foo="bari",what="ever")
+    yield from client.set("/foo","bar",index=x.modifiedIndex)
+    assert (yield from client._d()) == d(foo="bar",what="ever")
+    assert (yield from client.get("/foo")).value == "bar"
+    v=yield from client.read("/foo")
     assert v.value == "bar"
     # Verify that the key has in fact been replaced, not blindly overwritten
     assert v.createdIndex < v.etcd_index
     # random entry creation
-    r = client.set("/",value="baz",append=True)
+    r = yield from client.set("/",value="baz",append=True)
     assert r.key.endswith('000'+str(r.modifiedIndex))
 
+@pytest.mark.asyncio
 def test_feeding(client):
     """Feed data into etcd and check that they arrive."""
     # basic stuff
     d=dict
     d1=d(one="eins",two=d(zwei="drei",vier="fünf"),x="y")
-    client._f(d1)
-    assert client.get("/one").value == "eins"
-    assert client.get("/two/vier").value == "fünf"
+    yield from client._f(d1)
+    assert (yield from client.get("/one")).value == "eins"
+    assert (yield from client.get("/two/vier")).value == "fünf"
 
     # Now replace an entry with a tree and vice versa
     d2=d(two="drei",one=d(a="b"),x="y")
-    client._f(d2,delete=True)
-    assert client._d() == d(two="drei",one=d(a="b"),x="y")
+    yield from client._f(d2,delete=True)
+    assert (yield from client._d()) == d(two="drei",one=d(a="b"),x="y")
 
     # An entry that is in the way should get deleted
-    client._f("nix",subtree="/two/zero")
-    assert client._d() == d(two=d(zero="nix"),one=d(a="b"),x="y")
+    yield from client._f("nix",subtree="/two/zero")
+    assert (yield from client._d()) == d(two=d(zero="nix"),one=d(a="b"),x="y")
 

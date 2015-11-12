@@ -32,6 +32,7 @@ This is the core of etcTree, the object tree.
 """
 
 import os
+import asyncio
 
 VERSION = "0.1"
 
@@ -40,11 +41,14 @@ TESTING = "MOAT_TEST" in os.environ
 import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)
 
+@asyncio.coroutine
 def client(cfg="/etc/etctree.cfg"):
 	if not isinstance(cfg,dict): # pragma: no branch
 		from .util import from_yaml
 		cfg = from_yaml(cfg)
 
 	from .etcd import EtcClient
-	return EtcClient(**cfg['config']['etcd'])
+	c = EtcClient(**cfg['config']['etcd'])
+	yield from c._init()
+	return c
 

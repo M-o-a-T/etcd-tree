@@ -30,10 +30,12 @@ logger = logging.getLogger(__name__)
 import pytest
 import etcd
 import time
+import asyncio
 from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError
 
 from .util import cfg,client
 
+@pytest.mark.asyncio
 def test_basic_watch(client):
     """Watches which don't actually watch"""
     # object type registration
@@ -51,32 +53,32 @@ def test_basic_watch(client):
     d=dict
     t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="5"),x="y")
-    t._f(d1)
+    yield from t._f(d1)
     # basic access, each directory separately
     class xRoot(mtRoot):
         pass
     t.register("/two")(xRoot)
-    w = t.tree("/two", immediate=False, static=True)
+    w = yield from t.tree("/two", immediate=False, static=True)
     assert isinstance(w,xRoot)
     assert w['zwei']['und'] == "drei"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
         w['x']
     # basic access, read it all at once
-    w2 = t.tree("/two",mtRoot, immediate=True, static=True)
+    w2 = yield from t.tree("/two",mtRoot, immediate=True, static=True)
     assert w2['zwei']['und'] == "drei"
     assert w['vier'] == "5"
     assert w == w2
 
-    t._f(d(two=d(sechs="sieben")))
+    yield from t._f(d(two=d(sechs="sieben")))
     # use typed subtrees
     t.register("/",rRoot)
-    w3 = t.tree("/", static=True)
+    w3 = yield from t.tree("/", static=True)
     assert w3['two']['vier'] == 5
     assert w3['two']['sechs'] == "sieben"
     assert not w3['two'] == w2
     # which are different, but not because of the tree types
-    w4 = t.tree("/",mtRoot, static=True)
+    w4 = yield from t.tree("/",mtRoot, static=True)
     assert not w3 == w4
     assert w3['x'] == w4['x']
     assert type(w3) is not type(w4)
@@ -99,18 +101,46 @@ def test_basic_watch(client):
         assert v == w3['two'][k]
     assert res == {"zwei","vier","sechs"}
 
+@pytest.mark.asyncio
+def test_update_watch_direct(client):
+    """Testing auto-update, both ways"""
+    d=dict
+    t = client
+    w = yield from t.tree("/two",mtRoot, immediate=False, static=False)
+    d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
+    mod = yield from t._f(d2,delete=True)
+    yield from w._wait(mod=mod)
+
+    w['vier']
+    w['vier']['auch']
+    yield from w['vier'].delete('auch')
+    with pytest.raises(KeyError):
+        w['vier']['auch']
+    with pytest.raises(KeyError):
+        w['zwei']['zehn']
+    # Now test that adding a node does the right thing
+    yield from w['vier'].set('auch',"ja")
+    yield from w['zwei'].set('zehn',d(zwanzig=30,vierzig=d(fuenfzig=60)))
+    yield from w['zwei'].set('und', "weniger")
+
+    assert w['zwei']['und'] == "weniger"
+    assert w['zwei']['zehn']['zwanzig'] == "30"
+    assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
+    assert w['vier']['auch'] == "ja"
+
+@pytest.mark.asyncio
 def test_update_watch(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
-    t._f(d1)
-    w = t.tree("/two",mtRoot, immediate=False, static=False)
+    yield from t._f(d1)
+    w = yield from t.tree("/two",mtRoot, immediate=False, static=False)
     assert w['sechs'] =="sieben"
     assert w['acht']['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
-    mod = t._f(d2,delete=True)
-    w._watcher.sync(mod)
+    mod = yield from t._f(d2,delete=True)
+    yield from w._wait(mod=mod)
     assert w['zwei']['und']=="mehr"
     assert w['vier']['oder']=="fünfe"
     assert w['vier']['auch']=="xxx"
@@ -118,9 +148,9 @@ def test_update_watch(client):
     assert "oderr" not in w['vier']
 
     # Directly insert "deep" entries
-    t.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
-    mod = t.client.write(client._extkey('/two/three/four/fiver'),"what").modifiedIndex
-    w._watcher.sync(mod)
+    yield from t.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
+    mod = (yield from t.client.write(client._extkey('/two/three/four/fiver'),"what")).modifiedIndex
+    yield from w._wait(mod)
     # and check that they're here
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
@@ -133,29 +163,31 @@ def test_update_watch(client):
     with pytest.raises(NotImplementedError): # TODO
         del w['vier']
     del w['vier']['oder']
-    w._watcher.sync()
+    yield from w._wait()
     w['vier']
     w['vier']['auch']
     with pytest.raises(KeyError):
         w['vier']['oder']
     del w['vier']['auch']
-    w._watcher.sync()
+    yield from w._wait()
     with pytest.raises(KeyError):
         w['vier']['auch']
     # Now test that adding a node does the right thing
     w['vier']['auch'] = "ja"
-    w['zwei']['und'] = "weniger"
     w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
+    w['zwei']['und'] = "weniger"
+    logger.debug("WAIT FOR ME")
+    yield from w['zwei']._wait()
 
     from etctree import client as rclient
     from .util import cfgpath
-    tt = rclient(cfgpath)
-    w1 = tt.tree("/two",mtRoot, immediate=True)
+    tt = yield from rclient(cfgpath)
+    w1 = yield from tt.tree("/two",mtRoot, immediate=True)
     assert w is not w1
     assert w == w1
-    wx = tt.tree("/two",mtRoot, immediate=True)
+    wx = yield from tt.tree("/two",mtRoot, immediate=True)
     assert wx is w1
-    w2 = t.tree("/two",mtRoot, static=True)
+    w2 = yield from t.tree("/two",mtRoot, static=True)
     assert w1 is not w2
     assert w1['zwei']['und'] == "weniger"
     assert w1['zwei'].get('und') == "weniger"
@@ -173,28 +205,30 @@ def test_update_watch(client):
     assert w2['zwei']['zehn']['zwanzig'] == "30"
     assert w1['vier']['auch'] == "ja"
     assert w2['vier']['auch'] == "ja"
-    w1._watcher.sync()
+    yield from w1._wait()
 
     # _final=false means I can't add new untyped nodes
     mtDir._register("new_a",mtString)
     mtDir._register("new_b",mtString)
     w1._get('vier')._final = False
-    mod = t._f(d2,delete=True)
-    w1._watcher.sync(mod)
+    mod = yield from t._f(d2,delete=True)
+    yield from w1._wait()
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     with pytest.raises(UnknownNodeError):
         w1['vier']['nix'] = "da"
     w1['vier']['new_a'] = "e_a"
-    w1._watcher.sync()
+    yield from w1._wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
+    if 'new_a' not in w1['vier'] or w1['vier']['new_a'] != "e_a":
+        import pdb;pdb.set_trace()
     assert w1['vier']['new_a'] == "e_a"
 
     d1=d(two=d(vier=d(a="b",c="d")))
-    mod = t._f(d1)
-    w1._watcher.sync(mod)
+    mod = yield from t._f(d1)
+    yield from w1._wait()
     assert w1['vier']['a'] == "b"
     with pytest.raises(KeyError):
         w1['vier']['new_b']
@@ -202,8 +236,8 @@ def test_update_watch(client):
     # _final=true means external additions don't come through either
     w1._get('vier')._final = True
     d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
-    mod = t._f(d1)
-    w1._watcher.sync(mod)
+    mod = yield from t._f(d1)
+    yield from w1._wait()
     assert w1['vier']['c'] == "x"
     with pytest.raises(KeyError):
         w1['vier']['d']
@@ -211,12 +245,13 @@ def test_update_watch(client):
         w1['vier']['nixy'] = "daz"
     assert w1['vier']['new_b'] == "z"
 
+@pytest.mark.asyncio
 def test_update_ttl(client):
     d=dict
     t = client
 
-    mod = t._f(d(nice=d(timeout=d(of="data"),nodes="too")))
-    w = t.tree("/nice")
+    mod = yield from t._f(d(nice=d(timeout=d(of="data"),nodes="too")))
+    w = yield from t.tree("/nice")
     assert w['timeout']['of'] == "data"
     assert w['timeout']._ttl is None
     assert w['nodes'] == "too"
@@ -225,28 +260,29 @@ def test_update_ttl(client):
     w._get('timeout')._ttl = 1
     w._get('nodes')._ttl = 1
     logger.warning("_SYNC_TTL")
-    w._watcher.sync()
+    yield from w._wait()
     logger.warning("_GET_TTL")
     assert w._get('timeout')._ttl is not None
     assert w['nodes'] == "too"
     assert w._get('nodes')._ttl is not None
     del w._get('nodes')._ttl
-    time.sleep(2)
+    yield from asyncio.sleep(2)
     with pytest.raises(KeyError):
         w['timeout']
     assert w['nodes'] == "too"
     assert w._get('nodes')._ttl is None
 
+@pytest.mark.asyncio
 def test_create(client):
     t = client
     with pytest.raises(etcd.EtcdKeyNotFound):
-        t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
-    w1 = t.tree("/not/here",mtRoot, immediate=True, static=True, create=True)
-    w2 = t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
+        yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
+    w1 = yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=True)
+    w2 = yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
 
-    w2 = t.tree("/not/there",mtRoot, immediate=True, static=True)
-    w3 = t.tree("/not/there",mtRoot, immediate=True, static=True, create=False)
-    w4 = t.tree("/not/there",mtRoot, immediate=True, static=True)
+    w2 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True)
+    w3 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True, create=False)
+    w4 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True)
     with pytest.raises(etcd.EtcdAlreadyExist):
-        t.tree("/not/there",mtRoot, immediate=True, static=True, create=True)
+        yield from t.tree("/not/there",mtRoot, immediate=True, static=True, create=True)
 

@@ -40,18 +40,19 @@ __ALL__ = ('cfg','cfgpath')
 cfgpath = None
 
 @pytest.fixture
-def client():
+def client(event_loop):
     """An interface to a clean etcd subtree"""
     kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
     from etctree.etcd import EtcClient
     c = EtcClient(root=r, **kw)
+    event_loop.run_until_complete(c._init())
     try:
-        c.client.delete(c.root, recursive=True)
+        event_loop.run_until_complete(c.client.delete(c.root, recursive=True))
     except etcd.EtcdKeyNotFound:
         pass
-    c.client.write(c.root, dir=True, value=None)
+    event_loop.run_until_complete(c.client.write(c.root, dir=True, value=None))
     def dumper(client):
         from etctree.util import from_etcd
         return from_etcd(client.client,client.root)

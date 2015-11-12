@@ -28,11 +28,12 @@ import logging
 logger = logging.getLogger(__name__)
 ##BP
 
-from etcd.client import Client
+from aioetcd.client import Client
 from yaml import safe_dump
 from yaml.representer import SafeRepresenter
 from etctree.util import from_etcd
 import sys
+import asyncio
 
 from optparse import OptionParser
 parser = OptionParser(conflict_handler="resolve")
@@ -44,6 +45,8 @@ parser.add_option("-p", "--port", dest="port", action="store",
     default=None, type=int, help="User to connect as")
 parser.add_option("-r", "--root", dest="root", action="store",
     default='/', help="Subtree to dump")
+parser.add_option("-d", "--debug", dest="debug", action="store_true",
+    default=False, help="show metadata")
 
 (opts, args) = parser.parse_args()
 
@@ -54,6 +57,7 @@ if args:
 args = {'host':opts.host}
 if opts.port:
 	args['port']=opts.port
+loop=asyncio.get_event_loop()
 et = Client(**args)
-safe_dump(from_etcd(et,opts.root), stream=sys.stdout)
+safe_dump(loop.run_until_complete(from_etcd(et,opts.root, dump=opts.debug)), stream=sys.stdout)
 
