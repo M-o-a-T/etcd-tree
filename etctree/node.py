@@ -244,13 +244,7 @@ mtString = mtValue
 class mtInteger(mtValue):
 	type = int
 
-class mtTyped(type):
-	"""Instantiate a new per-class _types array"""
-	def __init__(cls, name, bases, nmspc):
-		super(mtTyped, cls).__init__(name, bases, nmspc)
-		cls._types = {}
-
-class mtDir(mtBase, metaclass=mtTyped):
+class mtDir(mtBase):
 	"""\
 		A node with other nodes below it.
 
@@ -260,7 +254,6 @@ class mtDir(mtBase, metaclass=mtTyped):
 		Map lookup will return a leaf node's mtValue node.
 		Access by attribute will return the value directly.
 		"""
-	_types = None
 	_final = None
 	_value = None
 	_is_dir = True
@@ -310,31 +303,14 @@ class mtDir(mtBase, metaclass=mtTyped):
 	def __contains__(self,key):
 		return key in self._data
 
-	@classmethod
-	def _register(cls, name, sub=None):
-		"""\
-			Teach this node that a sub-node named @name is to be of type @sub.
-			Can be used as a class decorator:
-				class myRoot(mtRoot):
-					pass
-				@myRoot._register("con")
-				class myConn(mtDir):
-					pass
-				myConn._register("port",mtInteger)
-			"""
-		def defi(sub):
-			cls._types[name] = sub
-			return sub
-		if sub is None:
-			return defi
-		else:
-			return defi(sub)
-
 	def __setitem__(self, key,val):
 		"""\
 			Update a node.
 			This just tells etcd to update the value.
 			The actual update happens when the watcher sees it.
+
+			The value may be a dictionary, in which case the code
+			recursively descends into it.
 			"""
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path)
@@ -342,22 +318,22 @@ class mtDir(mtBase, metaclass=mtTyped):
 			res = self._data[key]
 		except KeyError:
 			# new node. Send a "set" command for the data item.
-			# (or items if it's a dict)
-			def t_set(cls,path,key,val):
+			# (or items, if it's a dict)
+			root = self._root()
+			def t_set(path,keypath,key,val):
+				keypath += (key,)
 				path += '/'+key
-				t = cls._types.get(key, None)
-				if t is None and self._final is not None:
-					raise UnknownNodeError(key)
 				if isinstance(val,dict):
-					if t is None: # pragma: no branch # missing test due to obviousness
-						t = mtDir
 					for k,v in val.items():
-						t_set(t,path,k,v)
+						t_set(path,keypath,k,v)
 				else:
+					t = root._types.lookup(keypath)
 					if t is None:
+						if self._final is not None:
+							raise UnknownNodeError(key)
 						t = mtValue
-					self._task(self._root()._conn.set,path, t._dump(val), prevExist=False)
-			t_set(type(self), self._path,key, val)
+					self._task(root._conn.set,path, t._dump(val), prevExist=False)
+			t_set(self._path,self._keypath,key, val)
 		else:
 			assert isinstance(res,mtValue)
 			res.value = val
@@ -367,6 +343,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			"""
+		root = self._root()
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path)
 		try:
@@ -375,31 +352,30 @@ class mtDir(mtBase, metaclass=mtTyped):
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
 			@asyncio.coroutine
-			def t_set(cls,path,key,val):
+			def t_set(path,keypath,key,val):
 				path += '/'+key
-				t = cls._types.get(key, None)
+				keypath += (key,)
 				mod = None
-				if t is None and self._final is not None:
-					raise UnknownNodeError(key)
 				if isinstance(val,dict):
-					if t is None: # pragma: no branch # missing test due to obviousness
-						t = mtDir
 					for k,v in val.items():
-						r = yield from t_set(t,path,k,v)
+						r = yield from t_set(path,keypath,k,v)
 						if r is not None:
 							mod = r
 				else:
+					t = root._types.lookup(keypath)
 					if t is None:
+						if self._final is not None:
+							raise UnknownNodeError(key)
 						t = mtValue
-					r = yield from self._root()._conn.set(path, t._dump(val), prevExist=False)
+					r = yield from root._conn.set(path, t._dump(val), prevExist=False)
 					mod = r.modifiedIndex
 				return mod
-			mod = yield from t_set(type(self), self._path,key, val)
+			mod = yield from t_set(self._path,self._keypath,key, val)
 		else:
 			assert isinstance(res,mtValue)
 			mod = yield from res.set(val)
 		if sync and mod:
-			yield from self._root()._watcher.sync(mod)
+			yield from root._watcher.sync(mod)
 
 	def __delitem__(self, key):
 		"""\
@@ -442,7 +418,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 			return False
 		return self._data == other._data
 
-	def _ext_lookup(self, name, cls=None, dir=None, value=None, **kw):
+	def _ext_lookup(self, name, dir=None, value=None, **kw):
 		"""\
 			Do a node lookup.
 			
@@ -458,26 +434,25 @@ class mtDir(mtBase, metaclass=mtTyped):
 		assert name != ""
 		obj = self._data.get(name,None)
 		if obj is not None:
-			if cls is not None: # pragma: no cover
-				assert isinstance(obj,cls)
 			if dir is not None:
 				assert isinstance(obj,mtDir if dir else mtValue)
-			return obj,False
+			return obj
 
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path+'/'+name)
+		if dir is None: # pragma: no cover
+			raise AttributeError(name)
+		cls = self._root()._types.lookup(self._keypath+(name,))
 		if cls is None:
-			if dir is None: # pragma: no cover
-				raise AttributeError(name)
-			cls = self._types.get(name, None)
-			if cls is None:
-				if self._final:
-					return None,None
-				cls = mtDir if dir else mtValue
+			if self._final:
+				return None
+			cls = mtDir if dir else mtValue
+		else:
+			assert issubclass(cls,mtDir if dir else mtValue)
 
 		obj = cls(parent=self,name=name, value=cls._load(value), **kw)
 		self._data[name] = obj
-		return obj,True
+		return obj
 	
 	def _ext_update(self, value=None, **kw):
 		"""processed for doing a TTL update"""
@@ -504,13 +479,18 @@ class mtRoot(mtDir):
 	_parent = None
 	_name = ''
 	_path = ''
+	_types = None
 
-	def __init__(self,conn,watcher, **kw):
+	def __init__(self,conn,watcher,types=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
 		self._path = watcher.key if watcher else ''
 		self._keypath = ()
 		self._tasks = []
+		if types is None:
+			from .etcd import EtcTypes
+			types = EtcTypes()
+		self._types = types
 		super(mtRoot,self).__init__(**kw)
 
 	@asyncio.coroutine

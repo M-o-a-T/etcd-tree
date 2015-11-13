@@ -32,6 +32,7 @@ import etcd
 import time
 import asyncio
 from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError,FrozenError
+from etctree.etcd import EtcTypes
 
 from .util import cfg,client
 from unittest.mock import Mock
@@ -40,15 +41,14 @@ from unittest.mock import Mock
 def test_basic_watch(client):
     """Watches which don't actually watch"""
     # object type registration
-    class rRoot(mtRoot):
-        pass
-    @rRoot._register("two")
+    types = EtcTypes()
+    @types.register("two")
     class rTwo(mtDir):
         pass
     # reg funcion shall return the right thing
-    i = rTwo._register("vier",mtInteger)
+    i = types.register("two","vier", cls=mtInteger)
     assert i is mtInteger
-    i = rTwo._register("vierixx")(mtInteger)
+    i = types.register("two","vierixx")(mtInteger)
     assert i is mtInteger
 
     d=dict
@@ -58,31 +58,29 @@ def test_basic_watch(client):
     # basic access, each directory separately
     class xRoot(mtRoot):
         pass
-    t.register("/two")(xRoot)
-    w = yield from t.tree("/two", immediate=False, static=True)
+    types.register()(xRoot)
+    w = yield from t.tree("/two", immediate=False, static=True, types=types)
     assert isinstance(w,xRoot)
     assert w['zwei']['und'] == "drei"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
         w['x']
     # basic access, read it all at once
-    w2 = yield from t.tree("/two",mtRoot, immediate=True, static=True)
+    w2 = yield from t.tree("/two", immediate=True, static=True, types=types)
     assert w2['zwei']['und'] == "drei"
     assert w['vier'] == "5"
     assert w == w2
 
     yield from t._f(d(two=d(sechs="sieben")))
     # use typed subtrees
-    t.register("/",rRoot)
-    w3 = yield from t.tree("/", static=True)
+    w3 = yield from t.tree("/", static=True, types=types)
     assert w3['two']['vier'] == 5
     assert w3['two']['sechs'] == "sieben"
     assert not w3['two'] == w2
     # which are different, but not because of the tree types
-    w4 = yield from t.tree("/",mtRoot, static=True)
-    assert not w3 == w4
-    assert w3['x'] == w4['x']
-    assert type(w3) is not type(w4)
+    w4 = yield from t.tree("/", static=True, types=types)
+    assert not w3 is w4
+    assert w3 == w4
 
     # check basic node iterators
     res=set()
@@ -107,7 +105,7 @@ def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    w = yield from t.tree("/two",mtRoot, immediate=False, static=False)
+    w = yield from t.tree("/two", immediate=False, static=False)
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from w._wait(mod=mod)
@@ -141,19 +139,20 @@ def test_update_watch(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
+    types = EtcTypes()
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
     yield from t._f(d1)
-    w = yield from t.tree("/two",mtRoot, immediate=False, static=False)
+    w = yield from t.tree("/two", immediate=False, static=False, types=types)
 
-    m0,m1,m2,m3,m4,m5,m6,m7 = Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock()
-    w.monitor("three.four.fiver")(m0)
-    w.monitor("three.four.five.six.seven")(m1)
-    w.monitor("three","*","fiver")(m2)
-    w.monitor("three.**.six")(m3)
-    w.monitor("**.none")(m4)
-    w.monitor("*","fiver")(m5)
-    w.monitor("acht.neun")(m6)
-    w.monitor("acht")(m7)
+    #m0,m1,m2,m3,m4,m5,m6,m7 = Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock()
+    #w.monitor("three.four.fiver")(m0)
+    #w.monitor("three.four.five.six.seven")(m1)
+    #w.monitor("three","*","fiver")(m2)
+    #w.monitor("three.**.six")(m3)
+    #w.monitor("**.none")(m4)
+    #w.monitor("*","fiver")(m5)
+    #w.monitor("acht.neun")(m6)
+    #w.monitor("acht")(m7)
 
     assert w['sechs'] =="sieben"
     acht = w['acht']
@@ -175,19 +174,19 @@ def test_update_watch(client):
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
 
-    assert m0.call_count == 1
-    assert m1.call_count == 1
-    assert m2.call_count == 1
-    assert m3.call_count == 1
-    assert m7.call_count == 1
-    assert not m4.called
-    assert not m5.called
-    assert not m6.called
-    m0.assert_called_once_with(w['three']['four']._get('fiver'),'set')
-    m1.assert_called_once_with(w['three']['four']['five']['six']['seven'],'set')
-    m2.assert_called_once_with(w['three']['four']._get('fiver'),'set')
-    m3.assert_called_once_with(w['three']['four']['five']['six'],'dir')
-    m7.assert_called_once_with(acht,'delete')
+    #assert m0.call_count == 1
+    #assert m1.call_count == 1
+    #assert m2.call_count == 1
+    #assert m3.call_count == 1
+    #assert m7.call_count == 1
+    #assert not m4.called
+    #assert not m5.called
+    #assert not m6.called
+    #m0.assert_called_once_with(w['three']['four']._get('fiver'),'set')
+    #m1.assert_called_once_with(w['three']['four']['five']['six']['seven'],'set')
+    #m2.assert_called_once_with(w['three']['four']._get('fiver'),'set')
+    #m3.assert_called_once_with(w['three']['four']['five']['six'],'dir')
+    #m7.assert_called_once_with(acht,'delete')
 
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
@@ -217,12 +216,12 @@ def test_update_watch(client):
     from etctree import client as rclient
     from .util import cfgpath
     tt = yield from rclient(cfgpath)
-    w1 = yield from tt.tree("/two",mtRoot, immediate=True)
+    w1 = yield from tt.tree("/two", immediate=True, types=types)
     assert w is not w1
     assert w == w1
-    wx = yield from tt.tree("/two",mtRoot, immediate=True)
+    wx = yield from tt.tree("/two", immediate=True)
     assert wx is w1
-    w2 = yield from t.tree("/two",mtRoot, static=True)
+    w2 = yield from t.tree("/two", static=True)
     assert w1 is not w2
     assert w1['zwei']['und'] == "weniger"
     assert w1['zwei'].get('und') == "weniger"
@@ -243,8 +242,8 @@ def test_update_watch(client):
     yield from w1._wait()
 
     # _final=false means I can't add new untyped nodes
-    mtDir._register("new_a",mtString)
-    mtDir._register("new_b",mtString)
+    types.register("**","new_a", cls=mtString)
+    types.register("**","new_b", cls=mtString)
     w1._get('vier')._final = False
     mod = yield from t._f(d2,delete=True)
     yield from w1._wait()
@@ -313,13 +312,13 @@ def test_update_ttl(client):
 def test_create(client):
     t = client
     with pytest.raises(etcd.EtcdKeyNotFound):
-        yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
-    w1 = yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=True)
-    w2 = yield from t.tree("/not/here",mtRoot, immediate=True, static=True, create=False)
+        yield from t.tree("/not/here", immediate=True, static=True, create=False)
+    w1 = yield from t.tree("/not/here", immediate=True, static=True, create=True)
+    w2 = yield from t.tree("/not/here", immediate=True, static=True, create=False)
 
-    w2 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True)
-    w3 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True, create=False)
-    w4 = yield from t.tree("/not/there",mtRoot, immediate=True, static=True)
+    w2 = yield from t.tree("/not/there", immediate=True, static=True)
+    w3 = yield from t.tree("/not/there", immediate=True, static=True, create=False)
+    w4 = yield from t.tree("/not/there", immediate=True, static=True)
     with pytest.raises(etcd.EtcdAlreadyExist):
-        yield from t.tree("/not/there",mtRoot, immediate=True, static=True, create=True)
+        yield from t.tree("/not/there", immediate=True, static=True, create=True)
 

@@ -50,7 +50,6 @@ class EtcClient(object):
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 		self.client = Client(loop=loop, **args)
 		self.watched = weakref.WeakValueDictionary()
-		self.types = {}
 	
 	@asyncio.coroutine
 	def _init(self):
@@ -115,20 +114,8 @@ class EtcClient(object):
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	def register(self, name, sub=None):
-		"""\
-			Teach this node that a sub-node named @name is to be of type @sub.
-			"""
-		def defi(sub):
-			self.types[name] = sub
-			return sub
-		if sub is None:
-			return defi
-		else:
-			return defi(sub)
-
 	@asyncio.coroutine
-	def tree(self, key, cls=None, immediate=True, static=False, create=None):
+	def tree(self, key, types=None, immediate=True, static=False, create=None):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
@@ -150,9 +137,6 @@ class EtcClient(object):
 			if res is not None:
 				return res
 			
-		if cls is None:
-			cls = self.types.get(key,mtRoot)
-
 		try:
 			res = yield from self.client.read(self._extkey(key), recursive=immediate)
 		except etcd.EtcdKeyNotFound:
@@ -163,7 +147,14 @@ class EtcClient(object):
 			if create is True:
 				raise etcd.EtcdAlreadyExist(self._extkey(key))
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
-		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex,
+		cls = None
+		if types:
+			cls = types.type
+		if cls is None:
+			cls = mtRoot
+		else:
+			assert issubclass(cls,mtRoot)
+		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, types=types,
 			ttl=res.ttl if hasattr(res,'ttl') else None)
 
 		if immediate:
@@ -172,15 +163,13 @@ class EtcClient(object):
 					n = t['key']
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
-						sd,is_new = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
+						sd = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						d_add(t.get('nodes',()),sd)
 					else:
 						node._ext_lookup(n, dir=False, value=t['value'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
-				node._updated()
-				if w is not None:
-					w.notify(node,"populate")
+				node._updated('populate')
 			d_add(res._children,root)
 		else:
 			@asyncio.coroutine
@@ -191,16 +180,14 @@ class EtcClient(object):
 					n = c.key
 					n = n[n.rindex('/')+1:]
 					if c.dir:
-						sd,is_new = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
+						sd = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						data = yield from self.client.read(c.key)
 						yield from d_get(sd, data)
 					else:
 						node._ext_lookup(n,dir=False, value=c.value, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-				node._updated()
-				if w is not None:
-					w.notify(node,"populate")
+				node._updated('populate')
 			yield from d_get(root, res)
 
 		if w is not None:
@@ -217,43 +204,18 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
-	def __init__(self, conn,key,seq):
+	def __init__(self, conn,key,seq, types=None):
 		self.conn = conn
 		self.key = key
 		self.extkey = self.conn._extkey(key)
 		self.last_read = seq
 		self.last_seen = seq
-		self._reader = asyncio.async(self._watch_read())
+
 		self.uptodate = asyncio.Condition()
-		self.notifier = EtcNotifier()
+		self._reader = asyncio.async(self._watch_read())
 
 	def __del__(self): # pragma: no cover
 		self._kill(abnormal=False)
-
-	@asyncio.coroutine
-	def notify(self, node, type):
-		"""Send a change notification to all subscribers"""
-		nodes = [(".",self.notifier)]
-		if isinstance(node,tuple):
-			kp = node
-			node = None
-		else:
-			kp = node._keypath
-		for p in kp:
-			cn = set()
-			for k,n in nodes:
-				for nk,nn in n.items(p):
-					cn.add((nk,nn))
-				if k == "**":
-					cn.add((k,n))
-			if not cn:
-				return
-			nodes = cn
-		for p,n in nodes:
-			try:
-				yield from n.notify(node,type)
-			except Exception:
-				logger.exception("Error in notifier %s", repr(n))
 
 	def _kill(self, abnormal=True):
 		"""Tear down everything"""
@@ -269,31 +231,6 @@ class EtcWatcher(object):
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
 		
-	def monitor(self, *path):
-		"""\
-			Register a monitor function.
-
-			@watcher.monitor("/foo/bar/baz")
-			def on_change(node, type):
-				pass
-
-			@node is the affected tree node, or a tuple to its path if unavailable.
-			@type is dir/set/update/delete/expire
-			@path path can be a /- or .-separated string,
-			or a list of path elements.
-			"""
-		if len(path) == 1:
-			path = path[0]
-			if path[0] == "/":
-				path = tuple(p for p in path.split('/') if p != '')
-			else:
-				path = path.split(".")
-
-		mon = self.notifier
-		for p in path:
-			mon = mon.step(p)
-		return mon.register
-
 	@asyncio.coroutine
 	def sync(self, mod=None):
 		"""Wait for pending updates"""
@@ -356,22 +293,16 @@ class EtcWatcher(object):
 		if x.action in {'delete','expire'}:
 			try:
 				for n,k in enumerate(key):
-					r,is_new = r._ext_lookup(k)
+					r = r._ext_lookup(k)
 					if r is None: # pragma: no cover
 						break
 				else:
-					yield from self.notify(r, x.action)
 					r._ext_delete()
 			except (KeyError,AttributeError): # pragma: no cover
-				r = None
-			if r is None:
-				yield from self.notify(key, x.action)
+				pass
 		else:
-			is_new = False
 			for n,k in enumerate(key):
-				if is_new:
-					yield from self.notify(r, "dir")
-				r,is_new = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
+				r = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
 				if r is None:
 					break # pragma: no cover
 			else:
@@ -379,7 +310,6 @@ class EtcWatcher(object):
 				if hasattr(x,'ttl'): # pragma: no branch
 					kw['ttl'] = x.ttl
 				r._ext_update(x.value, seq=x.modifiedIndex, **kw)
-			yield from self.notify(r if r is not None else key, x.action)
 
 		yield from self.uptodate.acquire()
 		try:
@@ -389,11 +319,16 @@ class EtcWatcher(object):
 		finally:
 			self.uptodate.release()
 
-class EtcNotifier(dict):
+class EtcTypes(object):
+	type = None
+
 	def __init__(self):
 		self.callbacks = set()
 		self.nodes = {}
 	
+	def __repr__(self):
+		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
+
 	def __getitem__(self,key):
 		return self.nodes[key]
 	
@@ -401,42 +336,71 @@ class EtcNotifier(dict):
 		"""Lookup with auto-generation of new nodes"""
 		res = self.nodes.get(key,None)
 		if res is None:
-			self.nodes[key] = res = EtcNotifier()
+			self.nodes[key] = res = EtcTypes()
 		return res
 	
 	def items(self,key):
 		"""\
-			Enumerate entries matching this key.
+			Enumerate sub-entries matching this key.
 			Yields (name,sub-entry) tuples.
 			Note that a name of "**" is supposed to match a whole subtree,
-			so your matching algorithm needs to carry it over.
+			so the matching algorithm in .lookup() carries it over.
 			"""
 		res = self.nodes.get(key,None)
 		if res is not None:
 			yield key,res
 		res = self.nodes.get('*',None)
 		if res is not None:
-			yield "*",res
+			yield '*',res
 		res = self.nodes.get('**',None)
 		if res is not None:
-			yield "**",res
+			yield '**',res
 		
-	def register(self, proc):
+	def register(self, *path, cls=None):
+		"""\
+			Teach this node that a sub-node named @name is to be of type @sub.
+			"""
+		if len(path) == 1:
+			path = path[0]
+			if path[0] == "/":
+				path = tuple(p for p in path.split('/') if p != '')
+			else:
+				path = path.split(".")
+		for p in path:
+			self = self.step(p)
+		if cls is None:
+			return self._register
+		else:
+			return self._register(cls)
+
+	def _register(self, cls):
 		"""Register a callback on this node"""
-		self.callbacks.add(proc)
-		return proc
+		assert not self.type
+		self.type = cls
+		return cls
 	
 	def __hash__(self):
 		return id(self)
 
-	@asyncio.coroutine
-	def notify(self, node,type):
-		"""Run notification calls for this node"""
-		for p in self.callbacks:
-			try:
-				res = p(node,type)
-				if isinstance(res, asyncio.Future) or inspect.isgenerator(res):
-					yield from res
-			except Exception:
-				logger.exception("Error in '%s' callback for %s: %s ",type,repr(node),repr(p))
+	def lookup(self, path):
+		"""\
+			Find the node type that's to be associated with a path below me.
+
+			This is called on the root node.
+			"""
+		nodes = [(".",self)]
+		for p in path:
+			cn = []
+			for k,n in nodes:
+				for nk,nn in n.items(p):
+					cn.append((nk,nn))
+				if k == '**':
+					cn.append((k,n))
+			if not cn:
+				return None
+			nodes = cn
+		for p,n in nodes:
+			if n.type is not None:
+				return n.type
+		return None
 
