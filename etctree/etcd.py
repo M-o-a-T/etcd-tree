@@ -212,7 +212,6 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
-	_writer = None
 	def __init__(self, conn,key,seq):
 		self.conn = conn
 		self.key = key
@@ -235,15 +234,6 @@ class EtcWatcher(object):
 		if self.q is not None:
 			yield from self.q.put(None)
 			self.q = None
-		w,self._writer = self._writer,None
-		if w:
-			try:
-				yield from asyncio.wait_for(w,timeout=10)
-			except RuntimeError: # pragma: no cover
-				# cleanup may happen from within this coro
-				pass
-			except Exception as e: # pragma: no cover
-				logger.exception(e)
 		
 	def run(self, root):
 		self.root = weakref.ref(root)
@@ -255,7 +245,7 @@ class EtcWatcher(object):
 		logger.debug("Syncing, wait for %d",mod)
 		try:
 			yield from self.uptodate.acquire()
-			while self._writer is not None and self.last_seen < mod:
+			while self._reader is not None and self.last_seen < mod:
 				yield from self.uptodate.wait() # pragma: no cover
 				                                # processing got done during .acquire()
 		finally:
