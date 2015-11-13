@@ -130,12 +130,12 @@ class mtBase(object):
 			return
 		p = p()
 		if p is None:
-			return
+			return # pragma: no cover
 		p._ext_del_node(self)
 		
 	def _ext_update(self, seq=None, ttl=_NOTGIVEN):
-		if seq and self._seq and self._seq >= seq: # pragma: no cover
-			return False
+		if seq and self._seq and self._seq >= seq:
+			return False # pragma: no cover
 		if seq: # pragma: no branch
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
@@ -173,16 +173,22 @@ class mtValue(mtBase):
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		self._task(self._root()._conn.set,self._path,self._dump(value), index=self._seq)
 	def _del_value(self):
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		self._task(self._root()._conn.delete,self._path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 
 	@asyncio.coroutine
 	def set(self, value, sync=True):
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		root = self._root()
 		if root is None:
-			return
+			return # pragma: no cover
 		r = yield from root._conn.set(self._path,self._dump(value), index=self._seq)
 		if sync:
 			yield from root._watcher.sync(r.modifiedIndex)
@@ -190,9 +196,11 @@ class mtValue(mtBase):
 
 	@asyncio.coroutine
 	def delete(self, sync=True):
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		root = self._root()
 		if root is None:
-			return
+			return # pragma: no cover
 		r = yield from root._conn.delete(self._path, index=self._seq)
 		if sync:
 			yield from root._watcher.sync(r.modifiedIndex)
@@ -304,6 +312,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 			This just tells etcd to update the value.
 			The actual update happens when the watcher sees it.
 			"""
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		try:
 			res = self._data[key]
 		except KeyError:
@@ -333,6 +343,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			"""
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		try:
 			res = self._data[key]
 		except KeyError:
@@ -371,6 +383,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 			This just tells etcd to delete the key.
 			The actual deletion happens when the watcher sees it.
 			"""
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			del res.value
@@ -381,6 +395,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 		"""\
 			Delete a node.
 			"""
+		if self._frozen: # pragma: no cover
+			raise FrozenError(self._path)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			return res.delete(sync=sync)
@@ -485,7 +501,7 @@ class mtRoot(mtDir):
 					mod = self._conn.last_mod
 				r = getattr(r,'modifiedIndex',None)
 				if mod is None or (r is not None and mod < r):
-					mod = r
+					mod = r # pragma: no cover # because we pop off the end
 		yield from self._watcher.sync(mod)
 
 	def __repr__(self): # pragma: no cover

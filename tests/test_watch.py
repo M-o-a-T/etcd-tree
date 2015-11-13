@@ -31,7 +31,7 @@ import pytest
 import etcd
 import time
 import asyncio
-from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError
+from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError,FrozenError
 
 from .util import cfg,client
 
@@ -128,6 +128,15 @@ def test_update_watch_direct(client):
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja"
 
+    
+    with pytest.raises(NotImplementedError): # TODO
+        w.delete('vier')
+
+    w._get('zwei')._freeze()
+    with pytest.raises(FrozenError): # TODO
+        w['zwei']['ach'] = 'nee'
+
+
 @pytest.mark.asyncio
 def test_update_watch(client):
     """Testing auto-update, both ways"""
@@ -217,13 +226,13 @@ def test_update_watch(client):
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     with pytest.raises(UnknownNodeError):
         w1['vier']['nix'] = "da"
+    with pytest.raises(UnknownNodeError):
+        yield from w1['vier'].set('nix', "da")
     w1['vier']['new_a'] = "e_a"
     yield from w1._wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
-    if 'new_a' not in w1['vier'] or w1['vier']['new_a'] != "e_a":
-        import pdb;pdb.set_trace()
     assert w1['vier']['new_a'] == "e_a"
 
     d1=d(two=d(vier=d(a="b",c="d")))
@@ -243,6 +252,8 @@ def test_update_watch(client):
         w1['vier']['d']
     with pytest.raises(UnknownNodeError):
         w1['vier']['nixy'] = "daz"
+    with pytest.raises(UnknownNodeError):
+        yield from w1['vier'].set('nixy', "daz")
     assert w1['vier']['new_b'] == "z"
 
 @pytest.mark.asyncio
