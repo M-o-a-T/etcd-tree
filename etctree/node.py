@@ -71,6 +71,7 @@ class mtBase(object):
 			self._root = parent._root
 			self._name = name
 			self._path = parent._path+'/'+name
+			self._keypath = parent._keypath+(name,)
 		else:
 			# This is a root node
 			self._root = weakref.ref(self)
@@ -114,19 +115,27 @@ class mtBase(object):
 	def _freeze(self):
 		self._frozen = True
 
-	def _set_up(self):
-		"""Override this method to get notified when initial subtree set-up is completed"""
-		pass
-	def _updated(self, path=(), seq=None):
-		"""Override this method to get notified when my value changes"""
+	def _r_updated(self, path=(), seq=None):
+		"""call ._updated, then recurse to the parent if that true"""
+		if not self._updated(path=path, seq=seq):
+			return
 		p = self._parent
 		if p is None:
 			return
 		p = p()
 		if p is None:
 			return # pragma: no cover
-		p._updated(path=(self._name,)+path, seq=seq)
-		pass
+		p._r_updated(path=(self._name,)+path, seq=seq)
+
+	def _updated(self, path=(), seq=None):
+		"""\
+			Override this method to get notified when the value changes
+			(or that of a child node).
+			Return True if you want the change to be propagated to the
+			caller.
+			"""
+		return False
+
 	def _deleted(self):
 		"""Override this method to get notified when this node gets dropped"""
 		pass
@@ -147,7 +156,7 @@ class mtBase(object):
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._xttl = ttl
-		self._updated(seq=seq)
+		self._r_updated(seq=seq)
 		return True
 
 class mtValue(mtBase):
@@ -160,6 +169,14 @@ class mtValue(mtBase):
 		super().__init__(**kw)
 		self._value = value
 	
+	def _updated(self, path=(), seq=None):
+		"""\
+			Override to get notified of changes.
+			Defaults to returning True for value nodes so that the owner
+			gets notified.
+			"""
+		return True
+
 	# used for testing
 	def __eq__(self, other):
 		if type(self) != type(other):
@@ -421,6 +438,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 		## don't check that, non-leaves might be OK
 		#if type(self) != type(other):
 		#	return False
+		if not hasattr(other,'_data'):
+			return False
 		return self._data == other._data
 
 	def _ext_lookup(self, name, cls=None, dir=None, value=None, **kw):
@@ -433,6 +452,8 @@ class mtDir(mtBase, metaclass=mtTyped):
 
 			If @cls or @dir is passed in, the node is created if it doesn't
 			already exist, else an AttributeError is raised.
+			
+			Returns: the child node plus a "created" flag.
 			"""
 		assert name != ""
 		obj = self._data.get(name,None)
@@ -441,7 +462,7 @@ class mtDir(mtBase, metaclass=mtTyped):
 				assert isinstance(obj,cls)
 			if dir is not None:
 				assert isinstance(obj,mtDir if dir else mtValue)
-			return obj
+			return obj,False
 
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path+'/'+name)
@@ -451,12 +472,12 @@ class mtDir(mtBase, metaclass=mtTyped):
 			cls = self._types.get(name, None)
 			if cls is None:
 				if self._final:
-					return
+					return None,None
 				cls = mtDir if dir else mtValue
 
 		obj = cls(parent=self,name=name, value=cls._load(value), **kw)
 		self._data[name] = obj
-		return obj
+		return obj,True
 	
 	def _ext_update(self, value=None, **kw):
 		"""processed for doing a TTL update"""
@@ -488,6 +509,7 @@ class mtRoot(mtDir):
 		self._conn = conn
 		self._watcher = watcher
 		self._path = watcher.key if watcher else ''
+		self._keypath = ()
 		self._tasks = []
 		super(mtRoot,self).__init__(**kw)
 
@@ -526,3 +548,6 @@ class mtRoot(mtDir):
 		if w is not None:
 			w._kill()
 	
+	def monitor(self,*a,**k):
+		return self._watcher.monitor(*a,**k)
+

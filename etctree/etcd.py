@@ -35,6 +35,7 @@ import aioetcd as etcd
 from aioetcd.client import Client
 import asyncio
 import weakref
+import inspect
 
 from .node import mtRoot
 
@@ -171,13 +172,15 @@ class EtcClient(object):
 					n = t['key']
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
-						sd = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
+						sd,is_new = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						d_add(t.get('nodes',()),sd)
 					else:
 						node._ext_lookup(n, dir=False, value=t['value'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
-				node._set_up()
+				node._updated()
+				if w is not None:
+					w.notify(node,"populate")
 			d_add(res._children,root)
 		else:
 			@asyncio.coroutine
@@ -188,18 +191,20 @@ class EtcClient(object):
 					n = c.key
 					n = n[n.rindex('/')+1:]
 					if c.dir:
-						sd = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
+						sd,is_new = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						data = yield from self.client.read(c.key)
 						yield from d_get(sd, data)
 					else:
 						node._ext_lookup(n,dir=False, value=c.value, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-				node._set_up()
+				node._updated()
+				if w is not None:
+					w.notify(node,"populate")
 			yield from d_get(root, res)
 
 		if w is not None:
-			w.run(root)
+			w._set_root(root)
 			self.watched[key] = root
 		return root
 		
@@ -220,9 +225,35 @@ class EtcWatcher(object):
 		self.last_seen = seq
 		self._reader = asyncio.async(self._watch_read())
 		self.uptodate = asyncio.Condition()
+		self.notifier = EtcNotifier()
 
 	def __del__(self): # pragma: no cover
 		self._kill(abnormal=False)
+
+	@asyncio.coroutine
+	def notify(self, node, type):
+		"""Send a change notification to all subscribers"""
+		nodes = [(".",self.notifier)]
+		if isinstance(node,tuple):
+			kp = node
+			node = None
+		else:
+			kp = node._keypath
+		for p in kp:
+			cn = set()
+			for k,n in nodes:
+				for nk,nn in n.items(p):
+					cn.add((nk,nn))
+				if k == "**":
+					cn.add((k,n))
+			if not cn:
+				return
+			nodes = cn
+		for p,n in nodes:
+			try:
+				yield from n.notify(node,type)
+			except Exception:
+				logger.exception("Error in notifier %s", repr(n))
 
 	def _kill(self, abnormal=True):
 		"""Tear down everything"""
@@ -235,11 +266,37 @@ class EtcWatcher(object):
 			yield from self.q.put(None)
 			self.q = None
 		
-	def run(self, root):
+	def _set_root(self, root):
 		self.root = weakref.ref(root)
 		
+	def monitor(self, *path):
+		"""\
+			Register a monitor function.
+
+			@watcher.monitor("/foo/bar/baz")
+			def on_change(node, type):
+				pass
+
+			@node is the affected tree node, or a tuple to its path if unavailable.
+			@type is dir/set/update/delete/expire
+			@path path can be a /- or .-separated string,
+			or a list of path elements.
+			"""
+		if len(path) == 1:
+			path = path[0]
+			if path[0] == "/":
+				path = tuple(p for p in path.split('/') if p != '')
+			else:
+				path = path.split(".")
+
+		mon = self.notifier
+		for p in path:
+			mon = mon.step(p)
+		return mon.register
+
 	@asyncio.coroutine
 	def sync(self, mod=None):
+		"""Wait for pending updates"""
 		if mod is None:
 			mod = self.conn.last_mod
 		logger.debug("Syncing, wait for %d",mod)
@@ -265,11 +322,17 @@ class EtcWatcher(object):
 				@asyncio.coroutine
 				def cb(x):
 					logger.debug("IN: %s",repr(x.__dict__))
-					yield from self._watch_write(x)
+					try:
+						yield from self._watch_write(x)
+					except Exception:
+						logger.exception("Error in write watcher")
+						# XXX TODO trigger a major error
 					self.last_read = x.modifiedIndex
 
 				yield from conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
 
+		except GeneratorExit:
+			raise
 		except BaseException as e:
 			logger.exception("READER died")
 			raise
@@ -292,17 +355,23 @@ class EtcWatcher(object):
 		key = tuple(k for k in key.split('/') if k != '')
 		if x.action in {'delete','expire'}:
 			try:
-				for k in key:
-					r = r._ext_lookup(k)
+				for n,k in enumerate(key):
+					r,is_new = r._ext_lookup(k)
 					if r is None: # pragma: no cover
-						return
+						break
 				else:
+					yield from self.notify(r, x.action)
 					r._ext_delete()
 			except (KeyError,AttributeError): # pragma: no cover
-				pass
+				r = None
+			if r is None:
+				yield from self.notify(key, x.action)
 		else:
+			is_new = False
 			for n,k in enumerate(key):
-				r = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
+				if is_new:
+					yield from self.notify(r, "dir")
+				r,is_new = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
 				if r is None:
 					break # pragma: no cover
 			else:
@@ -310,6 +379,7 @@ class EtcWatcher(object):
 				if hasattr(x,'ttl'): # pragma: no branch
 					kw['ttl'] = x.ttl
 				r._ext_update(x.value, seq=x.modifiedIndex, **kw)
+			yield from self.notify(r if r is not None else key, x.action)
 
 		yield from self.uptodate.acquire()
 		try:
@@ -318,4 +388,55 @@ class EtcWatcher(object):
 			logger.debug("DONE %d",x.modifiedIndex)
 		finally:
 			self.uptodate.release()
+
+class EtcNotifier(dict):
+	def __init__(self):
+		self.callbacks = set()
+		self.nodes = {}
+	
+	def __getitem__(self,key):
+		return self.nodes[key]
+	
+	def step(self,key):
+		"""Lookup with auto-generation of new nodes"""
+		res = self.nodes.get(key,None)
+		if res is None:
+			self.nodes[key] = res = EtcNotifier()
+		return res
+	
+	def items(self,key):
+		"""\
+			Enumerate entries matching this key.
+			Yields (name,sub-entry) tuples.
+			Note that a name of "**" is supposed to match a whole subtree,
+			so your matching algorithm needs to carry it over.
+			"""
+		res = self.nodes.get(key,None)
+		if res is not None:
+			yield key,res
+		res = self.nodes.get('*',None)
+		if res is not None:
+			yield "*",res
+		res = self.nodes.get('**',None)
+		if res is not None:
+			yield "**",res
+		
+	def register(self, proc):
+		"""Register a callback on this node"""
+		self.callbacks.add(proc)
+		return proc
+	
+	def __hash__(self):
+		return id(self)
+
+	@asyncio.coroutine
+	def notify(self, node,type):
+		"""Run notification calls for this node"""
+		for p in self.callbacks:
+			try:
+				res = p(node,type)
+				if isinstance(res, asyncio.Future) or inspect.isgenerator(res):
+					yield from res
+			except Exception:
+				logger.exception("Error in '%s' callback for %s: %s ",type,repr(node),repr(p))
 

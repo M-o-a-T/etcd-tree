@@ -34,6 +34,7 @@ import asyncio
 from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError,FrozenError
 
 from .util import cfg,client
+from unittest.mock import Mock
 
 @pytest.mark.asyncio
 def test_basic_watch(client):
@@ -127,7 +128,6 @@ def test_update_watch_direct(client):
     assert w['zwei']['zehn']['zwanzig'] == "30"
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja"
-
     
     with pytest.raises(NotImplementedError): # TODO
         w.delete('vier')
@@ -135,7 +135,6 @@ def test_update_watch_direct(client):
     w._get('zwei')._freeze()
     with pytest.raises(FrozenError): # TODO
         w['zwei']['ach'] = 'nee'
-
 
 @pytest.mark.asyncio
 def test_update_watch(client):
@@ -145,8 +144,20 @@ def test_update_watch(client):
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
     yield from t._f(d1)
     w = yield from t.tree("/two",mtRoot, immediate=False, static=False)
+
+    m0,m1,m2,m3,m4,m5,m6,m7 = Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock()
+    w.monitor("three.four.fiver")(m0)
+    w.monitor("three.four.five.six.seven")(m1)
+    w.monitor("three","*","fiver")(m2)
+    w.monitor("three.**.six")(m3)
+    w.monitor("**.none")(m4)
+    w.monitor("*","fiver")(m5)
+    w.monitor("acht.neun")(m6)
+    w.monitor("acht")(m7)
+
     assert w['sechs'] =="sieben"
-    assert w['acht']['neun'] =="zehn"
+    acht = w['acht']
+    assert acht['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from w._wait(mod=mod)
@@ -163,6 +174,21 @@ def test_update_watch(client):
     # and check that they're here
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
+
+    assert m0.call_count == 1
+    assert m1.call_count == 1
+    assert m2.call_count == 1
+    assert m3.call_count == 1
+    assert m7.call_count == 1
+    assert not m4.called
+    assert not m5.called
+    assert not m6.called
+    m0.assert_called_once_with(w['three']['four']._get('fiver'),'set')
+    m1.assert_called_once_with(w['three']['four']['five']['six']['seven'],'set')
+    m2.assert_called_once_with(w['three']['four']._get('fiver'),'set')
+    m3.assert_called_once_with(w['three']['four']['five']['six'],'dir')
+    m7.assert_called_once_with(acht,'delete')
+
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
         w['sechs']
