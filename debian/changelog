@@ -1,3 +1,9 @@
+etctree (0.2.2-2) unstable; urgency=medium
+
+  * requires aioetcd
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 13 Nov 2015 08:50:38 +0100
+
 etctree (0.2.2-1) unstable; urgency=medium
 
   * _Really_ drop attrdict.

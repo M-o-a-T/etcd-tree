@@ -69,7 +69,7 @@ with bi-directional updates.
         ),
     install_requires = """\
 gi >= 3.12
-etcd >= 0.4.2
+aioetcd >= 0.4.2
 """,
     setup_requires = """\
 coverage
