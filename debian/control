@@ -5,6 +5,7 @@ Priority: optional
 Build-Depends: python3-setuptools, python3-all, debhelper (>= 9),
   python3-pytest-cov,
   python3-aioetcd,
+  python3-gi,
 Standards-Version: 3.9.1
 
 Package: python3-etctree
