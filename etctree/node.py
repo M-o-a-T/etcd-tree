@@ -117,8 +117,15 @@ class mtBase(object):
 	def _set_up(self):
 		"""Override this method to get notified when initial subtree set-up is completed"""
 		pass
-	def _updated(self):
+	def _updated(self, path=(), seq=None):
 		"""Override this method to get notified when my value changes"""
+		p = self._parent
+		if p is None:
+			return
+		p = p()
+		if p is None:
+			return # pragma: no cover
+		p._updated(path=(self._name,)+path, seq=seq)
 		pass
 	def _deleted(self):
 		"""Override this method to get notified when this node gets dropped"""
@@ -140,6 +147,7 @@ class mtBase(object):
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._xttl = ttl
+		self._updated(seq=seq)
 		return True
 
 class mtValue(mtBase):
@@ -214,7 +222,6 @@ class mtValue(mtBase):
 		if not super(mtValue,self)._ext_update(**kw): # pragma: no cover
 			return
 		self._value = self._load(value)
-		self._updated()
 
 mtString = mtValue
 class mtInteger(mtValue):
