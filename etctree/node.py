@@ -327,7 +327,7 @@ class mtDir(mtBase):
 					for k,v in val.items():
 						t_set(path,keypath,k,v)
 				else:
-					t = root._types.lookup(keypath)
+					t = root._types.lookup(keypath, dir=False)
 					if t is None:
 						if self._final is not None:
 							raise UnknownNodeError(key)
@@ -362,7 +362,7 @@ class mtDir(mtBase):
 						if r is not None:
 							mod = r
 				else:
-					t = root._types.lookup(keypath)
+					t = root._types.lookup(keypath, dir=False)
 					if t is None:
 						if self._final is not None:
 							raise UnknownNodeError(key)
@@ -442,7 +442,7 @@ class mtDir(mtBase):
 			raise FrozenError(self._path+'/'+name)
 		if dir is None: # pragma: no cover
 			raise AttributeError(name)
-		cls = self._root()._types.lookup(self._keypath+(name,))
+		cls = self._root()._types.lookup(self._keypath+(name,), dir=dir)
 		if cls is None:
 			if self._final:
 				return None

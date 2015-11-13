@@ -149,7 +149,7 @@ class EtcClient(object):
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
 		cls = None
 		if types:
-			cls = types.type
+			cls = types.type[True]
 		if cls is None:
 			cls = mtRoot
 		else:
@@ -320,10 +320,9 @@ class EtcWatcher(object):
 			self.uptodate.release()
 
 class EtcTypes(object):
-	type = None
 
 	def __init__(self):
-		self.callbacks = set()
+		self.type = [None,None]
 		self.nodes = {}
 	
 	def __repr__(self):
@@ -356,7 +355,7 @@ class EtcTypes(object):
 		if res is not None:
 			yield '**',res
 		
-	def register(self, *path, cls=None):
+	def register(self, *path, cls=None, dir=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
@@ -369,20 +368,26 @@ class EtcTypes(object):
 		for p in path:
 			self = self.step(p)
 		if cls is None:
-			return self._register
+			return self._register(dir)
 		else:
-			return self._register(cls)
+			return self._register(dir)(cls)
 
-	def _register(self, cls):
-		"""Register a callback on this node"""
-		assert not self.type
-		self.type = cls
-		return cls
+	def _register(self, dir):
+		def reg(cls):
+			"""Register a callback on this node"""
+			if dir is not True:
+				assert self.type[0] is None
+				self.type[0] = cls
+			if dir is not False:
+				assert self.type[1] is None
+				self.type[1] = cls
+			return cls
+		return reg
 	
 	def __hash__(self):
 		return id(self)
 
-	def lookup(self, path):
+	def lookup(self, path, dir):
 		"""\
 			Find the node type that's to be associated with a path below me.
 
@@ -400,7 +405,8 @@ class EtcTypes(object):
 				return None
 			nodes = cn
 		for p,n in nodes:
-			if n.type is not None:
-				return n.type
+			t = n.type[dir]
+			if t is not None:
+				return t
 		return None
 
