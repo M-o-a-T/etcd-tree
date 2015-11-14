@@ -110,13 +110,3 @@ def from_yaml(path):
     with open(path) as f:
         return yaml.safe_load(f)
 
-if __name__ == "__main__": # pragma: no cover
-    # quick&dirty test
-    cfg = from_yaml("test.cfg.sample")
-    d = dict
-    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
-    assert cfg == d, (cfg,d)
-else:
-	## only use for testing
-    cfg = from_yaml(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))
-
