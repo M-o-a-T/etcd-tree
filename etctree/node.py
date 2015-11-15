@@ -208,13 +208,13 @@ class mtValue(mtBase):
 	value = property(_get_value, _set_value, _del_value)
 
 	@asyncio.coroutine
-	def set(self, value, sync=True):
+	def set(self, value, sync=True, ttl=None):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.set(self._path,self._dump(value), index=self._seq)
+		r = yield from root._conn.set(self._path,self._dump(value), index=self._seq, ttl=ttl)
 		if sync:
 			yield from root._watcher.sync(r.modifiedIndex)
 		return r.modifiedIndex
@@ -339,7 +339,7 @@ class mtDir(mtBase):
 			res.value = val
 
 	@asyncio.coroutine
-	def set(self, key,val, sync=True):
+	def set(self, key,value, sync=True, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			"""
@@ -352,12 +352,12 @@ class mtDir(mtBase):
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
 			@asyncio.coroutine
-			def t_set(path,keypath,key,val):
+			def t_set(path,keypath,key,value):
 				path += '/'+key
 				keypath += (key,)
 				mod = None
-				if isinstance(val,dict):
-					for k,v in val.items():
+				if isinstance(value,dict):
+					for k,v in value.items():
 						r = yield from t_set(path,keypath,k,v)
 						if r is not None:
 							mod = r
@@ -367,13 +367,13 @@ class mtDir(mtBase):
 						if self._final is not None:
 							raise UnknownNodeError(key)
 						t = mtValue
-					r = yield from root._conn.set(path, t._dump(val), prevExist=False)
+					r = yield from root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
-			mod = yield from t_set(self._path,self._keypath,key, val)
+			mod = yield from t_set(self._path,self._keypath,key, value)
 		else:
 			assert isinstance(res,mtValue)
-			mod = yield from res.set(val)
+			mod = yield from res.set(value, **kw)
 		if sync and mod:
 			yield from root._watcher.sync(mod)
 
