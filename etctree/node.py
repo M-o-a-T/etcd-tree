@@ -180,7 +180,7 @@ class mtValue(mtBase):
 	# used for testing
 	def __eq__(self, other):
 		if type(self) != type(other):
-			return False
+			return False # pragma: no cover
 		return self.value == other.value
 
 	@classmethod
@@ -220,13 +220,13 @@ class mtValue(mtBase):
 		return r.modifiedIndex
 
 	@asyncio.coroutine
-	def delete(self, sync=True):
+	def delete(self, sync=True, **kw):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.delete(self._path, index=self._seq)
+		r = yield from root._conn.delete(self._path, index=self._seq, **kw)
 		if sync:
 			yield from root._watcher.sync(r.modifiedIndex)
 		return r.modifiedIndex
@@ -391,7 +391,7 @@ class mtDir(mtBase):
 			return
 		raise NotImplementedError
 
-	def delete(self, key, sync=True):
+	def delete(self, key, sync=True, **kw):
 		"""\
 			Delete a node.
 			"""
@@ -399,7 +399,7 @@ class mtDir(mtBase):
 			raise FrozenError(self._path)
 		res = self._data[key]
 		if isinstance(res,mtValue):
-			return res.delete(sync=sync)
+			return res.delete(sync=sync, **kw)
 		raise NotImplementedError
 	delete._is_coroutine = True
 
@@ -415,7 +415,7 @@ class mtDir(mtBase):
 		#if type(self) != type(other):
 		#	return False
 		if not hasattr(other,'_data'):
-			return False
+			return False # pragma: no cover
 		return self._data == other._data
 
 	def _ext_lookup(self, name, dir=None, value=None, **kw):
@@ -528,6 +528,3 @@ class mtRoot(mtDir):
 		if w is not None:
 			w._kill()
 	
-	def monitor(self,*a,**k):
-		return self._watcher.monitor(*a,**k)
-

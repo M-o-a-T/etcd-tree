@@ -48,7 +48,7 @@ def test_basic_watch(client):
     # reg funcion shall return the right thing
     i = types.register("two","vier", cls=mtInteger)
     assert i is mtInteger
-    i = types.register("two","vierixx")(mtInteger)
+    i = types.register("/*/vierixx")(mtInteger)
     assert i is mtInteger
 
     d=dict
@@ -112,7 +112,7 @@ def test_update_watch_direct(client):
 
     w['vier']
     w['vier']['auch']
-    yield from w['vier'].delete('auch')
+    yield from w['vier'].delete('auch',prev='xxx')
     with pytest.raises(KeyError):
         w['vier']['auch']
     with pytest.raises(KeyError):

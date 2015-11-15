@@ -53,7 +53,7 @@ class EtcClient(object):
 	
 	@asyncio.coroutine
 	def _init(self):
-		if self.last_mod is not None:
+		if self.last_mod is not None: # pragma: no cover
 			return
 		try:
 			self.last_mod = (yield from self.client.read(self.root)).etcd_index
@@ -232,7 +232,7 @@ class EtcWatcher(object):
 	def __del__(self): # pragma: no cover
 		self._kill(abnormal=False)
 
-	def _kill(self, abnormal=True):
+	def _kill(self, abnormal=True): # pragma: no cover
 		"""Tear down everything"""
 		#logger.warning("_KILL")
 		r,self._reader = self._reader,None
@@ -298,7 +298,7 @@ class EtcWatcher(object):
 			"""
 		# Drop references so that termination works
 		r = self.root()
-		if r is None:
+		if r is None: # pragma: no cover
 			raise etcd.StopWatching
 
 		logger.debug("RUN: %s",repr(x.__dict__))
@@ -340,12 +340,9 @@ class EtcTypes(object):
 		self.type = [None,None]
 		self.nodes = {}
 	
-	def __repr__(self):
+	def __repr__(self): # pragma: no cover
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
-	def __getitem__(self,key):
-		return self.nodes[key]
-	
 	def step(self,key):
 		"""Lookup with auto-generation of new nodes"""
 		res = self.nodes.get(key,None)
@@ -399,9 +396,6 @@ class EtcTypes(object):
 			return cls
 		return reg
 	
-	def __hash__(self):
-		return id(self)
-
 	def lookup(self, path, dir):
 		"""\
 			Find the node type that's to be associated with a path below me.

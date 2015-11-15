@@ -43,6 +43,14 @@ def test_invalid_etcd():
     with pytest.raises(AssertionError):
         EtcClient(root="nix", **kw)
 
+def clean_dump(d):
+    d.pop('modifiedIndex',None)
+    d.pop('createdIndex',None)
+    for v in d.values():
+        if isinstance(v,dict):
+            clean_dump(v)
+    return d
+
 @pytest.mark.asyncio
 def test_get_set(client):
     """Basic get/set stuff"""
@@ -51,6 +59,7 @@ def test_get_set(client):
     yield from client.set("/foo","dud")
     yield from client.set("/what","ever")
     assert (yield from client._d()) == d(foo="dud",what="ever")
+    assert clean_dump((yield from client._d(dump=True))) == d(foo=d(key='/moatree/temp/foo', value='dud'),what=d(key='/moatree/temp/what',value='ever'))
     v = yield from client.read("/foo")
     assert v.value == "dud"
 
