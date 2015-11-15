@@ -305,7 +305,7 @@ class EtcWatcher(object):
 		assert x.key.startswith(self.extkey), (x.key,self.key, x.modifiedIndex)
 		key = x.key[len(self.extkey):]
 		key = tuple(k for k in key.split('/') if k != '')
-		if x.action in {'delete','expire'}:
+		if x.action in {'compareAndDelete','delete','expire'}:
 			try:
 				for n,k in enumerate(key):
 					r = r._ext_lookup(k)
