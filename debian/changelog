@@ -1,3 +1,9 @@
+etctree (0.4.1-1) unstable; urgency=medium
+
+  * Update delete method
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 15 Nov 2015 02:03:35 +0100
+
 etctree (0.4.0-1) unstable; urgency=medium
 
   * Release based on asyncio.

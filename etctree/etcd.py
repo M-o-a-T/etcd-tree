@@ -81,7 +81,20 @@ class EtcClient(object):
 	read._is_coroutine = True
 	
 	@asyncio.coroutine
-	def delete(self, key, **kw):
+	def delete(self, key, prev=_NOTGIVEN, index=None, **kw):
+		"""\
+			Delete a value.
+
+			@recursive: delete a whole tree.
+
+			@index: current mod stamp
+
+			@prev: current value
+			"""
+		if prev is not _NOTGIVEN:
+			kw['prevValue'] = prev
+		if index is not None:
+			kw['prevIndex'] = index
 		res = yield from self.client.delete(self._extkey(key), **kw)
 		self.last_mod = res.modifiedIndex
 		return res
@@ -95,7 +108,9 @@ class EtcClient(object):
 
 			@ttl: time-to-live in seconds.
 
-			@append: generate a new guaranteed-unique and sequential entry.
+			@append=True: generate a new guaranteed-unique and sequential entry.
+
+			@dir=True: generate a directory entry
 
 			"""
 		key = self._extkey(key)
