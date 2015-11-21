@@ -453,7 +453,13 @@ class mtDir(mtBase):
 		else:
 			assert issubclass(cls,mtDir if dir else mtValue)
 
-		obj = cls(parent=self,name=name, value=cls._load(value), **kw)
+		try:
+			value = cls._load(value)
+		except Exception as e:
+			logger.exception("Could not load %s as %s", value, str(cls))
+			value = repr(value)
+			cls = mtDir if dir else mtValue
+		obj = cls(parent=self,name=name, value=value, **kw)
 		self._data[name] = obj
 		return obj
 	
