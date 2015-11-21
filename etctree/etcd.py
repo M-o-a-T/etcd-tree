@@ -67,6 +67,10 @@ class EtcClient(object):
 			# already gone
 			pass
 
+	def _kill(self):
+		try: del self.client
+		except AttributeError: pass
+		
 	def _extkey(self, key):
 		key = str(key)
 		assert (key == '' or key[0] == '/')
