@@ -27,9 +27,12 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import logging
 logger = logging.getLogger(__name__)
 ##BP
+import asyncio
+loop = asyncio.get_event_loop()
 
 from aioetcd.client import Client
 import sys
+from pprint import pprint
 
 from optparse import OptionParser
 parser = OptionParser(conflict_handler="resolve")
@@ -39,6 +42,8 @@ parser.add_option("-s", "--server", dest="host", action="store",
     default="127.0.0.1", help="etcd server to connect to")
 parser.add_option("-p", "--port", dest="port", action="store",
     default=None, type=int, help="User to connect as")
+parser.add_option("-d", "--dump", dest="dump", action="store_true",
+    help="show internal data")
 parser.add_option("-r", "--root", dest="root", action="store",
     default='/', help="Subtree to dump")
 
@@ -53,11 +58,14 @@ if opts.port:
 	args['port']=opts.port
 et = Client(**args)
 
-for r in et.eternal_watch(opts.root, recursive=True):
-	if r.dir:
+async def callback(r):
+	if opts.dump:
+		pprint(r.__dict__)
+	elif r.dir:
 		print(r.action,r.key[len(opts.root):])
 	elif r.action not in {'compareAndDelete','delete','expire'} and hasattr(r,'value'):
 		print(r.action,r.key[len(opts.root):],r.value)
 	else:
 		print(r.action,r.key[len(opts.root):],r._prev_node.value)
+loop.run_until_complete(et.eternal_watch(opts.root, callback=callback,recursive=True))
 
