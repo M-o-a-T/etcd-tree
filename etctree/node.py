@@ -151,15 +151,16 @@ class mtBase(object):
 		p._ext_del_node(self)
 		
 	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
-		if seq and self._seq and self._seq >= seq:
-			return False # pragma: no cover
-		if seq: # pragma: no branch
-			self._seq = seq
 		if cseq is not None:
 			if self._cseq is None:
 				self._cseq = cseq
 			elif self._cseq != cseq:
+				import pdb;pdb.set_trace()
 				raise RuntimeError("Object re-created but we didn't notice")
+		if seq and self._seq and self._seq >= seq:
+			raise RuntimeError("Updates out of order")
+		if seq: # pragma: no branch
+			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._xttl = ttl
 		self._r_updated(seq=seq)

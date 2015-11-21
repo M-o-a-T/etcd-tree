@@ -331,7 +331,10 @@ class EtcWatcher(object):
 				kw = {}
 				if hasattr(x,'ttl'): # pragma: no branch
 					kw['ttl'] = x.ttl
-				r._ext_update(x.value, cseq=x.createdIndex, seq=x.modifiedIndex, **kw)
+				pn = getattr(x,'_prev_node',None)
+				cseq=pn.createdIndex if pn is not None else x.createdIndex
+				r._ext_update(x.value, cseq=cseq, seq=x.modifiedIndex, **kw)
+				r._cseq = x.createdIndex
 
 		await self.uptodate.acquire()
 		try:
