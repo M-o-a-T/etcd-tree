@@ -299,8 +299,7 @@ class EtcWatcher(object):
 		finally:
 			logger.info("READER ended")
 
-	@asyncio.coroutine
-	def _watch_write(self, x):
+	async def _watch_write(self, x):
 		"""\
 			Callback which processes incoming events
 			"""
@@ -334,7 +333,7 @@ class EtcWatcher(object):
 					kw['ttl'] = x.ttl
 				r._ext_update(x.value, seq=x.modifiedIndex, **kw)
 
-		yield from self.uptodate.acquire()
+		await self.uptodate.acquire()
 		try:
 			self.last_seen = x.modifiedIndex
 			self.uptodate.notify_all()
