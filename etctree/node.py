@@ -376,6 +376,7 @@ class mtDir(mtBase):
 			mod = yield from res.set(value, **kw)
 		if sync and mod:
 			yield from root._watcher.sync(mod)
+		return mod
 
 	def __delitem__(self, key):
 		"""\
