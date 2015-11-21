@@ -2,7 +2,7 @@ Source: etctree
 Maintainer: Matthias Urlichs <matthias@urlichs.de>
 Section: python
 Priority: optional
-Build-Depends: python3-setuptools, python3-all, debhelper (>= 9),
+Build-Depends: python3-setuptools, python3-all (>= 3.5), debhelper (>= 9),
   python3-pytest-cov,
   python3-aioetcd,
   python3-gi,
