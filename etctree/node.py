@@ -243,6 +243,8 @@ class mtValue(mtBase):
 mtString = mtValue
 class mtInteger(mtValue):
 	type = int
+class mtFloat(mtValue):
+	type = float
 
 class mtDir(mtBase):
 	"""\
