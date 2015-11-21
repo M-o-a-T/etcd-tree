@@ -81,7 +81,7 @@ class mtBase(object):
 		self._timestamp = time.time()
 	
 	def _task(self,p,*a,**k):
-		f = asyncio.async(p(*a,**k))
+		f = asyncio.ensure_future(p(*a,**k))
 		f.args = (self,p,a,k)
 		self._root()._tasks.append(f)
 
