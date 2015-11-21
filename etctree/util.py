@@ -80,8 +80,15 @@ def to_etcd(conn, path, data, delete=False):
 @asyncio.coroutine
 def from_etcd(conn, path, dump=False):
 	res = yield from conn.read(path, recursive=True)
-	data = {}
 
+	data = {}
+	if dump:
+		data['_'] = dict((k,v) for k,v in res.__dict__.items() if v)
+		data['_'].pop('_children',None)
+		if res.value is not None:
+			return data
+	elif res.value is not None:
+		return res.value
 	def d_add(tree, res):
 		for t in tree:
 			n = t['key']
