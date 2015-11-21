@@ -118,7 +118,7 @@ class EtcClient(object):
 
 			"""
 		key = self._extkey(key)
-		logger.debug("Write %s to %s with %s",value,key, repr(kw))
+		logger.debug("Write %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
 		if prev is _NOTGIVEN and index is None:
 			kw['prevExist'] = False
 		elif not kw.get('append',False):
@@ -280,9 +280,13 @@ class EtcWatcher(object):
 					logger.debug("IN: %s",repr(x.__dict__))
 					try:
 						yield from self._watch_write(x)
-					except Exception:
-						logger.exception("Error in write watcher")
+					except Exception as e:
+						import traceback
+						traceback.print_exc()
+						logger.fatal("Error in write watcher")
 						# XXX TODO trigger a major error
+						self.conn._kill()
+						raise
 					self.last_read = x.modifiedIndex
 
 				yield from conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
