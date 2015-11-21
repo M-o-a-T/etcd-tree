@@ -100,6 +100,10 @@ def test_basic_watch(client):
         assert v == w3['two'][k]
     assert res == {"zwei","vier","sechs"}
 
+    yield from w2.close()
+    yield from w3.close()
+    yield from w4.close()
+
 @pytest.mark.asyncio
 def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
@@ -118,14 +122,14 @@ def test_update_watch_direct(client):
     with pytest.raises(KeyError):
         w['zwei']['zehn']
     # Now test that adding a node does the right thing
-    yield from w['vier'].set('auch',"ja")
+    yield from w['vier'].set('auch',"ja1")
     yield from w['zwei'].set('zehn',d(zwanzig=30,vierzig=d(fuenfzig=60)))
     yield from w['zwei'].set('und', "weniger")
 
     assert w['zwei']['und'] == "weniger"
     assert w['zwei']['zehn']['zwanzig'] == "30"
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
-    assert w['vier']['auch'] == "ja"
+    assert w['vier']['auch'] == "ja1"
     
     with pytest.raises(NotImplementedError): # TODO
         w.delete('vier')
@@ -133,6 +137,8 @@ def test_update_watch_direct(client):
     w._get('zwei')._freeze()
     with pytest.raises(FrozenError): # TODO
         w['zwei']['ach'] = 'nee'
+
+    yield from w.close()
 
 @pytest.mark.asyncio
 def test_update_watch(client):
@@ -207,7 +213,7 @@ def test_update_watch(client):
     with pytest.raises(KeyError):
         w['vier']['auch']
     # Now test that adding a node does the right thing
-    w['vier']['auch'] = "ja"
+    w['vier']['auch'] = "ja2"
     w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
@@ -238,8 +244,8 @@ def test_update_watch(client):
     assert w2['zwei']['und'] == "weniger"
     assert w1['zwei']['zehn']['zwanzig'] == "30"
     assert w2['zwei']['zehn']['zwanzig'] == "30"
-    assert w1['vier']['auch'] == "ja"
-    assert w2['vier']['auch'] == "ja"
+    assert w1['vier']['auch'] == "ja2"
+    assert w2['vier']['auch'] == "ja2"
     yield from w1._wait()
 
     # _final=false means I can't add new untyped nodes
@@ -282,6 +288,10 @@ def test_update_watch(client):
         yield from w1['vier'].set('nixy', "daz")
     assert w1['vier']['new_b'] == "z"
 
+    yield from w.close()
+    yield from w1.close()
+    yield from w2.close()
+
 @pytest.mark.asyncio
 def test_update_ttl(client):
     d=dict
@@ -313,6 +323,8 @@ def test_update_ttl(client):
     assert w['nodes'] == "too"
     assert w._get('nodes')._ttl is None
 
+    yield from w.close()
+
 @pytest.mark.asyncio
 def test_create(client):
     t = client
@@ -327,3 +339,7 @@ def test_create(client):
     with pytest.raises(etcd.EtcdAlreadyExist):
         yield from t.tree("/not/there", immediate=True, static=True, create=True)
 
+    yield from w1.close()
+    yield from w2.close()
+    yield from w3.close()
+    yield from w4.close()

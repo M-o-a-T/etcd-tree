@@ -509,6 +509,12 @@ class mtRoot(mtDir):
 		super(mtRoot,self).__init__(**kw)
 
 	@asyncio.coroutine
+	def close(self):
+		w,self._watcher = self._watcher,None
+		if w is not None:
+			yield from w.close()
+
+	@asyncio.coroutine
 	def _wait(self, mod=None, timeout=None):
 		if self._tasks:
 			tasks,self._tasks = self._tasks,[]

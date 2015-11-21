@@ -234,18 +234,26 @@ class EtcWatcher(object):
 		self._reader = asyncio.ensure_future(self._watch_read())
 
 	def __del__(self): # pragma: no cover
-		self._kill(abnormal=False)
+		self._kill()
 
-	def _kill(self, abnormal=True): # pragma: no cover
+	def _kill(self): # pragma: no cover
 		"""Tear down everything"""
 		#logger.warning("_KILL")
 		r,self._reader = self._reader,None
 		if r is not None:
 			r.cancel()
 			r = None
-		if self.q is not None:
-			yield from self.q.put(None)
-			self.q = None
+		
+	@asyncio.coroutine
+	def close(self):
+		r,self._reader = self._reader,None
+		if r is not None:
+			r.cancel()
+			try:
+				yield from r
+			except asyncio.CancelledError:
+				pass
+		self._kill()
 		
 	def _set_root(self, root):
 		self.root = weakref.ref(root)

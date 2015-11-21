@@ -1,3 +1,9 @@
+etctree (0.4.6-1) unstable; urgency=medium
+
+  * Add an async close() call to the watcher
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 22 Nov 2015 00:06:36 +0100
+
 etctree (0.4.5-3) unstable; urgency=medium
 
   * … again
