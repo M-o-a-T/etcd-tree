@@ -199,7 +199,7 @@ def test_update_watch(client):
     del w['vier']['oder']
     yield from w._wait()
     w['vier']
-    w['vier']['auch']
+    s = w['vier']._get('auch')._cseq
     with pytest.raises(KeyError):
         w['vier']['oder']
     del w['vier']['auch']
@@ -212,6 +212,7 @@ def test_update_watch(client):
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
     yield from w['zwei']._wait()
+    assert s != w['vier']._get('auch')._cseq
 
     from etctree import client as rclient
     from .util import cfgpath
@@ -262,7 +263,7 @@ def test_update_watch(client):
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = yield from t._f(d1)
-    yield from w1._wait()
+    yield from w1._wait(mod)
     assert w1['vier']['a'] == "b"
     with pytest.raises(KeyError):
         w1['vier']['new_b']
@@ -271,7 +272,7 @@ def test_update_watch(client):
     w1._get('vier')._final = True
     d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
     mod = yield from t._f(d1)
-    yield from w1._wait()
+    yield from w1._wait(mod)
     assert w1['vier']['c'] == "x"
     with pytest.raises(KeyError):
         w1['vier']['d']

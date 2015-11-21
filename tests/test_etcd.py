@@ -46,6 +46,8 @@ def test_invalid_etcd():
 def clean_dump(d):
     d.pop('modifiedIndex',None)
     d.pop('createdIndex',None)
+    d.pop('etcd_index',None)
+    d.pop('raft_index',None)
     for v in d.values():
         if isinstance(v,dict):
             clean_dump(v)
@@ -59,7 +61,11 @@ def test_get_set(client):
     yield from client.set("/foo","dud")
     yield from client.set("/what","ever")
     assert (yield from client._d()) == d(foo="dud",what="ever")
-    assert clean_dump((yield from client._d(dump=True))) == d(foo=d(key='/moatree/temp/foo', value='dud'),what=d(key='/moatree/temp/what',value='ever'))
+    du = clean_dump((yield from client._d(dump=True)))
+    assert du == d(
+        _=d(action='get', dir=True, key='/moatree/temp'),
+        foo=d(key='/moatree/temp/foo', value='dud'),
+        what=d(key='/moatree/temp/what',value='ever'))
     v = yield from client.read("/foo")
     assert v.value == "dud"
 
