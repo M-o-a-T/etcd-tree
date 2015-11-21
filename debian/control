@@ -3,6 +3,7 @@ Maintainer: Matthias Urlichs <matthias@urlichs.de>
 Section: python
 Priority: optional
 Build-Depends: python3-setuptools, python3-all (>= 3.5), debhelper (>= 9),
+  python3 (>= 3.5),
   python3-pytest-cov,
   python3-aioetcd,
   python3-gi,
@@ -11,7 +12,8 @@ Standards-Version: 3.9.1
 
 Package: python3-etctree
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}
+Depends: ${misc:Depends}, ${python3:Depends},
+  python3 (>= 3.5),
 Description: Dynamic state information
  etcTree is a dynamic, object-oriented view of an etcd (sub)tree
  with bi-directional updates.
