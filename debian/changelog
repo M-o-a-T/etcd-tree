@@ -1,3 +1,9 @@
+etctree (0.4.3-1) unstable; urgency=medium
+
+  * Add createdIndex handling
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 21 Nov 2015 22:44:40 +0100
+
 etctree (0.4.2-1) unstable; urgency=medium
 
   * More updates
