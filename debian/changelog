@@ -1,3 +1,9 @@
+etctree (0.4.5-3) unstable; urgency=medium
+
+  * … again
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 21 Nov 2015 22:57:48 +0100
+
 etctree (0.4.5-2) unstable; urgency=medium
 
   * require py3, dammit
