@@ -155,7 +155,6 @@ class mtBase(object):
 			if self._cseq is None:
 				self._cseq = cseq
 			elif self._cseq != cseq:
-				import pdb;pdb.set_trace()
 				raise RuntimeError("Object re-created but we didn't notice")
 		if seq and self._seq and self._seq >= seq:
 			raise RuntimeError("Updates out of order")

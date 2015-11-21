@@ -1,3 +1,9 @@
+etctree (0.4.4-1) unstable; urgency=medium
+
+  * found a stupid debug statement
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 21 Nov 2015 22:46:00 +0100
+
 etctree (0.4.3-1) unstable; urgency=medium
 
   * Add createdIndex handling
