@@ -173,7 +173,7 @@ class EtcClient(object):
 			cls = mtRoot
 		else:
 			assert issubclass(cls,mtRoot)
-		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, types=types,
+		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, cseq=res.createdIndex, types=types,
 			ttl=res.ttl if hasattr(res,'ttl') else None)
 
 		if immediate:
@@ -182,11 +182,11 @@ class EtcClient(object):
 					n = t['key']
 					n = n[n.rindex('/')+1:]
 					if t.get('dir',False):
-						sd = node._ext_lookup(n, dir=True, seq=t['modifiedIndex'],
+						sd = node._ext_lookup(n, dir=True, cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						d_add(t.get('nodes',()),sd)
 					else:
-						node._ext_lookup(n, dir=False, value=t['value'], seq=t['modifiedIndex'],
+						node._ext_lookup(n, dir=False, value=t['value'], cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
 				node._updated('populate')
 			d_add(res._children,root)
@@ -199,12 +199,12 @@ class EtcClient(object):
 					n = c.key
 					n = n[n.rindex('/')+1:]
 					if c.dir:
-						sd = node._ext_lookup(n,dir=True, seq=res.modifiedIndex,
+						sd = node._ext_lookup(n,dir=True, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 						data = yield from self.client.read(c.key)
 						yield from d_get(sd, data)
 					else:
-						node._ext_lookup(n,dir=False, value=c.value, seq=res.modifiedIndex,
+						node._ext_lookup(n,dir=False, value=c.value, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node._updated('populate')
 			yield from d_get(root, res)
@@ -324,14 +324,14 @@ class EtcWatcher(object):
 				pass
 		else:
 			for n,k in enumerate(key):
-				r = r._ext_lookup(k, dir=True if x.dir else n<len(key)-1)
+				r = r._ext_lookup(k, dir= True if x.dir else n<len(key)-1, value= None if x.dir or n<len(key)-1 else x.value)
 				if r is None:
 					break # pragma: no cover
 			else:
 				kw = {}
 				if hasattr(x,'ttl'): # pragma: no branch
 					kw['ttl'] = x.ttl
-				r._ext_update(x.value, seq=x.modifiedIndex, **kw)
+				r._ext_update(x.value, cseq=x.createdIndex, seq=x.modifiedIndex, **kw)
 
 		await self.uptodate.acquire()
 		try:

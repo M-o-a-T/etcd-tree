@@ -65,7 +65,7 @@ class mtBase(object):
 	_monitor = None
 	_frozen = False
 
-	def __init__(self, parent=None, name=None, seq=None, ttl=None):
+	def __init__(self, parent=None, name=None, seq=None, cseq=None, ttl=None):
 		if name:
 			self._parent = weakref.ref(parent)
 			self._root = parent._root
@@ -76,6 +76,7 @@ class mtBase(object):
 			# This is a root node
 			self._root = weakref.ref(self)
 		self._seq = seq
+		self._cseq = cseq
 		self._xttl = ttl
 		self._timestamp = time.time()
 	
@@ -149,11 +150,16 @@ class mtBase(object):
 			return # pragma: no cover
 		p._ext_del_node(self)
 		
-	def _ext_update(self, seq=None, ttl=_NOTGIVEN):
+	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
 		if seq and self._seq and self._seq >= seq:
 			return False # pragma: no cover
 		if seq: # pragma: no branch
 			self._seq = seq
+		if cseq is not None:
+			if self._cseq is None:
+				self._cseq = cseq
+			elif self._cseq != cseq:
+				raise RuntimeError("Object re-created but we didn't notice")
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._xttl = ttl
 		self._r_updated(seq=seq)
