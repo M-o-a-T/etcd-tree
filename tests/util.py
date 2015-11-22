@@ -53,9 +53,9 @@ def client(event_loop):
     except etcd.EtcdKeyNotFound:
         pass
     event_loop.run_until_complete(c.client.write(c.root, dir=True, value=None))
-    def dumper(client, dump=False):
+    def dumper(client, path='', dump=False):
         from etctree.util import from_etcd
-        return from_etcd(client.client,client.root, dump=dump)
+        return from_etcd(client.client,client.root+path, dump=dump)
     def feeder(client,data, delete=False,subtree=""):
         from etctree.util import to_etcd
         return to_etcd(client.client,client.root+subtree,data, delete=delete)

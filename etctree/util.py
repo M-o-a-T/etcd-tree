@@ -42,7 +42,7 @@ def to_etcd(conn, path, data, delete=False):
 		if mod is None:
 			mod = m
 		elif m is None:
-			return
+			return # pragma: no cover
 		elif mod < m:
 			mod = m
 	if isinstance(data,dict):

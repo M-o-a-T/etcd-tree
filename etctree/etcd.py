@@ -61,11 +61,7 @@ class EtcClient(object):
 			self.last_mod = (yield from self.client.write(self.root, value=None, dir=True)).etcd_index
 
 	def __del__(self):
-		try:
-			del self.client
-		except AttributeError:
-			# already gone
-			pass
+		self._kill()
 
 	def _kill(self):
 		try: del self.client

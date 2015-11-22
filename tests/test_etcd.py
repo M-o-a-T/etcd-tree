@@ -59,13 +59,18 @@ def test_get_set(client):
     d=dict
     assert (yield from client._d()) == d()
     yield from client.set("/foo","dud")
-    yield from client.set("/what","ever")
-    assert (yield from client._d()) == d(foo="dud",what="ever")
+    yield from client.set("/what/so","ever")
+    assert (yield from client._d()) == d(foo="dud",what=d(so="ever"))
+    assert (yield from client._d("/what/so")) == "ever"
+    assert (clean_dump((yield from client._d("/what/so",dump=True)))) == \
+        d(_=d(action='get', key='/moatree/temp/what/so', value='ever'))
     du = clean_dump((yield from client._d(dump=True)))
     assert du == d(
         _=d(action='get', dir=True, key='/moatree/temp'),
         foo=d(key='/moatree/temp/foo', value='dud'),
-        what=d(key='/moatree/temp/what',value='ever'))
+        what= d(_=d(dir=True, key='/moatree/temp/what'),
+          so=d(key='/moatree/temp/what/so', value='ever')))
+
     v = yield from client.read("/foo")
     assert v.value == "dud"
 
@@ -75,9 +80,9 @@ def test_get_set(client):
     with pytest.raises(etcd.EtcdCompareFailed):
         yield from client.set("/foo","bar",index=v.etcd_index+100)
     x=yield from client.set("/foo","bari",prev="dud")
-    assert (yield from client._d()) == d(foo="bari",what="ever")
+    assert (yield from client._d()) == d(foo="bari",what=d(so="ever"))
     yield from client.set("/foo","bar",index=x.modifiedIndex)
-    assert (yield from client._d()) == d(foo="bar",what="ever")
+    assert (yield from client._d()) == d(foo="bar",what=d(so="ever"))
     assert (yield from client.get("/foo")).value == "bar"
     v=yield from client.read("/foo")
     assert v.value == "bar"

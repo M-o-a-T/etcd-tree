@@ -163,12 +163,12 @@ def test_update_watch(client):
     assert w['sechs'] =="sieben"
     acht = w['acht']
     assert acht['neun'] =="zehn"
-    d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
+    d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxy",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from w._wait(mod=mod)
     assert w['zwei']['und']=="mehr"
     assert w['vier']['oder']=="fünfe"
-    assert w['vier']['auch']=="xxx"
+    assert w['vier']['auch']=="xxy"
     assert "oder" in w['vier']
     assert "oderr" not in w['vier']
 
@@ -212,6 +212,7 @@ def test_update_watch(client):
     yield from w._wait()
     with pytest.raises(KeyError):
         w['vier']['auch']
+
     # Now test that adding a node does the right thing
     w['vier']['auch'] = "ja2"
     w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))

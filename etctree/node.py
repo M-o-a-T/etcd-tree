@@ -122,7 +122,7 @@ class mtBase(object):
 			return
 		p = self._parent
 		if p is None:
-			return
+			return # pragma: no cover ## would require special root
 		p = p()
 		if p is None:
 			return # pragma: no cover
@@ -155,9 +155,9 @@ class mtBase(object):
 			if self._cseq is None:
 				self._cseq = cseq
 			elif self._cseq != cseq:
-				raise RuntimeError("Object re-created but we didn't notice")
+				raise RuntimeError("Object re-created but we didn't notice") # pragma: no cover # hopefully
 		if seq and self._seq and self._seq >= seq:
-			raise RuntimeError("Updates out of order")
+			raise RuntimeError("Updates out of order") # pragma: no cover # hopefully
 		if seq: # pragma: no branch
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
@@ -461,7 +461,7 @@ class mtDir(mtBase):
 
 		try:
 			value = cls._load(value)
-		except Exception as e:
+		except Exception as e: # pragma: no cover
 			logger.exception("Could not load %s as %s", value, str(cls))
 			value = repr(value)
 			cls = mtDir if dir else mtValue
@@ -547,5 +547,5 @@ class mtRoot(mtDir):
 	def _kill(self):
 		w,self._watcher = self._watcher,None
 		if w is not None:
-			w._kill()
+			w._kill() # pragma: no cover # as the tests call close()
 	
