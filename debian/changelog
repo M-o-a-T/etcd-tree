@@ -1,3 +1,9 @@
+etctree (0.4.8-1) unstable; urgency=medium
+
+  * Add optional loop argument to factory
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 22 Nov 2015 20:27:54 +0100
+
 etctree (0.4.7-1) unstable; urgency=medium
 
   * Found a race condition when deleting
