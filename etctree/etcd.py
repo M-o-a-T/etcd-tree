@@ -257,7 +257,7 @@ class EtcWatcher(object):
 	@asyncio.coroutine
 	def sync(self, mod=None):
 		"""Wait for pending updates"""
-		if mod is None:
+		if mod is None or mod < self.conn.last_mod:
 			mod = self.conn.last_mod
 		logger.debug("Syncing, wait for %d",mod)
 		try:

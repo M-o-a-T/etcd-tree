@@ -1,3 +1,9 @@
+etctree (0.4.7-1) unstable; urgency=medium
+
+  * Found a race condition when deleting
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 22 Nov 2015 11:37:47 +0100
+
 etctree (0.4.6-1) unstable; urgency=medium
 
   * Add an async close() call to the watcher

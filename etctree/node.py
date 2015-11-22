@@ -527,8 +527,6 @@ class mtRoot(mtDir):
 				except Exception as exc: # pragma: no cover
 					self._tasks.extend(done)
 					raise
-				if mod is None:
-					mod = self._conn.last_mod
 				r = getattr(r,'modifiedIndex',None)
 				if mod is None or (r is not None and mod < r):
 					mod = r # pragma: no cover # because we pop off the end
