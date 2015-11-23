@@ -53,7 +53,7 @@ def clean_dump(d):
             clean_dump(v)
     return d
 
-@pytest.mark.asyncio
+@pytest.mark.run_loop
 def test_get_set(client):
     """Basic get/set stuff"""
     d=dict
@@ -92,7 +92,7 @@ def test_get_set(client):
     r = yield from client.set("/",value="baz",append=True)
     assert r.key.endswith('000'+str(r.modifiedIndex))
 
-@pytest.mark.asyncio
+@pytest.mark.run_loop
 def test_feeding(client):
     """Feed data into etcd and check that they arrive."""
     # basic stuff

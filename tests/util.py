@@ -39,20 +39,20 @@ __ALL__ = ('cfg','cfgpath')
 
 cfgpath = None
 
-@pytest.fixture
-def client(event_loop):
+@pytest.yield_fixture
+def client(loop):
     """An interface to a clean etcd subtree"""
     kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
     from etctree.etcd import EtcClient
-    c = EtcClient(root=r, **kw)
-    event_loop.run_until_complete(c._init())
+    c = EtcClient(root=r, loop=loop, **kw)
+    loop.run_until_complete(c._init())
     try:
-        event_loop.run_until_complete(c.client.delete(c.root, recursive=True))
+        loop.run_until_complete(c.client.delete(c.root, recursive=True))
     except etcd.EtcdKeyNotFound:
         pass
-    event_loop.run_until_complete(c.client.write(c.root, dir=True, value=None))
+    loop.run_until_complete(c.client.write(c.root, dir=True, value=None))
     def dumper(client, path='', dump=False):
         from etctree.util import from_etcd
         return from_etcd(client.client,client.root+path, dump=dump)
@@ -62,7 +62,9 @@ def client(event_loop):
     type(c)._d = dumper
     type(c)._f = feeder
 
-    return c
+    yield c
+
+    c.close()
     
 # load a config file
 def load_cfg(cfg):

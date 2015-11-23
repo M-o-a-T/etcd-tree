@@ -67,6 +67,10 @@ class EtcClient(object):
 		try: del self.client
 		except AttributeError: pass
 		
+	def close(self):
+		self.client.close()
+		self._kill()
+
 	def _extkey(self, key):
 		key = str(key)
 		assert (key == '' or key[0] == '/')
@@ -227,7 +231,7 @@ class EtcWatcher(object):
 		self.last_seen = seq
 
 		self.uptodate = asyncio.Condition(loop=conn._loop)
-		self._reader = asyncio.ensure_future(self._watch_read())
+		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
 
 	def __del__(self): # pragma: no cover
 		self._kill()
@@ -275,7 +279,7 @@ class EtcWatcher(object):
 			Task which reads from etcd and processes the events received.
 			"""
 		logger.info("READER started")
-		conn = Client(**self.conn.args)
+		conn = Client(loop=self.conn._loop, **self.conn.args)
 		key = self.extkey
 		try:
 			while True:

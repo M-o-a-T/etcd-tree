@@ -37,7 +37,7 @@ from etctree.etcd import EtcTypes
 from .util import cfg,client
 from unittest.mock import Mock
 
-@pytest.mark.asyncio
+@pytest.mark.run_loop
 def test_basic_watch(client):
     """Watches which don't actually watch"""
     # object type registration
@@ -104,7 +104,7 @@ def test_basic_watch(client):
     yield from w3.close()
     yield from w4.close()
 
-@pytest.mark.asyncio
+@pytest.mark.run_loop
 def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
@@ -140,8 +140,8 @@ def test_update_watch_direct(client):
 
     yield from w.close()
 
-@pytest.mark.asyncio
-def test_update_watch(client):
+@pytest.mark.run_loop
+def test_update_watch(client, loop):
     """Testing auto-update, both ways"""
     d=dict
     t = client
@@ -223,7 +223,7 @@ def test_update_watch(client):
 
     from etctree import client as rclient
     from .util import cfgpath
-    tt = yield from rclient(cfgpath)
+    tt = yield from rclient(cfgpath, loop=loop)
     w1 = yield from tt.tree("/two", immediate=True, types=types)
     assert w is not w1
     assert w == w1
@@ -293,8 +293,8 @@ def test_update_watch(client):
     yield from w1.close()
     yield from w2.close()
 
-@pytest.mark.asyncio
-def test_update_ttl(client):
+@pytest.mark.run_loop
+def test_update_ttl(client, loop):
     d=dict
     t = client
 
@@ -316,7 +316,7 @@ def test_update_ttl(client):
     assert w['some'] == "data"
     assert w._get('nodes')._ttl is not None
     del w._get('nodes')._ttl
-    yield from asyncio.sleep(2)
+    yield from asyncio.sleep(2, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
     with pytest.raises(KeyError):
@@ -326,7 +326,7 @@ def test_update_ttl(client):
 
     yield from w.close()
 
-@pytest.mark.asyncio
+@pytest.mark.run_loop
 def test_create(client):
     t = client
     with pytest.raises(etcd.EtcdKeyNotFound):

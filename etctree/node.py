@@ -81,7 +81,7 @@ class mtBase(object):
 		self._timestamp = time.time()
 	
 	def _task(self,p,*a,**k):
-		f = asyncio.ensure_future(p(*a,**k))
+		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
 		f.args = (self,p,a,k)
 		self._root()._tasks.append(f)
 
@@ -518,7 +518,7 @@ class mtRoot(mtDir):
 	def _wait(self, mod=None, timeout=None):
 		if self._tasks:
 			tasks,self._tasks = self._tasks,[]
-			done,tasks = yield from asyncio.wait(tasks, timeout=timeout)
+			done,tasks = yield from asyncio.wait(tasks, timeout=timeout, loop=self._conn._loop)
 			self._tasks.extend(tasks)
 			while done:
 				t = done.pop()
