@@ -226,7 +226,7 @@ class EtcWatcher(object):
 		self.last_read = seq
 		self.last_seen = seq
 
-		self.uptodate = asyncio.Condition()
+		self.uptodate = asyncio.Condition(loop=conn._loop)
 		self._reader = asyncio.ensure_future(self._watch_read())
 
 	def __del__(self): # pragma: no cover
