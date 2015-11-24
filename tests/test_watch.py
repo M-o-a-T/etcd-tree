@@ -31,7 +31,7 @@ import pytest
 import etcd
 import time
 import asyncio
-from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtString, UnknownNodeError,FrozenError
+from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString, UnknownNodeError,FrozenError
 from etctree.etcd import EtcTypes
 
 from .util import cfg,client
@@ -50,6 +50,12 @@ def test_basic_watch(client):
     assert i is mtInteger
     i = types.register("/*/vierixx")(mtInteger)
     assert i is mtInteger
+    types['what.ever'] = mtFloat
+    types['/something/else'] = mtInteger
+    assert types['/what/ever'] is mtFloat
+    assert types['two.vier'] is mtInteger
+    assert types['something.else'] is mtInteger
+    assert types['not.not'] is None
 
     d=dict
     t = client

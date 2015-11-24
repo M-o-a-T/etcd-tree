@@ -387,6 +387,26 @@ class EtcTypes(object):
 		if res is not None:
 			yield '**',res
 		
+	def __getitem__(self,path):
+		"""Shortcut to directly lookup a non-directory node"""
+		if path[0] == "/":
+			path = tuple(p for p in path.split('/') if p != '')
+		else:
+			path = path.split(".")
+		for p in path:
+			self = self.step(p)
+		return self.type[0]
+
+	def __setitem__(self,path,value):
+		"""Shortcut to register a non-directory node"""
+		if path[0] == "/":
+			path = tuple(p for p in path.split('/') if p != '')
+		else:
+			path = path.split(".")
+		for p in path:
+			self = self.step(p)
+		self._register(False)(value)
+
 	def register(self, *path, cls=None, dir=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
