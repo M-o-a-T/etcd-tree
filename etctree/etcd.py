@@ -301,10 +301,12 @@ class EtcWatcher(object):
 
 		except GeneratorExit:
 			raise
+		except CancelledError:
+			logger.info("READER cancelled")
 		except BaseException as e:
 			logger.exception("READER died")
 			raise
-		finally:
+		else:
 			logger.info("READER ended")
 
 	async def _watch_write(self, x):
