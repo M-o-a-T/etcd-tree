@@ -301,7 +301,7 @@ class EtcWatcher(object):
 
 		except GeneratorExit:
 			raise
-		except CancelledError:
+		except asyncio.CancelledError:
 			logger.info("READER cancelled")
 		except BaseException as e:
 			logger.exception("READER died")

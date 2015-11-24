@@ -1,3 +1,9 @@
+etctree (0.4.11-2) unstable; urgency=medium
+
+  * *Sigh*
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 24 Nov 2015 08:06:03 +0100
+
 etctree (0.4.11-1) unstable; urgency=medium
 
   * Don't log a stack trace when the reader gets cancelled
