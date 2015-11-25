@@ -118,7 +118,7 @@ def test_update_watch_direct(client):
     w = yield from t.tree("/two", immediate=False, static=False)
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
-    yield from w._wait(mod=mod)
+    yield from w.wait(mod=mod)
 
     w['vier']
     w['vier']['auch']
@@ -161,16 +161,16 @@ def test_update_watch(client, loop):
     f = asyncio.Future(loop=loop)
     def wake(x):
         f.set_result(x)
-    i0 = w._add_monitor(wake)
-    i1 = w['zwei']._add_monitor(m1)
-    i2 = w['zwei']._get('und')._add_monitor(m2)
+    i0 = w.add_monitor(wake)
+    i1 = w['zwei'].add_monitor(m1)
+    i2 = w['zwei']._get('und').add_monitor(m2)
 
     assert w['sechs'] == "sieben"
     acht = w['acht']
     assert acht['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxy",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
-    yield from w._wait(mod=mod)
+    yield from w.wait(mod=mod)
     assert w['zwei']['und']=="mehr"
     assert w['vier']['oder']=="fünfe"
     assert w['vier']['auch']=="xxy"
@@ -180,7 +180,7 @@ def test_update_watch(client, loop):
     # Directly insert "deep" entries
     yield from t.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
     mod = (yield from t.client.write(client._extkey('/two/three/four/fiver'),"what")).modifiedIndex
-    yield from w._wait(mod)
+    yield from w.wait(mod)
     # and check that they're here
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
@@ -190,7 +190,7 @@ def test_update_watch(client, loop):
     f = asyncio.Future(loop=loop)
     assert m1.call_count == 1
     assert m2.call_count == 1
-    w['zwei']._remove_monitor(i1)
+    w['zwei'].remove_monitor(i1)
 
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
@@ -202,22 +202,22 @@ def test_update_watch(client, loop):
     with pytest.raises(NotImplementedError): # TODO
         del w['vier']
     del w['vier']['oder']
-    yield from w._wait()
+    yield from w.wait()
     w['vier']
     s = w['vier']._get('auch')._cseq
     with pytest.raises(KeyError):
         w['vier']['oder']
-    del w['vier']['auch']
-    yield from w._wait()
+    m = yield from w['vier']._get('auch').delete()
+    yield from w.wait(m)
     with pytest.raises(KeyError):
         w['vier']['auch']
 
     # Now test that adding a node does the right thing
-    w['vier']['auch'] = "ja2"
+    m = yield from w['vier'].set('auch',"ja2")
     w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
-    yield from w['zwei']._wait()
+    yield from w['zwei'].wait(m)
     assert s != w['vier']._get('auch')._cseq
 
     from etctree import client as rclient
@@ -246,7 +246,7 @@ def test_update_watch(client, loop):
     assert w2['zwei']['zehn']['zwanzig'] == "30"
     assert w1['vier']['auch'] == "ja2"
     assert w2['vier']['auch'] == "ja2"
-    yield from w1._wait()
+    yield from w1.wait()
 
     logger.debug("Waiting for _update 2")
     yield from f
@@ -258,7 +258,7 @@ def test_update_watch(client, loop):
     types.register("**","new_b", cls=mtString)
     w1._get('vier')._final = False
     mod = yield from t._f(d2,delete=True)
-    yield from w1._wait()
+    yield from w1.wait()
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     with pytest.raises(UnknownNodeError):
@@ -266,7 +266,7 @@ def test_update_watch(client, loop):
     with pytest.raises(UnknownNodeError):
         yield from w1['vier'].set('nix', "da")
     w1['vier']['new_a'] = "e_a"
-    yield from w1._wait()
+    yield from w1.wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
@@ -274,7 +274,7 @@ def test_update_watch(client, loop):
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = yield from t._f(d1)
-    yield from w1._wait(mod)
+    yield from w1.wait(mod)
     assert w1['vier']['a'] == "b"
     with pytest.raises(KeyError):
         w1['vier']['new_b']
@@ -283,7 +283,7 @@ def test_update_watch(client, loop):
     w1._get('vier')._final = True
     d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
     mod = yield from t._f(d1)
-    yield from w1._wait(mod)
+    yield from w1.wait(mod)
     assert w1['vier']['c'] == "x"
     with pytest.raises(KeyError):
         w1['vier']['d']
@@ -302,31 +302,34 @@ def test_update_ttl(client, loop):
     d=dict
     t = client
 
-    mod = yield from t._f(d(nice=d(timeout=d(of="data"),nodes="too")))
+    mod = yield from t._f(d(nice=d(t2="fuu",timeout=d(of="data"),nodes="too")))
     w = yield from t.tree("/nice")
     assert w['timeout']['of'] == "data"
-    assert w['timeout']._ttl is None
+    assert w['timeout'].ttl is None
     assert w['nodes'] == "too"
     yield from w.set('some','data',ttl=1)
-    assert w._get('nodes')._ttl is None
+    assert w._get('nodes').ttl is None
     logger.warning("_SET_TTL")
-    w._get('timeout')._ttl = 1
-    w._get('nodes')._ttl = 1
+    w._get('timeout').ttl = 1
+    yield from w._get('t2').set_ttl(1)
+    yield from w._get('t2').del_ttl()
+    yield from w._get('nodes').set_ttl(1)
     logger.warning("_SYNC_TTL")
-    yield from w._wait()
+    yield from w.wait()
     logger.warning("_GET_TTL")
-    assert w._get('timeout')._ttl is not None
+    assert w._get('timeout').ttl is not None
     assert w['nodes'] == "too"
     assert w['some'] == "data"
-    assert w._get('nodes')._ttl is not None
-    del w._get('nodes')._ttl
+    assert w._get('nodes').ttl is not None
+    del w._get('nodes').ttl
     yield from asyncio.sleep(2, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
     with pytest.raises(KeyError):
         w['some']
     assert w['nodes'] == "too"
-    assert w._get('nodes')._ttl is None
+    assert w._get('nodes').ttl is None
+    assert w._get('t2').ttl is None
 
     yield from w.close()
 

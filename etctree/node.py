@@ -70,15 +70,15 @@ class mtBase(object):
 		if name:
 			self._parent = weakref.ref(parent)
 			self._root = parent._root
-			self._name = name
-			self._path = parent._path+'/'+name
+			self.name = name
+			self.path = parent.path+'/'+name
 			self._keypath = parent._keypath+(name,)
 		else:
 			# This is a root node
 			self._root = weakref.ref(self)
 		self._seq = seq
 		self._cseq = cseq
-		self._xttl = ttl
+		self._ttl = ttl
 		self._timestamp = time.time()
 		self._later_mon = {}
 	
@@ -88,37 +88,56 @@ class mtBase(object):
 		self._root()._tasks.append(f)
 
 	@asyncio.coroutine
-	def _wait(self,mod=None,timeout=None):
-		yield from self._root()._wait(mod, timeout=timeout)
-	_wait._is_coroutine = True
+	def wait(self,mod=None,timeout=None):
+		yield from self._root().wait(mod, timeout=timeout)
+	wait._is_coroutine = True
 
 	def __repr__(self): ## pragma: no cover
 		try:
-			return "<{} @{}>".format(self.__class__.__name__,self._path)
+			return "<{} @{}>".format(self.__class__.__name__,self.path)
 		except Exception as e:
 			logger.exception(e)
 			res = super(mtBase,self).__repr__()
 			return res[:-1]+" ?? "+res[-1]
 
 	def _get_ttl(self):
-		if self._xttl is None:
+		if self._ttl is None:
 			return None
-		return self._xttl - (time.time()-self._timestamp)
+		return self._ttl - (time.time()-self._timestamp)
 	def _set_ttl(self,ttl):
 		kw = {}
 		if self._is_dir:
 			kw['prev'] = None
 		else:
 			kw['index'] = self._seq
-		self._task(self._root()._conn.set,self._path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		self._task(self._root()._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
-	_ttl = property(_get_ttl, _set_ttl, _del_ttl)
+	ttl = property(_get_ttl, _set_ttl, _del_ttl)
+
+	@asyncio.coroutine
+	def set_ttl(self, ttl, sync=True):
+		"""Coroutine to set/update this node's TTL"""
+		root=self._root()
+		kw = {}
+		if self._is_dir:
+			kw['prev'] = None
+		else:
+			kw['index'] = self._seq
+		r = yield from root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		r = r.modifiedIndex
+		if sync:
+			yield from root._watcher.sync(r)
+		return r
+
+	def del_ttl(self, sync=True):
+		return self.set_ttl('', sync=True)
+	del_ttl._is_coroutine = True
 
 	def _freeze(self):
 		self._frozen = True
 
-	def _has_update(self):
+	def has_update(self):
 		"""\
 			Override this method to get notified after the value changes
 			(or that of a child node).
@@ -128,10 +147,10 @@ class mtBase(object):
 			"""
 		pass
 
-	def _updated(self, seq=None, force=False):
-		"""Call to schedule an update.
-			@force: False: called from outside
-				    True: child scheduler is done
+	def updated(self, seq=None, _force=False):
+		"""Call to schedule a call to the update monitors.
+			@_force: False: schedule a call
+				      True: child scheduler is done (DO NOT USE)
 			"""
 		# Invariant: _later is the number of direct children which are blocked.
 		# If that is zero, it may be an asyncio call_later token instead.
@@ -141,30 +160,30 @@ class mtBase(object):
 		# Thus, adding a timer implies walking up the parent chain until we
 		# find a node that's already blocked, where we increment the
 		# counter (or drop the timer and set the counter to 1) and stop.
-		# After a timer runs, it calls its parent's _updated(force=True),
+		# After a timer runs, it calls its parent's updated(_force=True),
 		# which decrements the counter and adds a timer if that reaches zero.
 
-		#logger.debug("run_update register %s, later is %s. force %s",self._path,self._later,force)
+		#logger.debug("run_update register %s, later is %s. force %s",self.path,self._later,_force)
 		p = self._parent
 		if self._later:
 			# In this block, clear the parent (p) if it was already blocked.
 			# Otherwise we'd block it again later, which would be Bad.
 			if type(self._later) is int:
-				if force:
+				if _force:
 					assert self._later > 0
 					self._later += -1
 					if self._later:
-						#logger.debug("run_update still_blocked %s, later is %s",self._path,self._later)
+						#logger.debug("run_update still_blocked %s, later is %s",self.path,self._later)
 						return
 					p = None
 				elif self._later > 0:
-					#logger.debug("run_update already_blocked %s, later is %s",self._path,self._later)
+					#logger.debug("run_update already_blocked %s, later is %s",self.path,self._later)
 					return
 			else:
 				self._later.cancel()
 				p = None
 		else:
-			assert not force
+			assert not _force
 		self._later_seq = seq
 		self._later = self._root()._conn._loop.call_later(1,self._run_update)
 
@@ -174,7 +193,7 @@ class mtBase(object):
 			p = p()
 			if p is None:
 				return # pragma: no cover
-			#logger.debug("run_update block %s, later was %s",p._path,p._later)
+			#logger.debug("run_update block %s, later was %s",p.path,p._later)
 			if type(p._later) is int:
 				p._later += 1
 				if p._later > 1:
@@ -183,7 +202,7 @@ class mtBase(object):
 				# this node has a running timer. By the invariant it cannot
 				# have (had) blocked children, therefore trying to unblock this
 				# node must be a bug.
-				assert not force
+				assert not _force
 				p._later.cancel()
 				# The call will be re-scheduled later, when the node unblocks
 				p._later = 1
@@ -192,7 +211,7 @@ class mtBase(object):
 	
 	def _run_update(self):
 		"""Timer callback to run a node's callback."""
-		#logger.debug("run_update %s",self._path)
+		#logger.debug("run_update %s",self.path)
 		ls = self._later_seq
 		self._later = 0
 		# At this point our parent's invariant is temporarily violated,
@@ -208,24 +227,24 @@ class mtBase(object):
 		if p is None:
 			return # pragma: no cover
 		# Now unblock the parent, restoring the invariant.
-		p._updated(seq=ls,force=True)
+		p.updated(seq=ls,_force=True)
 
 	def _call_monitors(self):
 		"""Actually run the monitoring code."""
 		try:
-			self._has_update()
+			self.has_update()
 		except Exception: # pragma: no cover
 			logger.exception("Monitoring %s at %s",lp,ls)
 		if self._later_mon:
 			for k,f in list(self._later_mon.items()):
 				try:
-					#logger.debug("run_update %s: call %s",self._path,f)
+					#logger.debug("run_update %s: call %s",self.path,f)
 					f(self)
 				except Exception: # pragma: no cover
 					logger.exception("Monitoring %s at %s",lp,ls)
 					del self._later_mon[k]
 
-	def _add_monitor(self, callback):
+	def add_monitor(self, callback):
 		"""\
 			Add a monitor function that watches for updates of this node
 			(and its children).
@@ -236,15 +255,15 @@ class mtBase(object):
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
 		self._later_mon[i] = callback
-		#logger.debug("run_update add_mon %s %s %s",self._path,i,callback)
+		#logger.debug("run_update add_mon %s %s %s",self.path,i,callback)
 		return i
 
-	def _remove_monitor(self, token):
-		#logger.debug("run_update del_mon %s %s",self._path,token)
+	def remove_monitor(self, token):
+		#logger.debug("run_update del_mon %s %s",self.path,token)
 		del self._later_mon[token]
 
 	def _deleted(self):
-		#logger.debug("DELETE %s",self._path)
+		#logger.debug("DELETE %s",self.path)
 		s = self._seq
 		self._seq = None
 		self._call_monitors()
@@ -258,10 +277,10 @@ class mtBase(object):
 		if p is None:
 			return # pragma: no cover
 		#logger.debug("run_update: deleted:")
-		p._updated(seq=s, force=bool(self._later))
+		p.updated(seq=s, _force=bool(self._later))
 
 	def _ext_delete(self, seq=None):
-		#logger.debug("DELETE_ %s",self._path)
+		#logger.debug("DELETE_ %s",self.path)
 		p = self._parent
 		if p is None:
 			return
@@ -271,7 +290,7 @@ class mtBase(object):
 		p._ext_del_node(self)
 		
 	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
-		#logger.debug("UPDATE %s",self._path)
+		#logger.debug("UPDATE %s",self.path)
 		if cseq is not None:
 			if self._cseq is None:
 				self._cseq = cseq
@@ -282,8 +301,8 @@ class mtBase(object):
 		if seq: # pragma: no branch
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
-			self._xttl = ttl
-		self._updated(seq=seq)
+			self._ttl = ttl
+		self.updated(seq=seq)
 		return True
 
 class mtValue(mtBase):
@@ -312,43 +331,45 @@ class mtValue(mtBase):
 	def _get_value(self):
 		# TODO: no cover
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		if self._value is _NOTGIVEN: # pragma: no cover
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
-		self._task(self._root()._conn.set,self._path,self._dump(value), index=self._seq)
+			raise FrozenError(self.path)
+		self._task(self._root()._conn.set,self.path,self._dump(value), index=self._seq)
 	def _del_value(self):
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
-		self._task(self._root()._conn.delete,self._path, index=self._seq)
+			raise FrozenError(self.path)
+		self._task(self._root()._conn.delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 
 	@asyncio.coroutine
 	def set(self, value, sync=True, ttl=None):
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.set(self._path,self._dump(value), index=self._seq, ttl=ttl)
+		r = yield from root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
+		r = r.modifiedIndex
 		if sync:
-			yield from root._watcher.sync(r.modifiedIndex)
-		return r.modifiedIndex
+			yield from root._watcher.sync(r)
+		return r
 
 	@asyncio.coroutine
 	def delete(self, sync=True, **kw):
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.delete(self._path, index=self._seq, **kw)
+		r = yield from root._conn.delete(self.path, index=self._seq, **kw)
+		r = r.modifiedIndex
 		if sync:
-			yield from root._watcher.sync(r.modifiedIndex)
-		return r.modifiedIndex
+			yield from root._watcher.sync(r)
+		return r
 
 	def _ext_update(self, value, **kw):
 		"""\
@@ -434,7 +455,7 @@ class mtDir(mtBase):
 			recursively descends into it.
 			"""
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		try:
 			res = self._data[key]
 		except KeyError:
@@ -454,7 +475,7 @@ class mtDir(mtBase):
 							raise UnknownNodeError(key)
 						t = mtValue
 					self._task(root._conn.set,path, t._dump(val), prevExist=False)
-			t_set(self._path,self._keypath,key, val)
+			t_set(self.path,self._keypath,key, val)
 		else:
 			assert isinstance(res,mtValue)
 			res.value = val
@@ -466,7 +487,7 @@ class mtDir(mtBase):
 			"""
 		root = self._root()
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		try:
 			res = self._data[key]
 		except KeyError:
@@ -491,7 +512,7 @@ class mtDir(mtBase):
 					r = yield from root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
-			mod = yield from t_set(self._path,self._keypath,key, value)
+			mod = yield from t_set(self.path,self._keypath,key, value)
 		else:
 			assert isinstance(res,mtValue)
 			mod = yield from res.set(value, **kw)
@@ -506,7 +527,7 @@ class mtDir(mtBase):
 			The actual deletion happens when the watcher sees it.
 			"""
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			del res.value
@@ -518,7 +539,7 @@ class mtDir(mtBase):
 			Delete a node.
 			"""
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path)
+			raise FrozenError(self.path)
 		res = self._data[key]
 		if isinstance(res,mtValue):
 			return res.delete(sync=sync, **kw)
@@ -561,7 +582,7 @@ class mtDir(mtBase):
 			return obj
 
 		if self._frozen: # pragma: no cover
-			raise FrozenError(self._path+'/'+name)
+			raise FrozenError(self.path+'/'+name)
 		if dir is None: # pragma: no cover
 			return None
 		cls = self._root()._types.lookup(self._keypath+(name,), dir=dir)
@@ -589,7 +610,7 @@ class mtDir(mtBase):
 
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
-		node = self._data.pop(child._name)
+		node = self._data.pop(child.name)
 		node._deleted()
 
 	def _freeze(self):
@@ -605,14 +626,14 @@ class mtRoot(mtDir):
 		@watcher: the watcher that's talking to me
 		"""
 	_parent = None
-	_name = ''
+	name = ''
 	_path = ''
 	_types = None
 
 	def __init__(self,conn,watcher,types=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
-		self._path = watcher.key if watcher else ''
+		self.path = watcher.key if watcher else ''
 		self._keypath = ()
 		self._tasks = []
 		if types is None:
@@ -628,7 +649,7 @@ class mtRoot(mtDir):
 			yield from w.close()
 
 	@asyncio.coroutine
-	def _wait(self, mod=None, timeout=None):
+	def wait(self, mod=None, timeout=None):
 		if self._tasks:
 			tasks,self._tasks = self._tasks,[]
 			done,tasks = yield from asyncio.wait(tasks, timeout=timeout, loop=self._conn._loop)

@@ -1,3 +1,9 @@
+etctree (0.5.0-1) unstable; urgency=medium
+
+  * Exported a couple of functions on nodes
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 25 Nov 2015 08:16:01 +0100
+
 etctree (0.4.12-1) unstable; urgency=medium
 
   * Add delayed node monitoring.

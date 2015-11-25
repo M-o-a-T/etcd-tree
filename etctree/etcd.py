@@ -190,7 +190,7 @@ class EtcClient(object):
 					else:
 						node._ext_lookup(n, dir=False, value=t['value'], cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
-				node._updated('populate')
+				node.updated(seq=0)
 			d_add(res._children,root)
 		else:
 			@asyncio.coroutine
@@ -208,7 +208,7 @@ class EtcClient(object):
 					else:
 						node._ext_lookup(n,dir=False, value=c.value, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-				node._updated('populate')
+				node.updated(seq=0)
 			yield from d_get(root, res)
 
 		if w is not None:
