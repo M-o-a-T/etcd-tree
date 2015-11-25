@@ -133,9 +133,22 @@ class mtBase(object):
 			@force: False: called from outside
 				    True: child scheduler is done
 			"""
+		# Invariant: _later is the number of direct children which are blocked.
+		# If that is zero, it may be an asyncio call_later token instead.
+		# (The token has a .cancel method, thus it cannot be an integer.)
+		# A node is blocked if its _later attribute is not zero.
+		#
+		# Thus, adding a timer implies walking up the parent chain until we
+		# find a node that's already blocked, where we increment the
+		# counter (or drop the timer and set the counter to 1) and stop.
+		# After a timer runs, it calls its parent's _updated(force=True),
+		# which decrements the counter and adds a timer if that reaches zero.
+
 		#logger.debug("run_update register %s, later is %s. force %s",self._path,self._later,force)
 		p = self._parent
 		if self._later:
+			# In this block, clear the parent (p) if it was already blocked.
+			# Otherwise we'd block it again later, which would be Bad.
 			if type(self._later) is int:
 				if force:
 					assert self._later > 0
@@ -150,9 +163,14 @@ class mtBase(object):
 			else:
 				self._later.cancel()
 				p = None
+		else:
+			assert not force
 		self._later_seq = seq
 		self._later = self._root()._conn._loop.call_later(1,self._run_update)
+
 		while p:
+			# Now block our parents, until we find one that's blocked
+			# already. In that case we increment its counter and stop.
 			p = p()
 			if p is None:
 				return # pragma: no cover
@@ -162,15 +180,25 @@ class mtBase(object):
 				if p._later > 1:
 					return
 			else:
+				# this node has a running timer. By the invariant it cannot
+				# have (had) blocked children, therefore trying to unblock this
+				# node must be a bug.
+				assert not force
 				p._later.cancel()
+				# The call will be re-scheduled later, when the node unblocks
 				p._later = 1
 				return
 			p = p._parent
 	
 	def _run_update(self):
+		"""Timer callback to run a node's callback."""
 		#logger.debug("run_update %s",self._path)
 		ls = self._later_seq
 		self._later = 0
+		# At this point our parent's invariant is temporarily violated,
+		# but we fix that later: if this is the last blocked child and
+		# _call_monitors() triggers another update, we'd create and then
+		# immediately destroy a timer
 		self._call_monitors()
 
 		p = self._parent
@@ -179,9 +207,11 @@ class mtBase(object):
 		p = p()
 		if p is None:
 			return # pragma: no cover
+		# Now unblock the parent, restoring the invariant.
 		p._updated(seq=ls,force=True)
 
 	def _call_monitors(self):
+		"""Actually run the monitoring code."""
 		try:
 			self._has_update()
 		except Exception: # pragma: no cover
