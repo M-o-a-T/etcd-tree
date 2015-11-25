@@ -149,24 +149,23 @@ def test_update_watch_direct(client):
 @pytest.mark.run_loop
 def test_update_watch(client, loop):
     """Testing auto-update, both ways"""
+    logger.debug("START update_watch")
     d=dict
-    t = client
     types = EtcTypes()
+    t = client
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
     yield from t._f(d1)
-    w = yield from t.tree("/two", immediate=False, static=False, types=types)
+    w = yield from t.tree("/two", immediate=False, static=False)
 
-    #m0,m1,m2,m3,m4,m5,m6,m7 = Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock(),Mock()
-    #w.monitor("three.four.fiver")(m0)
-    #w.monitor("three.four.five.six.seven")(m1)
-    #w.monitor("three","*","fiver")(m2)
-    #w.monitor("three.**.six")(m3)
-    #w.monitor("**.none")(m4)
-    #w.monitor("*","fiver")(m5)
-    #w.monitor("acht.neun")(m6)
-    #w.monitor("acht")(m7)
+    m1,m2 = Mock(),Mock()
+    f = asyncio.Future(loop=loop)
+    def wake(x):
+        f.set_result(x)
+    i0 = w._add_monitor(wake)
+    i1 = w['zwei']._add_monitor(m1)
+    i2 = w['zwei']._get('und')._add_monitor(m2)
 
-    assert w['sechs'] =="sieben"
+    assert w['sechs'] == "sieben"
     acht = w['acht']
     assert acht['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxy",oder="fünfe")))
@@ -186,24 +185,18 @@ def test_update_watch(client, loop):
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
 
-    #assert m0.call_count == 1
-    #assert m1.call_count == 1
-    #assert m2.call_count == 1
-    #assert m3.call_count == 1
-    #assert m7.call_count == 1
-    #assert not m4.called
-    #assert not m5.called
-    #assert not m6.called
-    #m0.assert_called_once_with(w['three']['four']._get('fiver'),'set')
-    #m1.assert_called_once_with(w['three']['four']['five']['six']['seven'],'set')
-    #m2.assert_called_once_with(w['three']['four']._get('fiver'),'set')
-    #m3.assert_called_once_with(w['three']['four']['five']['six'],'dir')
-    #m7.assert_called_once_with(acht,'delete')
+    logger.debug("Waiting for _update 1")
+    yield from f
+    f = asyncio.Future(loop=loop)
+    assert m1.call_count == 1
+    assert m2.call_count == 1
+    w['zwei']._remove_monitor(i1)
 
     # The ones deleted by _f(…,delete=True) should not be
     with pytest.raises(KeyError):
         w['sechs']
     with pytest.raises(KeyError):
+        logger.debug("CHECK acht")
         w['acht']
     # deleting a whole subtree is not yet implemented
     with pytest.raises(NotImplementedError): # TODO
@@ -254,6 +247,11 @@ def test_update_watch(client, loop):
     assert w1['vier']['auch'] == "ja2"
     assert w2['vier']['auch'] == "ja2"
     yield from w1._wait()
+
+    logger.debug("Waiting for _update 2")
+    yield from f
+    assert m1.call_count == 1
+    assert m2.call_count == 2
 
     # _final=false means I can't add new untyped nodes
     types.register("**","new_a", cls=mtString)

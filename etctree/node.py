@@ -37,6 +37,7 @@ import asyncio
 
 class _NOTGIVEN:
 	pass
+_later_idx = 1
 
 class UnknownNodeError(RuntimeError):
 	"""\
@@ -62,7 +63,7 @@ class mtBase(object):
 		All mthods have a leading underscore, which is necessary because
 		non-underscored names are potential etcd node names.
 		"""
-	_monitor = None
+	_later = 0
 	_frozen = False
 
 	def __init__(self, parent=None, name=None, seq=None, cseq=None, ttl=None):
@@ -79,6 +80,7 @@ class mtBase(object):
 		self._cseq = cseq
 		self._xttl = ttl
 		self._timestamp = time.time()
+		self._later_mon = {}
 	
 	def _task(self,p,*a,**k):
 		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
@@ -116,32 +118,120 @@ class mtBase(object):
 	def _freeze(self):
 		self._frozen = True
 
-	def _r_updated(self, path=(), seq=None):
-		"""call ._updated, then recurse to the parent if that true"""
-		if not self._updated(path=path, seq=seq):
-			return
+	def _has_update(self):
+		"""\
+			Override this method to get notified after the value changes
+			(or that of a child node).
+
+			The call is delayed to allow multiple changes to coalesce.
+			If .seq is None, the node is being deleted.
+			"""
+		pass
+
+	def _updated(self, seq=None, force=False):
+		"""Call to schedule an update.
+			@force: False: called from outside
+				    True: child scheduler is done
+			"""
+		#logger.debug("run_update register %s, later is %s. force %s",self._path,self._later,force)
+		p = self._parent
+		if self._later:
+			if type(self._later) is int:
+				if force:
+					assert self._later > 0
+					self._later += -1
+					if self._later:
+						#logger.debug("run_update still_blocked %s, later is %s",self._path,self._later)
+						return
+					p = None
+				elif self._later > 0:
+					#logger.debug("run_update already_blocked %s, later is %s",self._path,self._later)
+					return
+			else:
+				self._later.cancel()
+				p = None
+		self._later_seq = seq
+		self._later = self._root()._conn._loop.call_later(1,self._run_update)
+		while p:
+			p = p()
+			if p is None:
+				return # pragma: no cover
+			#logger.debug("run_update block %s, later was %s",p._path,p._later)
+			if type(p._later) is int:
+				p._later += 1
+				if p._later > 1:
+					return
+			else:
+				p._later.cancel()
+				p._later = 1
+				return
+			p = p._parent
+	
+	def _run_update(self):
+		#logger.debug("run_update %s",self._path)
+		ls = self._later_seq
+		self._later = 0
+		self._call_monitors()
+
 		p = self._parent
 		if p is None:
-			return # pragma: no cover ## would require special root
+			return
 		p = p()
 		if p is None:
 			return # pragma: no cover
-		p._r_updated(path=(self._name,)+path, seq=seq)
+		p._updated(seq=ls,force=True)
 
-	def _updated(self, path=(), seq=None):
+	def _call_monitors(self):
+		try:
+			self._has_update()
+		except Exception: # pragma: no cover
+			logger.exception("Monitoring %s at %s",lp,ls)
+		if self._later_mon:
+			for k,f in list(self._later_mon.items()):
+				try:
+					#logger.debug("run_update %s: call %s",self._path,f)
+					f(self)
+				except Exception: # pragma: no cover
+					logger.exception("Monitoring %s at %s",lp,ls)
+					del self._later_mon[k]
+
+	def _add_monitor(self, callback):
 		"""\
-			Override this method to get notified when the value changes
-			(or that of a child node).
-			Return True if you want the change to be propagated to the
-			caller.
+			Add a monitor function that watches for updates of this node
+			(and its children).
+
+			Called with the node as single parameter.
+			If .seq is zero, the node is being deleted.
 			"""
-		return False
+		global _later_idx
+		i,_later_idx = _later_idx,_later_idx+1
+		self._later_mon[i] = callback
+		#logger.debug("run_update add_mon %s %s %s",self._path,i,callback)
+		return i
+
+	def _remove_monitor(self, token):
+		#logger.debug("run_update del_mon %s %s",self._path,token)
+		del self._later_mon[token]
 
 	def _deleted(self):
-		"""Override this method to get notified when this node gets dropped"""
-		pass
+		#logger.debug("DELETE %s",self._path)
+		s = self._seq
+		self._seq = None
+		self._call_monitors()
+		if self._later:
+			if type(self._later) is not int:
+				self._later.cancel()
+		p = self._parent
+		if p is None:
+			return # pragma: no cover
+		p = p()
+		if p is None:
+			return # pragma: no cover
+		#logger.debug("run_update: deleted:")
+		p._updated(seq=s, force=bool(self._later))
 
 	def _ext_delete(self, seq=None):
+		#logger.debug("DELETE_ %s",self._path)
 		p = self._parent
 		if p is None:
 			return
@@ -151,6 +241,7 @@ class mtBase(object):
 		p._ext_del_node(self)
 		
 	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
+		#logger.debug("UPDATE %s",self._path)
 		if cseq is not None:
 			if self._cseq is None:
 				self._cseq = cseq
@@ -162,7 +253,7 @@ class mtBase(object):
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._xttl = ttl
-		self._r_updated(seq=seq)
+		self._updated(seq=seq)
 		return True
 
 class mtValue(mtBase):
@@ -175,14 +266,6 @@ class mtValue(mtBase):
 		super().__init__(**kw)
 		self._value = value
 	
-	def _updated(self, path=(), seq=None):
-		"""\
-			Override to get notified of changes.
-			Defaults to returning True for value nodes so that the owner
-			gets notified.
-			"""
-		return True
-
 	# used for testing
 	def __eq__(self, other):
 		if type(self) != type(other):
@@ -450,7 +533,7 @@ class mtDir(mtBase):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self._path+'/'+name)
 		if dir is None: # pragma: no cover
-			raise AttributeError(name)
+			return None
 		cls = self._root()._types.lookup(self._keypath+(name,), dir=dir)
 		if cls is None:
 			if self._final:

@@ -68,7 +68,9 @@ class EtcClient(object):
 		except AttributeError: pass
 		
 	def close(self):
-		self.client.close()
+		try: c = self.client
+		except AttributeError: pass
+		else: c.close()
 		self._kill()
 
 	def _extkey(self, key):
@@ -323,15 +325,12 @@ class EtcWatcher(object):
 		key = x.key[len(self.extkey):]
 		key = tuple(k for k in key.split('/') if k != '')
 		if x.action in {'compareAndDelete','delete','expire'}:
-			try:
-				for n,k in enumerate(key):
-					r = r._ext_lookup(k)
-					if r is None: # pragma: no cover
-						break
-				else:
-					r._ext_delete()
-			except (KeyError,AttributeError): # pragma: no cover
-				pass
+			for n,k in enumerate(key):
+				r = r._ext_lookup(k)
+				if r is None: # pragma: no cover
+					break
+			else:
+				r._ext_delete()
 		else:
 			for n,k in enumerate(key):
 				r = r._ext_lookup(k, dir= True if x.dir else n<len(key)-1, value= None if x.dir or n<len(key)-1 else x.value)

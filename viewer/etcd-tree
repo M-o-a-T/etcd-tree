@@ -142,7 +142,7 @@ class AssocUI(object):
 			#print("add",na,v,str(m.get_path(p)))
 			d[na] = nd = {'_node':p, '_value':v}
 			if nr.get('dir',False):
-				for r in nr['nodes']:
+				for r in nr.get('nodes',()):
 					fill_dest(r,p,nd)
 			
 		for r in res._children:

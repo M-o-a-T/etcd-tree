@@ -14,7 +14,7 @@
 ##  for more details.
 ##
 
-export PYTHONPATH=$(shell pwd):$(shell pwd)/dabroker
+export PYTHONPATH?=$(shell pwd):$(shell pwd)/dabroker
 DESTDIR ?= "/"
 PYDESTDIR ?= ${DESTDIR}
 PYTHON ?= python3
