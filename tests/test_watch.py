@@ -253,6 +253,14 @@ def test_update_watch(client, loop):
     assert m1.call_count == 1
     assert m2.call_count == 2
 
+    # three ways to skin a cat
+    del i0
+    # w['zwei'].remove_monitor(i1) ## happened above
+    i2.cancel()
+    assert not w._later_mon
+    assert not w['zwei']._later_mon
+    assert not w['zwei']._get('und')._later_mon
+
     # _final=false means I can't add new untyped nodes
     types.register("**","new_a", cls=mtString)
     types.register("**","new_b", cls=mtString)

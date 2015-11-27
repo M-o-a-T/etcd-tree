@@ -1,3 +1,9 @@
+etctree (0.5.1-1) unstable; urgency=medium
+
+  * Replace the monitor token with an object
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 27 Nov 2015 21:37:32 +0100
+
 etctree (0.5.0-1) unstable; urgency=medium
 
   * Exported a couple of functions on nodes

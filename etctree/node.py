@@ -52,6 +52,19 @@ class FrozenError(RuntimeError):
 		"""
 	pass
 
+class MonitorCallback(object):
+	def __init__(self, base,i,callback):
+		self.base = weakref.ref(base)
+		self.i = i
+		self.callback = callback
+	def cancel(self):
+		base = self.base()
+		if base is None:
+			return
+		base.remove_monitor(self.i)
+	def __call__(self,x):
+		return self.callback(x)
+
 class mtBase(object):
 	"""\
 		Abstract base class for an etcd node.
@@ -80,7 +93,7 @@ class mtBase(object):
 		self._cseq = cseq
 		self._ttl = ttl
 		self._timestamp = time.time()
-		self._later_mon = {}
+		self._later_mon = weakref.WeakValueDictionary()
 	
 	def _task(self,p,*a,**k):
 		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
@@ -254,13 +267,15 @@ class mtBase(object):
 			"""
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
-		self._later_mon[i] = callback
+		self._later_mon[i] = mon = MonitorCallback(self,i,callback)
 		#logger.debug("run_update add_mon %s %s %s",self.path,i,callback)
-		return i
+		return mon
 
 	def remove_monitor(self, token):
 		#logger.debug("run_update del_mon %s %s",self.path,token)
-		del self._later_mon[token]
+		if isinstance(token,MonitorCallback):
+			token = token.i
+		self._later_mon.pop(token,None)
 
 	def _deleted(self):
 		#logger.debug("DELETE %s",self.path)
