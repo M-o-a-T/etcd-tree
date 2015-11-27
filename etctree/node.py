@@ -60,7 +60,7 @@ class MonitorCallback(object):
 	def cancel(self):
 		base = self.base()
 		if base is None:
-			return
+			return # pragma: no cover
 		base.remove_monitor(self.i)
 	def __call__(self,x):
 		return self.callback(x)
