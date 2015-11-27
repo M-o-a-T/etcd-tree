@@ -52,3 +52,5 @@ def client(cfg="/etc/etctree.cfg", loop=None):
 	yield from c._init()
 	return c
 
+from .etcd import EtcTypes
+
