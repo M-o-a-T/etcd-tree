@@ -1,6 +1,7 @@
-etctree (0.5.2-1) unstable; urgency=medium
+etctree (0.5.2-2) unstable; urgency=medium
 
   * Let mtDir be a MutableMapping
+  * change mtDir iterator to return keys only, as per dict protocol
 
  -- Matthias Urlichs <matthias@urlichs.de>  Sat, 28 Nov 2015 16:02:41 +0100
 

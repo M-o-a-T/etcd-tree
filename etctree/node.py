@@ -422,10 +422,7 @@ class mtDir(mtBase, MutableMapping):
 		self._data = {}
 
 	def __iter__(self):
-		for k,v in self._data.items():
-			if isinstance(v,mtValue):
-				v = v.value
-			yield k,v
+		return self._data.keys()
 
 	def __len__(self):
 		return len(self._data)
@@ -447,7 +444,10 @@ class mtDir(mtBase, MutableMapping):
 				v = v.value
 			yield v
 	def items(self):
-		return self.__iter__()
+		for k,v in self._data.items():
+			if isinstance(v,mtValue):
+				v = v.value
+			yield k,v
 	def _get(self,key,default=_NOTGIVEN):
 		if default is _NOTGIVEN:
 			return self._data[key]
