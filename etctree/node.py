@@ -34,6 +34,7 @@ This declares nodes for the basic etcTree structure.
 import weakref
 import time
 import asyncio
+from collections.abc import MutableMapping
 
 class _NOTGIVEN:
 	pass
@@ -401,7 +402,7 @@ class mtInteger(mtValue):
 class mtFloat(mtValue):
 	type = float
 
-class mtDir(mtBase):
+class mtDir(mtBase, MutableMapping):
 	"""\
 		A node with other nodes below it.
 
@@ -425,6 +426,9 @@ class mtDir(mtBase):
 			if isinstance(v,mtValue):
 				v = v.value
 			yield k,v
+
+	def __len__(self):
+		return len(self._data)
 
 	@classmethod
 	def _load(cls,value):
