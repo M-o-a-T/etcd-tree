@@ -422,7 +422,7 @@ class mtDir(mtBase, MutableMapping):
 		self._data = {}
 
 	def __iter__(self):
-		return self._data.keys()
+		return iter(self._data.keys())
 
 	def __len__(self):
 		return len(self._data)
