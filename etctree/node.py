@@ -96,6 +96,10 @@ class mtBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 
+	async def __await__(self):
+		"""Nodes which are already loaded support lazy lookup by doing nothing."""
+		return self
+
 	def _task(self,p,*a,**k):
 		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
 		f.args = (self,p,a,k)
@@ -104,7 +108,6 @@ class mtBase(object):
 	@asyncio.coroutine
 	def wait(self,mod=None,timeout=None):
 		yield from self._root().wait(mod, timeout=timeout)
-	wait._is_coroutine = True
 
 	def __repr__(self): ## pragma: no cover
 		try:
@@ -321,6 +324,61 @@ class mtBase(object):
 		self.updated(seq=seq)
 		return True
 
+##############################################################################
+
+class mtAwaiter(mtBase):
+	"""\
+		A node that needs to be looked up via "await".
+
+		This implements lazy 
+		"""
+	_done = None
+
+	def __init__(self,parent,name):
+		super().__init__(parent=parent, name=name)
+		self.parent = lambda: parent # no weakref
+		self._data = {}
+
+	def __getitem__(self,key):
+		v = self._data.get(key,_NOTGIVEN)
+		if v is _NOTGIVEN:
+			self._data[key] = v = mtAwaiter(self, name=key)
+		return v
+
+	async def __await__(self):
+		if self._done is not None:
+			return self._done
+		root = self._root()
+		if root is None:
+			return None # pragma: no cover
+		p = self.parent()
+		if type(p) is mtAwaiter:
+			p = await p
+		res = await root._conn.get(self.path)
+		cls = root._types.lookup(self._keypath+(name,), dir=dir)
+		if cls is None:
+			cls = mtDir if res.dir else mtValue
+		else:
+			assert issubclass(cls, mtDir if res.dir else mtValue)
+		if dir:
+			value = cls._load(res.value)
+			obj = cls(parent=p,name=self.name)
+			obj._data = self._data
+			for c in res.children:
+				if c is res:
+					continue
+				n = c.key
+				n = n[n.rindex('/')+1:]
+				if n not in obj._data:
+					obj._data[n] = mtAwaiter(parent=obj,name=n)
+		else:
+			obj = cls(parent=p,name=self.name, value=value)
+		p._data[self.name] = self._done = obj
+		p._later_mon.update(self._later_mon)
+		return obj
+
+##############################################################################
+
 class mtValue(mtBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
@@ -403,6 +461,8 @@ class mtInteger(mtValue):
 class mtFloat(mtValue):
 	type = float
 
+##############################################################################
+
 class mtDir(mtBase, MutableMapping):
 	"""\
 		A node with other nodes below it.
@@ -437,6 +497,9 @@ class mtDir(mtBase, MutableMapping):
 		assert value is None
 		return None
 
+	def _add_awaiter(self, c):
+		assert c not in self._data
+		self._data[c] = mtAwaiter(self,c)
 	def keys(self):
 		return self._data.keys()
 	def values(self):

@@ -185,7 +185,7 @@ class EtcClient(object):
 		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, cseq=res.createdIndex, types=types,
 			ttl=res.ttl if hasattr(res,'ttl') else None)
 
-		if immediate:
+		if immediate is True:
 			def d_add(tree, node):
 				for t in tree:
 					n = t['key']
@@ -199,7 +199,7 @@ class EtcClient(object):
 							ttl=t['ttl'] if 'ttl' in t else None)
 				node.updated(seq=0)
 			d_add(res._children,root)
-		else:
+		elif immediate is False:
 			@asyncio.coroutine
 			def d_get(node, res):
 				for c in res.children:
@@ -217,6 +217,12 @@ class EtcClient(object):
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node.updated(seq=0)
 			yield from d_get(root, res)
+		else:
+			for c in res.children:
+				if c is res:
+					continue
+				root._add_awaiter(c)
+				root.updated(seq=0)
 
 		if w is not None:
 			w._set_root(root)
