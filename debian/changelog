@@ -1,3 +1,9 @@
+etctree (0.5.5-1) unstable; urgency=medium
+
+  * Handle dir creation when starting to watch
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 29 Nov 2015 04:39:38 +0100
+
 etctree (0.5.4-2) unstable; urgency=medium
 
   * etcd's watch thing sometimes returns the parent

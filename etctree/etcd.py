@@ -158,15 +158,22 @@ class EtcClient(object):
 			if res is not None:
 				return res
 			
-		try:
+		if create is False:
 			res = yield from self.client.read(self._extkey(key), recursive=immediate)
-		except etcd.EtcdKeyNotFound:
-			if create is False:
-				raise
+		elif create is True:
 			res = yield from self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
 		else:
-			if create is True:
-				raise etcd.EtcdAlreadyExist(self._extkey(key))
+			# etcd can't do "create-directory-if-it-does-not-exist", so
+			# if two jobs with create=None attempt this at the same time
+			# the whole thing gets interesting.
+			try:
+				res = yield from self.client.read(self._extkey(key), recursive=immediate)
+			except etcd.EtcdKeyNotFound:
+				try:
+					res = yield from self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+				except etcd.EtcdAlreadyExist:
+					res = yield from self.client.read(self._extkey(key), recursive=immediate)
+
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
 		cls = None
 		if types:
