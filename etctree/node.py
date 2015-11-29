@@ -95,7 +95,7 @@ class mtBase(object):
 		self._ttl = ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
-	
+
 	def _task(self,p,*a,**k):
 		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
 		f.args = (self,p,a,k)
@@ -222,7 +222,7 @@ class mtBase(object):
 				p._later = 1
 				return
 			p = p._parent
-	
+
 	def _run_update(self):
 		"""Timer callback to run a node's callback."""
 		#logger.debug("run_update %s",self.path)
@@ -304,7 +304,7 @@ class mtBase(object):
 		if p is None:
 			return # pragma: no cover
 		p._ext_del_node(self)
-		
+
 	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
 		#logger.debug("UPDATE %s",self.path)
 		if cseq is not None:
@@ -330,7 +330,7 @@ class mtValue(mtBase):
 	def __init__(self, value=_NOTGIVEN, **kw):
 		super().__init__(**kw)
 		self._value = value
-	
+
 	# used for testing
 	def __eq__(self, other):
 		if type(self) != type(other):
@@ -343,7 +343,7 @@ class mtValue(mtBase):
 	@classmethod
 	def _dump(cls,value):
 		return str(value)
-	
+
 	def _get_value(self):
 		# TODO: no cover
 		if self._frozen: # pragma: no cover
@@ -597,14 +597,14 @@ class mtDir(mtBase, MutableMapping):
 	def _ext_lookup(self, name, dir=None, value=None, **kw):
 		"""\
 			Do a node lookup.
-			
+
 			@name: my name, as seen by my parent.
 			@cls: the class the object is supposed to have.
 			@dir: The node type.
 
 			If @cls or @dir is passed in, the node is created if it doesn't
 			already exist, else an AttributeError is raised.
-			
+
 			Returns: the child node plus a "created" flag.
 			"""
 		assert name != ""
@@ -635,7 +635,7 @@ class mtDir(mtBase, MutableMapping):
 		obj = cls(parent=self,name=name, value=value, **kw)
 		self._data[name] = obj
 		return obj
-	
+
 	def _ext_update(self, value=None, **kw):
 		"""processed for doing a TTL update"""
 		assert value is None
@@ -713,4 +713,4 @@ class mtRoot(mtDir):
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			w._kill() # pragma: no cover # as the tests call close()
-	
+

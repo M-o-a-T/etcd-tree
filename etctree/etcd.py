@@ -50,7 +50,7 @@ class EtcClient(object):
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 		self.client = Client(loop=loop, **args)
 		self.watched = weakref.WeakValueDictionary()
-	
+
 	@asyncio.coroutine
 	def _init(self):
 		if self.last_mod is not None: # pragma: no cover
@@ -66,7 +66,7 @@ class EtcClient(object):
 	def _kill(self):
 		try: del self.client
 		except AttributeError: pass
-		
+
 	def close(self):
 		try: c = self.client
 		except AttributeError: pass
@@ -85,7 +85,7 @@ class EtcClient(object):
 	def read(self, key, **kw):
 		return self.client.read(self._extkey(key), **kw)
 	read._is_coroutine = True
-	
+
 	@asyncio.coroutine
 	def delete(self, key, prev=_NOTGIVEN, index=None, **kw):
 		"""\
@@ -104,7 +104,7 @@ class EtcClient(object):
 		res = yield from self.client.delete(self._extkey(key), **kw)
 		self.last_mod = res.modifiedIndex
 		return res
-	
+
 	@asyncio.coroutine
 	def set(self, key, value, prev=_NOTGIVEN, index=None, **kw):
 		"""\
@@ -157,7 +157,7 @@ class EtcClient(object):
 			res = self.watched.get(key,None)
 			if res is not None:
 				return res
-			
+
 		if create is False:
 			res = yield from self.client.read(self._extkey(key), recursive=immediate)
 		elif create is True:
@@ -222,7 +222,7 @@ class EtcClient(object):
 			w._set_root(root)
 			self.watched[key] = root
 		return root
-		
+
 class EtcWatcher(object):
 	"""\
 		Runs a watcher on a (sub)tree.
@@ -255,7 +255,7 @@ class EtcWatcher(object):
 			except RuntimeError: # pragma: no cover ## event loop might be closed
 				pass
 			r = None
-		
+
 	@asyncio.coroutine
 	def close(self):
 		r,self._reader = self._reader,None
@@ -266,10 +266,10 @@ class EtcWatcher(object):
 			except asyncio.CancelledError:
 				pass
 		self._kill()
-		
+
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
-		
+
 	@asyncio.coroutine
 	def sync(self, mod=None):
 		"""Wait for pending updates"""
@@ -369,7 +369,7 @@ class EtcTypes(object):
 	def __init__(self):
 		self.type = [None,None]
 		self.nodes = {}
-	
+
 	def __repr__(self): # pragma: no cover
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
@@ -379,7 +379,7 @@ class EtcTypes(object):
 		if res is None:
 			self.nodes[key] = res = EtcTypes()
 		return res
-	
+
 	def items(self,key):
 		"""\
 			Enumerate sub-entries matching this key.
@@ -396,7 +396,7 @@ class EtcTypes(object):
 		res = self.nodes.get('**',None)
 		if res is not None:
 			yield '**',res
-		
+
 	def __getitem__(self,path):
 		"""Shortcut to directly lookup a non-directory node"""
 		if path[0] == "/":
@@ -445,7 +445,7 @@ class EtcTypes(object):
 				self.type[1] = cls
 			return cls
 		return reg
-	
+
 	def lookup(self, path, dir):
 		"""\
 			Find the node type that's to be associated with a path below me.
