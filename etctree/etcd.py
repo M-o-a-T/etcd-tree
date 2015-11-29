@@ -243,7 +243,10 @@ class EtcWatcher(object):
 		#logger.warning("_KILL")
 		r,self._reader = self._reader,None
 		if r is not None:
-			r.cancel()
+			try:
+				r.cancel()
+			except RuntimeError: # pragma: no cover ## event loop might be closed
+				pass
 			r = None
 		
 	@asyncio.coroutine

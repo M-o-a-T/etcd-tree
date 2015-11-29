@@ -1,8 +1,9 @@
-etctree (0.5.4-1) unstable; urgency=medium
+etctree (0.5.4-2) unstable; urgency=medium
 
   * etcd's watch thing sometimes returns the parent
+  * don't raise RuntimeError when closing
 
- -- Matthias Urlichs <matthias@urlichs.de>  Sun, 29 Nov 2015 01:57:19 +0100
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 29 Nov 2015 03:21:14 +0100
 
 etctree (0.5.3-1) unstable; urgency=medium
 
