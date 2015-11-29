@@ -63,13 +63,13 @@ def test_get_set(client):
     assert (yield from client._d()) == d(foo="dud",what=d(so="ever"))
     assert (yield from client._d("/what/so")) == "ever"
     assert (clean_dump((yield from client._d("/what/so",dump=True)))) == \
-        d(_=d(action='get', key='/moatree/temp/what/so', value='ever'))
+        d(_=d(action='get', key='/test/etctree/what/so', value='ever'))
     du = clean_dump((yield from client._d(dump=True)))
     assert du == d(
-        _=d(action='get', dir=True, key='/moatree/temp'),
-        foo=d(key='/moatree/temp/foo', value='dud'),
-        what= d(_=d(dir=True, key='/moatree/temp/what'),
-          so=d(key='/moatree/temp/what/so', value='ever')))
+        _=d(action='get', dir=True, key='/test/etctree'),
+        foo=d(key='/test/etctree/foo', value='dud'),
+        what= d(_=d(dir=True, key='/test/etctree/what'),
+          so=d(key='/test/etctree/what/so', value='ever')))
 
     v = yield from client.read("/foo")
     assert v.value == "dud"
