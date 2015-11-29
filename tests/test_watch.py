@@ -312,6 +312,7 @@ def test_update_watch(client, loop):
     with pytest.raises(UnknownNodeError):
         yield from w1['vier'].set('nixy', "daz")
     assert w1['vier']['new_b'] == "z"
+    yield from w.wait()
 
     assert len(w['vier']) == 7
     s=set(w['vier'])
