@@ -321,7 +321,8 @@ class EtcWatcher(object):
 			raise etcd.StopWatching
 
 		logger.debug("RUN: %s",repr(x.__dict__))
-		assert x.key.startswith(self.extkey), (x.key,self.key, x.modifiedIndex)
+		if not x.key.startswith(self.extkey+'/'):
+			return # sometimes we get the parent
 		key = x.key[len(self.extkey):]
 		key = tuple(k for k in key.split('/') if k != '')
 		if x.action in {'compareAndDelete','delete','expire'}:

@@ -1,3 +1,9 @@
+etctree (0.5.4-1) unstable; urgency=medium
+
+  * etcd's watch thing sometimes returns the parent
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 29 Nov 2015 01:57:19 +0100
+
 etctree (0.5.3-1) unstable; urgency=medium
 
   * Recursively remove a tree
