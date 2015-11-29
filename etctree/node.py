@@ -360,6 +360,7 @@ class mtValue(mtBase):
 			raise FrozenError(self.path)
 		self._task(self._root()._conn.delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
+	__delitem__ = _del_value # for mtDir.delete
 
 	@asyncio.coroutine
 	def set(self, value, sync=True, ttl=None):
@@ -375,7 +376,7 @@ class mtValue(mtBase):
 		return r
 
 	@asyncio.coroutine
-	def delete(self, sync=True, **kw):
+	def delete(self, sync=True, recursive=None, **kw):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
 		root = self._root()
@@ -539,31 +540,44 @@ class mtDir(mtBase, MutableMapping):
 			yield from root._watcher.sync(mod)
 		return mod
 
-	def __delitem__(self, key):
+	def __delitem__(self, key=_NOTGIVEN):
 		"""\
 			Delete a node.
 			This just tells etcd to delete the key.
 			The actual deletion happens when the watcher sees it.
+
+			This will fail if the directory is not empty.
 			"""
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
-		res = self._data[key]
-		if isinstance(res,mtValue):
-			del res.value
+		if key is not _NOTGIVEN:
+			res = self._data[key]
+			res.__delitem__()
 			return
-		raise NotImplementedError
+		self._task(self._root()._conn.delete,self.path,dir=True, index=self._seq)
 
-	def delete(self, key, sync=True, **kw):
+	@asyncio.coroutine
+	def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
 		"""\
 			Delete a node.
+			Recursive=True: drop it sequentially
+			Recursive=False: don't do anything if I have sub-nodes
+			Recursive=None(default): let etcd handle it
 			"""
+		root = self._root()
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
-		res = self._data[key]
-		if isinstance(res,mtValue):
-			return res.delete(sync=sync, **kw)
-		raise NotImplementedError
-	delete._is_coroutine = True
+		if key is not _NOTGIVEN:
+			res = self._data[key]
+			yield from res.delete(sync=sync,recursive=recursive, **kw)
+			return
+		if recursive:
+			for v in list(self._data.values()):
+				yield from v.delete(sync=sync,recursive=recursive)
+		r = yield from root._conn.delete(self.path, dir=True, recursive=(recursive is None))
+		r = r.modifiedIndex
+		if sync:
+			yield from root._watcher.sync(r)
 
 	def _ext_delete(self):
 		"""We vanished. Oh well."""

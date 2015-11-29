@@ -116,7 +116,7 @@ def test_update_watch_direct(client):
     d=dict
     t = client
     w = yield from t.tree("/two", immediate=False, static=False)
-    d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxx",oder="fünfe")))
+    d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from w.wait(mod=mod)
 
@@ -137,12 +137,23 @@ def test_update_watch_direct(client):
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja1"
     
-    with pytest.raises(NotImplementedError): # TODO
-        w.delete('vier')
+    m = yield from w.delete('vier')
+    yield from w.wait(m)
+    with pytest.raises(KeyError):
+        w['vier']
 
-    w._get('zwei')._freeze()
-    with pytest.raises(FrozenError): # TODO
-        w['zwei']['ach'] = 'nee'
+    w._get('drei')._freeze()
+    with pytest.raises(FrozenError):
+        w['drei']['cold'] = 'nee'
+
+    with pytest.raises(etcd.EtcdDirNotEmpty):
+        del w['zwei']
+        yield from w.wait(m)
+
+    m = yield from w.delete('zwei', recursive=True)
+    yield from w.wait(m)
+    with pytest.raises(KeyError):
+        w['zwei']
 
     yield from w.close()
 
@@ -199,8 +210,9 @@ def test_update_watch(client, loop):
         logger.debug("CHECK acht")
         w['acht']
     # deleting a whole subtree is not yet implemented
-    with pytest.raises(NotImplementedError): # TODO
+    with pytest.raises(etcd.EtcdDirNotEmpty):
         del w['vier']
+        yield from w.wait()
     del w['vier']['oder']
     yield from w.wait()
     w['vier']
@@ -300,6 +312,25 @@ def test_update_watch(client, loop):
     with pytest.raises(UnknownNodeError):
         yield from w1['vier'].set('nixy', "daz")
     assert w1['vier']['new_b'] == "z"
+
+    assert len(w['vier']) == 7
+    s=set(w['vier'])
+    assert 'a' in s
+    assert 'auch' in s
+    assert 'auck' not in s
+
+    # now delete the thing
+    yield from w['vier'].delete('a')
+    yield from w['vier'].delete('auch')
+    yield from w['vier'].delete('oder')
+    yield from w['vier'].delete('c')
+    yield from w['vier'].delete('d')
+    yield from w['vier'].delete('new_a')
+    yield from w['vier'].delete('new_b')
+    m = yield from w['vier'].delete(recursive=False)
+    yield from w.wait(m)
+    with pytest.raises(KeyError):
+        w['vier']
 
     yield from w.close()
     yield from w1.close()
