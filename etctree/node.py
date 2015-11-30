@@ -34,7 +34,9 @@ This declares nodes for the basic etcTree structure.
 import weakref
 import time
 import asyncio
+from itertools import chain
 from collections.abc import MutableMapping
+import aioetcd as etcd
 
 class _NOTGIVEN:
 	pass
@@ -524,6 +526,38 @@ class mtDir(mtBase, MutableMapping):
 			v = v.value
 		return v
 	__getitem__ = get
+
+	@asyncio.coroutine
+	def subdir(self, *_name, name=(), create=False):
+		"""Utility function to find/create a sub-node."""
+		root=self._root()
+
+		if isinstance(name,str):
+			name = name.split('/')
+		if len(_name) == 1:
+			_name = _name[0].split('/')
+		for n in chain(_name,name):
+			if create and n not in self:
+				try:
+					res = yield from root._conn.set(self.path+'/'+n, prevExist=False, dir=True, value=None)
+				except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
+					res = yield from root._conn.get(self.path+'/'+n)
+				yield from root.wait(res.modifiedIndex)
+			self = self[n]
+			if isinstance(self,mtAwaiter):
+				self = yield from self.__await__()
+		return self
+
+	def tagged(self,tag):
+		"""Generator to find all sub-nodes with a tag"""
+		assert tag[0] == ':'
+		for k,v in self.items():
+			if k == tag:
+				yield v
+			elif k[0] == ':':
+				pass
+			elif isinstance(v,mtDir):
+				yield from v.tagged(tag)
 
 	def __contains__(self,key):
 		return key in self._data

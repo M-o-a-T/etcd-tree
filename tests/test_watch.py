@@ -120,6 +120,13 @@ def test_update_watch_direct(client):
     mod = yield from t._f(d2,delete=True)
     yield from w.wait(mod=mod)
 
+    with pytest.raises(KeyError):
+        yield from w.subdir('zwei','drei','der', name=":tag")
+    tag = yield from w.subdir("zwei/drei",name="der/:tag", create=True)
+    tug = yield from w.subdir("zwei/drei/vier",name="das/:tagg", create=True)
+    yield from tag.set("hello","kitty")
+    yield from tug.set("hello","kittycat")
+
     w['vier']
     w['vier']['auch']
     yield from w['vier'].delete('auch',prev='xxx')
@@ -136,6 +143,13 @@ def test_update_watch_direct(client):
     assert w['zwei']['zehn']['zwanzig'] == "30"
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja1"
+    assert w['zwei']['drei']['der'][':tag']['hello'] == "kitty"
+    n=0
+    for k in w.tagged(':tag'):
+        n += 1
+        assert k['hello']=='kitty'
+    assert n==1
+
     
     m = yield from w.delete('vier')
     yield from w.wait(m)
