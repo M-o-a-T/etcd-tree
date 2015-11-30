@@ -199,8 +199,9 @@ def test_update_watch(client, loop):
     logger.debug("Waiting for _update 1")
     yield from f
     f = asyncio.Future(loop=loop)
-    assert m1.call_count == 1
+    assert m1.call_count # may be >1
     assert m2.call_count == 1
+    mc1 = m1.call_count
     w['zwei'].remove_monitor(i1)
 
     # The ones deleted by _f(…,delete=True) should not be
@@ -262,7 +263,7 @@ def test_update_watch(client, loop):
 
     logger.debug("Waiting for _update 2")
     yield from f
-    assert m1.call_count == 1
+    assert m1.call_count == mc1
     assert m2.call_count == 2
 
     # three ways to skin a cat
@@ -314,7 +315,7 @@ def test_update_watch(client, loop):
     assert w1['vier']['new_b'] == "z"
     yield from w.wait()
 
-    assert len(w['vier']) == 7
+    assert len(w['vier']) == 7,list(w)
     s=set(w['vier'])
     assert 'a' in s
     assert 'auch' in s
@@ -347,7 +348,7 @@ def test_update_ttl(client, loop):
     assert w['timeout']['of'] == "data"
     assert w['timeout'].ttl is None
     assert w['nodes'] == "too"
-    yield from w.set('some','data',ttl=1)
+    mod = yield from w.set('some','data',ttl=1)
     assert w._get('nodes').ttl is None
     logger.warning("_SET_TTL")
     w._get('timeout').ttl = 1
@@ -359,6 +360,7 @@ def test_update_ttl(client, loop):
     logger.warning("_GET_TTL")
     assert w._get('timeout').ttl is not None
     assert w['nodes'] == "too"
+    yield from w.wait(mod)
     assert w['some'] == "data"
     assert w._get('nodes').ttl is not None
     del w._get('nodes').ttl
