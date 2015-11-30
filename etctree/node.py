@@ -302,7 +302,7 @@ class mtBase(object):
 		#logger.debug("DELETE_ %s",self.path)
 		p = self._parent
 		if p is None:
-			return
+			return # pragma: no cover
 		p = p()
 		if p is None:
 			return # pragma: no cover
