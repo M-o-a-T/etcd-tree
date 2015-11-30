@@ -41,7 +41,7 @@ from .node import mtRoot
 
 class _NOTGIVEN: pass
 
-class CompareFailed(etcd.EtcdCompareFailed):
+class CompareFailed(etcd.EtcdCompareFailed): # pragma: no cover ## hopefully
 	def __init__(self,*args):
 		self.args = args
 	def __repr__(self):
@@ -75,7 +75,7 @@ class EtcClient(object):
 
 	def close(self):
 		try: c = self.client
-		except AttributeError: pass
+		except AttributeError: pass # pragma: no cover
 		else: c.close()
 		self._kill()
 
@@ -180,7 +180,7 @@ class EtcClient(object):
 			except etcd.EtcdKeyNotFound:
 				try:
 					res = yield from self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
-				except etcd.EtcdAlreadyExist:
+				except etcd.EtcdAlreadyExist: # pragma: no cover
 					res = yield from self.client.read(self._extkey(key), recursive=immediate)
 
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
@@ -278,7 +278,7 @@ class EtcWatcher(object):
 			r.cancel()
 			try:
 				yield from r
-			except asyncio.CancelledError:
+			except asyncio.CancelledError: # pragma: no cover
 				pass
 		self._kill()
 
