@@ -214,8 +214,9 @@ def test_update_watch(client, loop):
     yield from f
     f = asyncio.Future(loop=loop)
     assert m1.call_count # may be >1
-    assert m2.call_count == 1
+    assert m2.call_count
     mc1 = m1.call_count
+    mc2 = m2.call_count
     w['zwei'].remove_monitor(i1)
 
     # The ones deleted by _f(…,delete=True) should not be
@@ -278,7 +279,7 @@ def test_update_watch(client, loop):
     logger.debug("Waiting for _update 2")
     yield from f
     assert m1.call_count == mc1
-    assert m2.call_count == 2
+    assert m2.call_count == mc2+1
 
     # three ways to skin a cat
     del i0
@@ -293,7 +294,7 @@ def test_update_watch(client, loop):
     types.register("**","new_b", cls=mtString)
     w1._get('vier')._final = False
     mod = yield from t._f(d2,delete=True)
-    yield from w1.wait()
+    yield from w1.wait(mod)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     with pytest.raises(UnknownNodeError):
