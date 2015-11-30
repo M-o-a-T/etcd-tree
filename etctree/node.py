@@ -654,6 +654,14 @@ class mtDir(mtBase, MutableMapping):
 		self._task(self._root()._conn.delete,self.path,dir=True, index=self._seq)
 
 	@asyncio.coroutine
+	def update(self, d1={}, _sync=True, **d2):
+		mod = None
+		for k,v in chain(d1.items(),d2.items()):
+			mod = yield from self.set(k,v, sync=False)
+		if _sync and mod:
+			yield from self._root()._watcher.sync(mod)
+
+	@asyncio.coroutine
 	def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
 		"""\
 			Delete a node.

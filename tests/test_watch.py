@@ -178,9 +178,9 @@ def test_update_watch(client, loop):
     d=dict
     types = EtcTypes()
     t = client
-    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn")))
-    yield from t._f(d1)
     w = yield from t.tree("/two", immediate=False, static=False)
+    d1=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn"))
+    yield from w.update(d1)
 
     m1,m2 = Mock(),Mock()
     f = asyncio.Future(loop=loop)

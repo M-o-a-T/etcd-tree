@@ -1,3 +1,9 @@
+etctree (0.5.7-1) unstable; urgency=medium
+
+  * Add an async .update method to mtDir
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 30 Nov 2015 09:07:18 +0100
+
 etctree (0.5.6-1) unstable; urgency=medium
 
   * Add .subdir and .tagged nodes to mtDir
