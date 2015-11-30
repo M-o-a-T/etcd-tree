@@ -41,6 +41,12 @@ from .node import mtRoot
 
 class _NOTGIVEN: pass
 
+class CompareFailed(etcd.EtcdCompareFailed):
+	def __init__(self,*args):
+		self.args = args
+	def __repr__(self):
+		return "Write %s to %s prev=%s index=%s %s" % (value,key, prev,index, repr(kw))
+
 class EtcClient(object):
 	last_mod = None
 	def __init__(self, root="", loop=None, **args):
@@ -130,7 +136,10 @@ class EtcClient(object):
 			if prev not in (None,_NOTGIVEN):
 				kw['prevValue'] = prev
 
-		res = yield from self.client.write(key, value=value, **kw)
+		try:
+			res = yield from self.client.write(key, value=value, **kw)
+		except etcd.EtcdCompareFailed as exc:
+			raise CompareFailed(value,key,prev,index,kw) from exc
 		self.last_mod = res.modifiedIndex
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
