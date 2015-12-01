@@ -306,7 +306,7 @@ class EtcWatcher(object):
 		"""\
 			Task which reads from etcd and processes the events received.
 			"""
-		logger.info("READER started")
+		logger.debug("READER started")
 		conn = Client(loop=self.conn._loop, **self.conn.args)
 		key = self.extkey
 		try:
@@ -330,12 +330,12 @@ class EtcWatcher(object):
 		except GeneratorExit:
 			raise
 		except asyncio.CancelledError:
-			logger.info("READER cancelled")
+			logger.debug("READER cancelled")
 		except BaseException as e:
 			logger.exception("READER died")
 			raise
 		else:
-			logger.info("READER ended")
+			logger.debug("READER ended")
 
 	async def _watch_write(self, x):
 		"""\
