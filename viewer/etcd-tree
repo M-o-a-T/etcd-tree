@@ -2,6 +2,9 @@
 # -*- coding: utf8 -*-
 
 from __future__ import division
+import gi
+gi.require_version('Gtk', '3.0')
+
 from gi.repository import Gtk
 from gi.repository import GObject, GLib
 import os
@@ -24,6 +27,7 @@ class AssocUI(object):
 		#gnome.init(APPNAME, APPVERSION)
 		from pkg_resources import Requirement, resource_filename
 		filename = resource_filename(Requirement.parse("etctree"),os.path.join("viewer",APPNAME+".glade"))
+		filename = os.path.join("viewer",APPNAME+".glade")
 
 		self.widgets = Gtk.Builder()
 		self.widgets.add_from_file(filename)
@@ -159,7 +163,7 @@ class AssocUI(object):
 		"""Reader for the background connection to etcd"""
 		res = pipe.recv()
 		print(res)
-		self.tree_node(res.key,DEL if res.action == "delete" else res.value)
+		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value)
 		return True
 
 	def listen_tree(self,start=None):

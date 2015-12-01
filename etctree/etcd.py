@@ -55,7 +55,7 @@ class EtcClient(object):
 		self.args = args
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 		self.client = Client(loop=loop, **args)
-		self.watched = weakref.WeakValueDictionary()
+#		self.watched = weakref.WeakValueDictionary()
 
 	@asyncio.coroutine
 	def _init(self):
@@ -162,10 +162,11 @@ class EtcClient(object):
 
 		assert key[0] == '/'
 
-		if not static:
-			res = self.watched.get(key,None)
-			if res is not None:
-				return res
+# disabled: closing requires waiting for the reader task
+#		if not static:
+#			res = self.watched.get(key,None)
+#			if res is not None:
+#				return res
 
 		if create is False:
 			res = yield from self.client.read(self._extkey(key), recursive=immediate)
@@ -235,7 +236,7 @@ class EtcClient(object):
 
 		if w is not None:
 			w._set_root(root)
-			self.watched[key] = root
+#			self.watched[key] = root
 		return root
 
 class EtcWatcher(object):
