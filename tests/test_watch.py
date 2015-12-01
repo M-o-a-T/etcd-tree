@@ -48,14 +48,20 @@ def test_basic_watch(client):
     # reg funcion shall return the right thing
     i = types.register("two","vier", cls=mtInteger)
     assert i is mtInteger
-    i = types.register("/*/vierixx")(mtInteger)
+    i = types.register("*/vierixx")(mtInteger)
     assert i is mtInteger
-    types['what.ever'] = mtFloat
-    types['/something/else'] = mtInteger
-    assert types['/what/ever'] is mtFloat
-    assert types['two.vier'] is mtInteger
-    assert types['something.else'] is mtInteger
-    assert types['not.not'] is None
+    types['what/ever'] = mtFloat
+    assert types['what/ever'] is mtFloat
+    with pytest.raises(AssertionError):
+        types['/what/ever']
+    with pytest.raises(AssertionError):
+        types['what/ever/']
+    with pytest.raises(AssertionError):
+        types['what//ever']
+    types['something/else'] = mtInteger
+    assert types['two/vier'] is mtInteger
+    assert types['something/else'] is mtInteger
+    assert types['not/not'] is None
 
     d=dict
     t = client
@@ -64,7 +70,7 @@ def test_basic_watch(client):
     # basic access, each directory separately
     class xRoot(mtRoot):
         pass
-    types.register()(xRoot)
+    types.register(cls=xRoot)
     w = yield from t.tree("/two", immediate=False, static=True, types=types)
     assert isinstance(w,xRoot)
     assert w['zwei']['und'] == "drei"

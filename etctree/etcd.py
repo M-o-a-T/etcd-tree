@@ -390,6 +390,7 @@ class EtcTypes(object):
 
 	def step(self,key):
 		"""Lookup with auto-generation of new nodes"""
+		assert key != ''
 		res = self.nodes.get(key,None)
 		if res is None:
 			self.nodes[key] = res = EtcTypes()
@@ -414,52 +415,44 @@ class EtcTypes(object):
 
 	def __getitem__(self,path):
 		"""Shortcut to directly lookup a non-directory node"""
-		if path[0] == "/":
-			path = tuple(p for p in path.split('/') if p != '')
-		else:
-			path = path.split(".")
+		path = tuple(p for p in path.split('/'))
 		for p in path:
 			self = self.step(p)
 		return self.type[0]
 
 	def __setitem__(self,path,value):
 		"""Shortcut to register a non-directory node"""
-		if path[0] == "/":
-			path = tuple(p for p in path.split('/') if p != '')
-		else:
-			path = path.split(".")
+		path = tuple(p for p in path.split('/'))
 		for p in path:
 			self = self.step(p)
-		self._register(False)(value)
+		self._register(value)
 
-	def register(self, *path, cls=None, dir=None):
+	def register(self, *path, cls=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
 		if len(path) == 1:
-			path = path[0]
-			if path[0] == "/":
-				path = tuple(p for p in path.split('/') if p != '')
-			else:
-				path = path.split(".")
+			path = tuple(p for p in path[0].split('/'))
 		for p in path:
 			self = self.step(p)
 		if cls is None:
-			return self._register(dir)
+			return self._register
 		else:
-			return self._register(dir)(cls)
+			return self._register(cls)
 
-	def _register(self, dir):
-		def reg(cls):
-			"""Register a callback on this node"""
-			if dir is not True:
-				assert self.type[0] is None
-				self.type[0] = cls
-			if dir is not False:
-				assert self.type[1] is None
-				self.type[1] = cls
-			return cls
-		return reg
+	def _register(self, cls):
+		"""Register a callback on this node"""
+		from .node import mtDir,mtValue
+		done = False
+		if issubclass(cls,mtValue):
+			self.type[0] = cls
+			done = True
+		if issubclass(cls,mtDir):
+			self.type[1] = cls
+			done = True
+		if not done:
+			raise RuntimeError("What exactly are you trying to register?")
+		return cls
 
 	def lookup(self, path, dir):
 		"""\
