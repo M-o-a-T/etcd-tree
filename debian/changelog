@@ -1,8 +1,8 @@
-etctree (0.5.9-2) unstable; urgency=medium
+etctree (0.5.9-3) unstable; urgency=medium
 
   * Untest, for now
 
- -- Matthias Urlichs <matthias@urlichs.de>  Tue, 01 Dec 2015 08:12:05 +0100
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 01 Dec 2015 08:12:39 +0100
 
 etctree (0.5.9-1) unstable; urgency=medium
 

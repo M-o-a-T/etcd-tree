@@ -4,5 +4,5 @@ export PYBUILD_NAME=etctree
 %:
 	dh $@ --with python3 --buildsystem=pybuild
 
-override_dh_test:
+override_dh_auto_test:
 	true
