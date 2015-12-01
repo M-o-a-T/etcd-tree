@@ -261,7 +261,7 @@ def test_update_watch(client, loop):
     assert w is not w1
     assert w == w1
     wx = yield from tt.tree("/two", immediate=True)
-    assert wx is w1
+    # assert wx is w1 ## no caching
     w2 = yield from t.tree("/two", static=True)
     assert w1 is not w2
     assert w1['zwei']['und'] == "weniger"

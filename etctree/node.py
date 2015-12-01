@@ -261,8 +261,8 @@ class mtBase(object):
 				try:
 					#logger.debug("run_update %s: call %s",self.path,f)
 					f(self)
-				except Exception: # pragma: no cover
-					logger.exception("Monitoring %s at %s",lp,ls)
+				except Exception:
+					logger.exception("Monitoring %s at %s",f,k)
 					del self._later_mon[k]
 
 	def add_monitor(self, callback):
