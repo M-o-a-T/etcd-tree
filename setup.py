@@ -38,6 +38,22 @@ from etctree import VERSION
 #from distutils.core import setup
 from setuptools import setup
 
+from setuptools.command.test import test as TestCommand
+
+class PyTest(TestCommand):
+    user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = ['--assert=plain']
+
+    def run_tests(self):
+        #import here, cause outside the eggs aren't loaded
+        import pytest
+        errno = pytest.main(self.pytest_args)
+        sys.exit(errno)
+
+
 name='etctree'
 
 if version < '3.4':
@@ -76,4 +92,6 @@ coverage
 pytest
 pytest-cov
 """,
+    test_suite='pytest.collector',
+    cmdclass = {'test': PyTest},
     )

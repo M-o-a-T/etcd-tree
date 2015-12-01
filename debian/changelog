@@ -1,3 +1,9 @@
+etctree (0.5.9-1) unstable; urgency=medium
+
+  * Nodes: Pull up the loop argument
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 01 Dec 2015 08:10:26 +0100
+
 etctree (0.5.8-2) unstable; urgency=medium
 
   * Don't delete the root

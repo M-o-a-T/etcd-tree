@@ -85,6 +85,7 @@ class mtBase(object):
 	def __init__(self, parent=None, name=None, seq=None, cseq=None, ttl=None):
 		if name:
 			self._parent = weakref.ref(parent)
+			self._loop = parent._loop
 			self._root = parent._root
 			self.name = name
 			self.path = parent.path+'/'+name
@@ -103,7 +104,7 @@ class mtBase(object):
 		return self
 
 	def _task(self,p,*a,**k):
-		f = asyncio.ensure_future(p(*a,**k), loop=self._root()._conn._loop)
+		f = asyncio.ensure_future(p(*a,**k), loop=self._loop)
 		f.args = (self,p,a,k)
 		self._root()._tasks.append(f)
 
@@ -204,7 +205,8 @@ class mtBase(object):
 		else:
 			assert not _force
 		self._later_seq = seq
-		self._later = self._root()._conn._loop.call_later(1,self._run_update)
+
+		self._later = self._loop.call_later(1,self._run_update)
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -774,6 +776,7 @@ class mtRoot(mtDir):
 		self.path = watcher.key if watcher else ''
 		self._keypath = ()
 		self._tasks = []
+		self._loop = conn._loop
 		if types is None:
 			from .etcd import EtcTypes
 			types = EtcTypes()
@@ -790,7 +793,7 @@ class mtRoot(mtDir):
 	def wait(self, mod=None, timeout=None):
 		if self._tasks:
 			tasks,self._tasks = self._tasks,[]
-			done,tasks = yield from asyncio.wait(tasks, timeout=timeout, loop=self._conn._loop)
+			done,tasks = yield from asyncio.wait(tasks, timeout=timeout, loop=self._loop)
 			self._tasks.extend(tasks)
 			while done:
 				t = done.pop()
