@@ -147,7 +147,7 @@ class mtBase(object):
 		r = yield from root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
 		r = r.modifiedIndex
 		if sync:
-			yield from root._watcher.sync(r)
+			yield from root.wait(r)
 		return r
 
 	def del_ttl(self, sync=True):
@@ -434,7 +434,7 @@ class mtValue(mtBase):
 		r = yield from root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
 		r = r.modifiedIndex
 		if sync:
-			yield from root._watcher.sync(r)
+			yield from root.wait(r)
 		return r
 
 	@asyncio.coroutine
@@ -447,7 +447,7 @@ class mtValue(mtBase):
 		r = yield from root._conn.delete(self.path, index=self._seq, **kw)
 		r = r.modifiedIndex
 		if sync:
-			yield from root._watcher.sync(r)
+			yield from root.wait(r)
 		return r
 
 	def _ext_update(self, value, **kw):
@@ -635,8 +635,8 @@ class mtDir(mtBase, MutableMapping):
 		else:
 			assert isinstance(res,mtValue)
 			mod = yield from res.set(value, **kw)
-		if sync and mod:
-			yield from root._watcher.sync(mod)
+		if sync and mod and root:
+			yield from root.wait(mod)
 		return mod
 
 	def __delitem__(self, key=_NOTGIVEN):
@@ -661,7 +661,9 @@ class mtDir(mtBase, MutableMapping):
 		for k,v in chain(d1.items(),d2.items()):
 			mod = yield from self.set(k,v, sync=False)
 		if _sync and mod:
-			yield from self._root()._watcher.sync(mod)
+			root = self._root()
+			if root:
+				yield from root.wait(mod)
 
 	@asyncio.coroutine
 	def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
@@ -683,8 +685,8 @@ class mtDir(mtBase, MutableMapping):
 				yield from v.delete(sync=sync,recursive=recursive)
 		r = yield from root._conn.delete(self.path, dir=True, recursive=(recursive is None))
 		r = r.modifiedIndex
-		if sync:
-			yield from root._watcher.sync(r)
+		if sync and root:
+			yield from root.wait(r)
 
 	def _ext_delete(self):
 		"""We vanished. Oh well."""
@@ -805,7 +807,8 @@ class mtRoot(mtDir):
 				r = getattr(r,'modifiedIndex',None)
 				if mod is None or (r is not None and mod < r):
 					mod = r # pragma: no cover # because we pop off the end
-		yield from self._watcher.sync(mod)
+		if self._watcher is not None:
+			yield from self._watcher.sync(mod)
 
 	def __repr__(self): # pragma: no cover
 		try:
