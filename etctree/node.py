@@ -819,3 +819,8 @@ class mtRoot(mtDir):
 		if w is not None:
 			w._kill() # pragma: no cover # as the tests call close()
 
+	def delete(self, key=_NOTGIVEN, **kw):
+		if key is _NOTGIVEN:
+			raise RuntimeError("You can't delete the root")
+		return super().delete(key=key, **kw)
+
