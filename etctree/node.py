@@ -318,7 +318,7 @@ class mtBase(object):
 			if self._cseq is None:
 				self._cseq = cseq
 			elif self._cseq != cseq:
-				raise RuntimeError("Object re-created but we didn't notice") # pragma: no cover # hopefully
+				raise RuntimeError("Object re-created but we didn't notice: %s %s" % (self._cseq,cseq)) # pragma: no cover # hopefully
 		if seq and self._seq and self._seq >= seq:
 			raise RuntimeError("Updates out of order") # pragma: no cover # hopefully
 		if seq: # pragma: no branch
