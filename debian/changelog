@@ -1,3 +1,9 @@
+etctree (0.5.12-3) unstable; urgency=medium
+
+  * Debugger trap
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 09 Dec 2015 15:25:47 +0100
+
 etctree (0.5.12-2) unstable; urgency=medium
 
   * INFO logging debug-ified

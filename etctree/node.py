@@ -738,7 +738,7 @@ class mtDir(mtBase, MutableMapping):
 		try:
 			value = cls._load(value)
 		except Exception as e: # pragma: no cover
-			logger.exception("Could not load %s as %s", value, str(cls))
+			logger.error("Could not load '%s' as %s at %s/%s", value, str(cls),self.path,name)
 			value = repr(value)
 			cls = mtDir if dir else mtValue
 		obj = cls(parent=self,name=name, value=value, **kw)
