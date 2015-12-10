@@ -826,6 +826,10 @@ class mtRoot(mtDir):
 		self._types = types
 		super(mtRoot,self).__init__(**kw)
 
+	@property
+	def parent(self):
+		return None
+
 	@asyncio.coroutine
 	def close(self):
 		w,self._watcher = self._watcher,None

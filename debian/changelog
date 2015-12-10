@@ -1,8 +1,8 @@
-etctree (0.5.14-1) unstable; urgency=medium
+etctree (0.5.14-2) unstable; urgency=medium
 
   * publish node's .parent attribute
 
- -- Matthias Urlichs <matthias@urlichs.de>  Thu, 10 Dec 2015 18:18:27 +0100
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 10 Dec 2015 18:20:48 +0100
 
 etctree (0.5.13-1) unstable; urgency=medium
 
