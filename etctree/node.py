@@ -230,6 +230,11 @@ class mtBase(object):
 				return
 			p = p._parent
 
+	@property
+	def parent(self):
+		p = self._parent
+		return None if p is None else p()
+
 	def _run_update(self):
 		"""Timer callback to run a node's callback."""
 		#logger.debug("run_update %s",self.path)
