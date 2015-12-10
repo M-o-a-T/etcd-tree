@@ -317,9 +317,7 @@ class EtcWatcher(object):
 					try:
 						yield from self._watch_write(x)
 					except Exception as e:
-						import traceback
-						traceback.print_exc()
-						logger.fatal("Error in write watcher")
+						logger.exception("Error in write watcher")
 						# XXX TODO trigger a major error
 						self.conn._kill()
 						raise

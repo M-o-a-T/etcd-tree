@@ -318,7 +318,10 @@ class mtBase(object):
 			if self._cseq is None:
 				self._cseq = cseq
 			elif self._cseq != cseq:
-				raise RuntimeError("Object re-created but we didn't notice: %s %s" % (self._cseq,cseq)) # pragma: no cover # hopefully
+				# this happens if a parent directory gets deleted and re-created
+				logger.info("Re-created %s",self.path)
+				for d in list(self._data.values()):
+					d._ext_delete()
 		if seq and self._seq and self._seq >= seq:
 			raise RuntimeError("Updates out of order") # pragma: no cover # hopefully
 		if seq: # pragma: no branch
@@ -572,6 +575,8 @@ class mtDir(mtBase, MutableMapping):
 
 			The value may be a dictionary, in which case the code
 			recursively descends into it.
+
+			@key=None is not supported.
 			"""
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
@@ -585,8 +590,11 @@ class mtDir(mtBase, MutableMapping):
 				keypath += (key,)
 				path += '/'+key
 				if isinstance(val,dict):
-					for k,v in val.items():
-						t_set(path,keypath,k,v)
+					if val:
+						for k,v in val.items():
+							t_set(path,keypath,k,v)
+					else:
+						self._task(root._conn.set,path, None, prevExist=False, dir=True)
 				else:
 					t = root._types.lookup(keypath, dir=False)
 					if t is None:
@@ -603,12 +611,19 @@ class mtDir(mtBase, MutableMapping):
 	def set(self, key,value, sync=True, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
+			Returns the operation's modification index.
+
+			If @key is None, this code will do an etcd "append" operation
+			and the return value will be a key,modIndex tuple.
 			"""
 		root = self._root()
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
 		try:
-			res = self._data[key]
+			if key is None:
+				raise KeyError
+			else:
+				res = self._data[key]
 		except KeyError:
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
@@ -618,10 +633,14 @@ class mtDir(mtBase, MutableMapping):
 				keypath += (key,)
 				mod = None
 				if isinstance(value,dict):
-					for k,v in value.items():
-						r = yield from t_set(path,keypath,k,v)
-						if r is not None:
-							mod = r
+					if value:
+						for k,v in value.items():
+							r = yield from t_set(path,keypath,k,v)
+							if r is not None:
+								mod = r
+					else: # empty dict
+						r = yield from root._conn.set(path, None, dir=True, **kw)
+						mod = r.modifiedIndex
 				else:
 					t = root._types.lookup(keypath, dir=False)
 					if t is None:
@@ -631,13 +650,29 @@ class mtDir(mtBase, MutableMapping):
 					r = yield from root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
-			mod = yield from t_set(self.path,self._keypath,key, value)
+			if key is None:
+				if isinstance(value,dict):
+					r = yield from root._conn.set(self.path, None, append=True, dir=True)
+					res = r.key.rsplit('/',1)[1]
+					mod = yield from t_set(self.path,self._keypath,res, value)
+					if mod is None:
+						mod = r.modifiedIndex # pragma: no cover
+				else:
+					t = root._types.lookup(self._keypath+('0',), dir=False)
+					if t is None:
+						t = mtValue
+					r = yield from root._conn.set(self.path, t._dump(value), append=True, **kw)
+					res = r.key.rsplit('/',1)[1]
+					mod = r.modifiedIndex
+				res = res,mod
+			else:
+				res = mod = yield from t_set(self.path,self._keypath,key, value)
 		else:
 			assert isinstance(res,mtValue)
-			mod = yield from res.set(value, **kw)
+			res = mod = yield from res.set(value, **kw)
 		if sync and mod and root:
 			yield from root.wait(mod)
-		return mod
+		return res
 
 	def __delitem__(self, key=_NOTGIVEN):
 		"""\
@@ -687,6 +722,7 @@ class mtDir(mtBase, MutableMapping):
 		r = r.modifiedIndex
 		if sync and root:
 			yield from root.wait(r)
+		return r
 
 	def _ext_delete(self):
 		"""We vanished. Oh well."""
@@ -827,6 +863,6 @@ class mtRoot(mtDir):
 
 	def delete(self, key=_NOTGIVEN, **kw):
 		if key is _NOTGIVEN:
-			raise RuntimeError("You can't delete the root")
+			raise RuntimeError("You can't delete the root") # pragma: no cover
 		return super().delete(key=key, **kw)
 

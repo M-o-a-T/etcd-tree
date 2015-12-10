@@ -185,7 +185,7 @@ def test_update_watch(client, loop):
     types = EtcTypes()
     t = client
     w = yield from t.tree("/two", immediate=False, static=False)
-    d1=d(zwei=d(und="drei"),vier="fünf",sechs="sieben",acht=d(neun="zehn"))
+    d1=d(zwei=d(und="drei",oder={}),vier="fünf",sechs="sieben",acht=d(neun="zehn"))
     yield from w.update(d1)
 
     m1,m2 = Mock(),Mock()
@@ -334,9 +334,9 @@ def test_update_watch(client, loop):
     with pytest.raises(UnknownNodeError):
         yield from w1['vier'].set('nixy', "daz")
     assert w1['vier']['new_b'] == "z"
-    yield from w.wait()
+    yield from w.wait(mod)
 
-    assert len(w['vier']) == 7,list(w)
+    assert len(w['vier']) == 7,list(w['vier'])
     s=set(w['vier'])
     assert 'a' in s
     assert 'auch' in s
@@ -414,3 +414,18 @@ def test_create(client):
     yield from w2.close()
     yield from w3.close()
     yield from w4.close()
+
+@pytest.mark.run_loop
+def test_append(client):
+    t = client
+    d=dict
+    w = yield from t.tree("/two", immediate=False, static=False)
+    d1=d(zwei=d(drei={}))
+    mod = yield from w.update(d1)
+    yield from w.wait(mod=mod)
+    a,mod = yield from w['zwei'].set(None,"value")
+    b,mod = yield from w['zwei']['drei'].set(None,{'some':'data','is':'here'})
+    yield from w.wait(mod=mod)
+    assert w['zwei'][a] == 'value'
+    assert w['zwei']['drei'][b]['some'] == 'data'
+
