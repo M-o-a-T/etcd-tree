@@ -1,0 +1,22 @@
+language: python
+python:
+  - "3.5"
+
+# command to install dependencies
+install:
+  - pip install coveralls
+  - pip install coverage
+  - pip install 'svn+svn://anonscm.debian.org/pkg-gnome/desktop/unstable/pygobject'
+  - pip install 'git+https://github.com/jplana/python-etcd.git'
+  - pip install 'git+https://github.com/M-o-a-T/python-aio-etcd.git'
+  - python setup.py build
+
+# command to run tests
+script:
+  PATH=$PATH:./etcd/bin python ./setup.py test
+
+after_success: coveralls
+
+# Add env var to detect travis during build
+env: TRAVIS=True
+sudo: false

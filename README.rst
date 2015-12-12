@@ -9,6 +9,13 @@ This is supposed to be mostly seamless, in that a change *here* will be
 reflected *there* without requiring you to manage all that tedious
 communication.
 
+.. image:: https://travis-ci.org/M-o-a-T/etctree.png?branch=master
+   :target: https://travis-ci.org/M-o-a-T/etctree
+
+.. image:: https://coveralls.io/repos/M-o-a-T/etctree/badge.svg?branch=master&service=github
+   :target: https://coveralls.io/github/M-o-a-T/etctree?branch=master
+
+
 `etcd` has a couple of advantages; among others, replication is really easy
 to set up and its data can be controlled with simple HTTP requests. On the
 downside, there's no atomicity and no structured data. To help with the
