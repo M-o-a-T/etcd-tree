@@ -40,6 +40,12 @@ from setuptools import setup
 
 from setuptools.command.test import test as TestCommand
 
+def get_version(fname='etcd_tree/__init__.py'):
+    with open(fname) as f:
+        for line in f:
+            if line.startswith('__VERSION__'):
+                return eval(line.split('=')[-1])
+
 class PyTest(TestCommand):
     user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
 
@@ -56,13 +62,13 @@ class PyTest(TestCommand):
 
 name='etcd_tree'
 
-if version < '3.4':
-    sys.exit('Error: Python-3.4 or newer is required. Current version:\n %s'
+if version < '3.5':
+    sys.exit('Error: Python 3.5 or newer is required. Current version:\n %s'
              % sys.version)
 
 setup(
     name = name,
-    version = VERSION,
+    version = '.'.join(str(x) for x in get_version()),
     description = 'Dynamic etcd state',
     long_description = '''\
 etcTree is a dynamic, object-oriented view of an etcd (sub)tree
@@ -70,7 +76,7 @@ with bi-directional updates.
 ''',
     author = 'Matthias Urlichs',
     author_email = 'matthias@urlichs.de',
-    url = 'https://github.com/m-o-a-t/etcd_tree',
+    url = 'https://github.com/m-o-a-t/etcd-tree',
     download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=etcd_tree.git;a=snapshot;h=master',
     license = 'GPL',
 
