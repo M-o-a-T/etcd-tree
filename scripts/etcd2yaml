@@ -28,7 +28,7 @@ import logging
 logger = logging.getLogger(__name__)
 ##BP
 
-from aioetcd.client import Client
+from aio_etcd.client import Client
 from yaml import safe_dump
 from yaml.representer import SafeRepresenter
 from etctree.util import from_etcd

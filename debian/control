@@ -4,7 +4,7 @@ Section: python
 Priority: optional
 Build-Depends: python3-setuptools, python3-all (>= 3.5), debhelper (>= 9),
   python3-pytest-cov,
-  python3-aioetcd,
+  python3-aio-etcd,
   python3-gi,
   python3-pytest-asyncio,
 Standards-Version: 3.9.1

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 import asyncio
 loop = asyncio.get_event_loop()
 
-from aioetcd.client import Client
+from aio_etcd.client import Client
 import sys
 from pprint import pprint
 

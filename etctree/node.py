@@ -36,7 +36,7 @@ import time
 import asyncio
 from itertools import chain
 from collections.abc import MutableMapping
-import aioetcd as etcd
+import aio_etcd as etcd
 
 class _NOTGIVEN:
 	pass

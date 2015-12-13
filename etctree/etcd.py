@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 This is the etcd interface.
 """
 
-import aioetcd as etcd
-from aioetcd.client import Client
+import aio_etcd as etcd
+from aio_etcd.client import Client
 import asyncio
 import weakref
 import inspect
