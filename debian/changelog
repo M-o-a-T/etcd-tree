@@ -1,3 +1,11 @@
+etctree (0.5.15-1) unstable; urgency=medium
+
+  * Travis test (doesn't work yet)
+  * Test fixes (really need @coroutine wrapper)
+  * aio_etcd rename (from aioetcd, which is a different module)
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 13 Dec 2015 11:13:15 +0100
+
 etctree (0.5.14-3) unstable; urgency=medium
 
   * (Not) enable Travis

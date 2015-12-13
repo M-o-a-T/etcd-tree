@@ -27,6 +27,7 @@ import logging
 logger = logging.getLogger(__name__)
 ##BP
 
+import asyncio
 import pytest
 import etcd
 from etctree.node import mtDir
@@ -54,6 +55,7 @@ def clean_dump(d):
     return d
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_get_set(client):
     """Basic get/set stuff"""
     d=dict
@@ -91,8 +93,10 @@ def test_get_set(client):
     # random entry creation
     r = yield from client.set("/",value="baz",append=True)
     assert r.key.endswith('000'+str(r.modifiedIndex))
+test_get_set._is_oroutine = True
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_feeding(client):
     """Feed data into etcd and check that they arrive."""
     # basic stuff

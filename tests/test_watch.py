@@ -38,6 +38,7 @@ from .util import cfg,client
 from unittest.mock import Mock
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_basic_watch(client):
     """Watches which don't actually watch"""
     # object type registration
@@ -117,6 +118,7 @@ def test_basic_watch(client):
     yield from w4.close()
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
@@ -178,6 +180,7 @@ def test_update_watch_direct(client):
     yield from w.close()
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_update_watch(client, loop):
     """Testing auto-update, both ways"""
     logger.debug("START update_watch")
@@ -360,6 +363,7 @@ def test_update_watch(client, loop):
     yield from w2.close()
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_update_ttl(client, loop):
     d=dict
     t = client
@@ -397,6 +401,7 @@ def test_update_ttl(client, loop):
     yield from w.close()
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_create(client):
     t = client
     with pytest.raises(etcd.EtcdKeyNotFound):
@@ -416,6 +421,7 @@ def test_create(client):
     yield from w4.close()
 
 @pytest.mark.run_loop
+@asyncio.coroutine
 def test_append(client):
     t = client
     d=dict
