@@ -57,14 +57,13 @@ class EtcClient(object):
 		self.client = Client(loop=loop, **args)
 #		self.watched = weakref.WeakValueDictionary()
 
-	@asyncio.coroutine
-	def _init(self):
+	async def _init(self):
 		if self.last_mod is not None: # pragma: no cover
 			return
 		try:
-			self.last_mod = (yield from self.client.read(self.root)).etcd_index
+			self.last_mod = (await self.client.read(self.root)).etcd_index
 		except etcd.EtcdKeyNotFound:
-			self.last_mod = (yield from self.client.write(self.root, value=None, dir=True)).etcd_index
+			self.last_mod = (await self.client.write(self.root, value=None, dir=True)).etcd_index
 
 	def __del__(self):
 		self._kill()
@@ -84,16 +83,13 @@ class EtcClient(object):
 		assert (key == '' or key[0] == '/')
 		return self.root+key
 
-	def get(self, key, **kw):
-		return self.client.get(self._extkey(key), **kw)
-	get._is_coroutine = True
+	async def get(self, key, **kw):
+		return (await self.client.get(self._extkey(key), **kw))
 
-	def read(self, key, **kw):
-		return self.client.read(self._extkey(key), **kw)
-	read._is_coroutine = True
+	async def read(self, key, **kw):
+		return (await self.client.read(self._extkey(key), **kw))
 
-	@asyncio.coroutine
-	def delete(self, key, prev=_NOTGIVEN, index=None, **kw):
+	async def delete(self, key, prev=_NOTGIVEN, index=None, **kw):
 		"""\
 			Delete a value.
 
@@ -107,12 +103,11 @@ class EtcClient(object):
 			kw['prevValue'] = prev
 		if index is not None:
 			kw['prevIndex'] = index
-		res = yield from self.client.delete(self._extkey(key), **kw)
+		res = await self.client.delete(self._extkey(key), **kw)
 		self.last_mod = res.modifiedIndex
 		return res
 
-	@asyncio.coroutine
-	def set(self, key, value, prev=_NOTGIVEN, index=None, **kw):
+	async def set(self, key, value, prev=_NOTGIVEN, index=None, **kw):
 		"""\
 			Either create or update a value.
 
@@ -137,15 +132,14 @@ class EtcClient(object):
 				kw['prevValue'] = prev
 
 		try:
-			res = yield from self.client.write(key, value=value, **kw)
+			res = await self.client.write(key, value=value, **kw)
 		except etcd.EtcdCompareFailed as exc:
 			raise CompareFailed(value,key,prev,index,kw) from exc
 		self.last_mod = res.modifiedIndex
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	@asyncio.coroutine
-	def tree(self, key, types=None, immediate=True, static=False, create=None):
+	async def tree(self, key, types=None, immediate=True, static=False, create=None):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
@@ -169,20 +163,20 @@ class EtcClient(object):
 #				return res
 
 		if create is False:
-			res = yield from self.client.read(self._extkey(key), recursive=immediate)
+			res = await self.client.read(self._extkey(key), recursive=immediate)
 		elif create is True:
-			res = yield from self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+			res = await self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
 		else:
 			# etcd can't do "create-directory-if-it-does-not-exist", so
 			# if two jobs with create=None attempt this at the same time
 			# the whole thing gets interesting.
 			try:
-				res = yield from self.client.read(self._extkey(key), recursive=immediate)
+				res = await self.client.read(self._extkey(key), recursive=immediate)
 			except etcd.EtcdKeyNotFound:
 				try:
-					res = yield from self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+					res = await self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover
-					res = yield from self.client.read(self._extkey(key), recursive=immediate)
+					res = await self.client.read(self._extkey(key), recursive=immediate)
 
 		w = None if static else EtcWatcher(self,key,res.etcd_index)
 		cls = None
@@ -210,8 +204,7 @@ class EtcClient(object):
 				node.updated(seq=0)
 			d_add(res._children,root)
 		elif immediate is False:
-			@asyncio.coroutine
-			def d_get(node, res):
+			async def d_get(node, res):
 				for c in res.children:
 					if c is res:
 						continue # pragma: no cover
@@ -220,13 +213,13 @@ class EtcClient(object):
 					if c.dir:
 						sd = node._ext_lookup(n,dir=True, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-						data = yield from self.client.read(c.key)
-						yield from d_get(sd, data)
+						data = await self.client.read(c.key)
+						await d_get(sd, data)
 					else:
 						node._ext_lookup(n,dir=False, value=c.value, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node.updated(seq=0)
-			yield from d_get(root, res)
+			await d_get(root, res)
 		else:
 			for c in res.children:
 				if c is res:
@@ -272,13 +265,12 @@ class EtcWatcher(object):
 				pass
 			r = None
 
-	@asyncio.coroutine
-	def close(self):
+	async def close(self):
 		r,self._reader = self._reader,None
 		if r is not None:
 			r.cancel()
 			try:
-				yield from r
+				await r
 			except asyncio.CancelledError: # pragma: no cover
 				pass
 		self._kill()
@@ -286,23 +278,21 @@ class EtcWatcher(object):
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
 
-	@asyncio.coroutine
-	def sync(self, mod=None):
+	async def sync(self, mod=None):
 		"""Wait for pending updates"""
 		if mod is None or mod < self.conn.last_mod:
 			mod = self.conn.last_mod
 		logger.debug("Syncing, wait for %d",mod)
 		try:
-			yield from self.uptodate.acquire()
+			await self.uptodate.acquire()
 			while self._reader is not None and self.last_seen < mod:
-				yield from self.uptodate.wait() # pragma: no cover
+				await self.uptodate.wait() # pragma: no cover
 				                                # processing got done during .acquire()
 		finally:
 			self.uptodate.release()
 		logger.debug("Syncing, done, at %d",self.last_seen)
 
-	@asyncio.coroutine
-	def _watch_read(self): # pragma: no cover
+	async def _watch_read(self): # pragma: no cover
 		"""\
 			Task which reads from etcd and processes the events received.
 			"""
@@ -311,11 +301,10 @@ class EtcWatcher(object):
 		key = self.extkey
 		try:
 			while True:
-				@asyncio.coroutine
-				def cb(x):
+				async def cb(x):
 					logger.debug("IN: %s",repr(x.__dict__))
 					try:
-						yield from self._watch_write(x)
+						await self._watch_write(x)
 					except Exception as e:
 						logger.exception("Error in write watcher")
 						# XXX TODO trigger a major error
@@ -323,7 +312,7 @@ class EtcWatcher(object):
 						raise
 					self.last_read = x.modifiedIndex
 
-				yield from conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
+				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
 
 		except GeneratorExit:
 			raise

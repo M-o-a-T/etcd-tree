@@ -100,7 +100,7 @@ class mtBase(object):
 		self._later_mon = weakref.WeakValueDictionary()
 
 	async def __await__(self):
-		"""Nodes which are already loaded support lazy lookup by doing nothing."""
+		"Nodes which are already loaded support lazy lookup by doing nothing."
 		return self
 
 	def _task(self,p,*a,**k):
@@ -108,9 +108,8 @@ class mtBase(object):
 		f.args = (self,p,a,k)
 		self._root()._tasks.append(f)
 
-	@asyncio.coroutine
-	def wait(self,mod=None,timeout=None):
-		yield from self._root().wait(mod, timeout=timeout)
+	async def wait(self,mod=None,timeout=None):
+		await self._root().wait(mod, timeout=timeout)
 
 	def __repr__(self): ## pragma: no cover
 		try:
@@ -135,8 +134,7 @@ class mtBase(object):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
 
-	@asyncio.coroutine
-	def set_ttl(self, ttl, sync=True):
+	async def set_ttl(self, ttl, sync=True):
 		"""Coroutine to set/update this node's TTL"""
 		root=self._root()
 		kw = {}
@@ -144,15 +142,14 @@ class mtBase(object):
 			kw['prev'] = None
 		else:
 			kw['index'] = self._seq
-		r = yield from root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		r = await root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
 		r = r.modifiedIndex
 		if sync:
-			yield from root.wait(r)
+			await root.wait(r)
 		return r
 
-	def del_ttl(self, sync=True):
-		return self.set_ttl('', sync=True)
-	del_ttl._is_coroutine = True
+	async def del_ttl(self, sync=True):
+		return (await self.set_ttl('', sync=True))
 
 	def _freeze(self):
 		self._frozen = True
@@ -432,30 +429,28 @@ class mtValue(mtBase):
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for mtDir.delete
 
-	@asyncio.coroutine
-	def set(self, value, sync=True, ttl=None):
+	async def set(self, value, sync=True, ttl=None):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
+		r = await root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
 		r = r.modifiedIndex
 		if sync:
-			yield from root.wait(r)
+			await root.wait(r)
 		return r
 
-	@asyncio.coroutine
-	def delete(self, sync=True, recursive=None, **kw):
+	async def delete(self, sync=True, recursive=None, **kw):
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path)
 		root = self._root()
 		if root is None:
 			return # pragma: no cover
-		r = yield from root._conn.delete(self.path, index=self._seq, **kw)
+		r = await root._conn.delete(self.path, index=self._seq, **kw)
 		r = r.modifiedIndex
 		if sync:
-			yield from root.wait(r)
+			await root.wait(r)
 		return r
 
 	def _ext_update(self, value, **kw):
@@ -537,8 +532,7 @@ class mtDir(mtBase, MutableMapping):
 		return v
 	__getitem__ = get
 
-	@asyncio.coroutine
-	def subdir(self, *_name, name=(), create=False):
+	async def subdir(self, *_name, name=(), create=False):
 		"""Utility function to find/create a sub-node."""
 		root=self._root()
 
@@ -549,13 +543,13 @@ class mtDir(mtBase, MutableMapping):
 		for n in chain(_name,name):
 			if create and n not in self:
 				try:
-					res = yield from root._conn.set(self.path+'/'+n, prevExist=False, dir=True, value=None)
+					res = await root._conn.set(self.path+'/'+n, prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
-					res = yield from root._conn.get(self.path+'/'+n)
-				yield from root.wait(res.modifiedIndex)
+					res = await root._conn.get(self.path+'/'+n)
+				await root.wait(res.modifiedIndex)
 			self = self[n]
 			if isinstance(self,mtAwaiter):
-				self = yield from self.__await__()
+				self = await self.__await__()
 		return self
 
 	def tagged(self,tag):
@@ -612,8 +606,7 @@ class mtDir(mtBase, MutableMapping):
 			assert isinstance(res,mtValue)
 			res.value = val
 
-	@asyncio.coroutine
-	def set(self, key,value, sync=True, **kw):
+	async def set(self, key,value, sync=True, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			Returns the operation's modification index.
@@ -632,19 +625,18 @@ class mtDir(mtBase, MutableMapping):
 		except KeyError:
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
-			@asyncio.coroutine
-			def t_set(path,keypath,key,value):
+			async def t_set(path,keypath,key,value):
 				path += '/'+key
 				keypath += (key,)
 				mod = None
 				if isinstance(value,dict):
 					if value:
 						for k,v in value.items():
-							r = yield from t_set(path,keypath,k,v)
+							r = await t_set(path,keypath,k,v)
 							if r is not None:
 								mod = r
 					else: # empty dict
-						r = yield from root._conn.set(path, None, dir=True, **kw)
+						r = await root._conn.set(path, None, dir=True, **kw)
 						mod = r.modifiedIndex
 				else:
 					t = root._types.lookup(keypath, dir=False)
@@ -652,31 +644,31 @@ class mtDir(mtBase, MutableMapping):
 						if self._final is not None:
 							raise UnknownNodeError(key)
 						t = mtValue
-					r = yield from root._conn.set(path, t._dump(value), prevExist=False, **kw)
+					r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
 				if isinstance(value,dict):
-					r = yield from root._conn.set(self.path, None, append=True, dir=True)
+					r = await root._conn.set(self.path, None, append=True, dir=True)
 					res = r.key.rsplit('/',1)[1]
-					mod = yield from t_set(self.path,self._keypath,res, value)
+					mod = await t_set(self.path,self._keypath,res, value)
 					if mod is None:
 						mod = r.modifiedIndex # pragma: no cover
 				else:
 					t = root._types.lookup(self._keypath+('0',), dir=False)
 					if t is None:
 						t = mtValue
-					r = yield from root._conn.set(self.path, t._dump(value), append=True, **kw)
+					r = await root._conn.set(self.path, t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
 				res = res,mod
 			else:
-				res = mod = yield from t_set(self.path,self._keypath,key, value)
+				res = mod = await t_set(self.path,self._keypath,key, value)
 		else:
 			assert isinstance(res,mtValue)
-			res = mod = yield from res.set(value, **kw)
+			res = mod = await res.set(value, **kw)
 		if sync and mod and root:
-			yield from root.wait(mod)
+			await root.wait(mod)
 		return res
 
 	def __delitem__(self, key=_NOTGIVEN):
@@ -695,18 +687,16 @@ class mtDir(mtBase, MutableMapping):
 			return
 		self._task(self._root()._conn.delete,self.path,dir=True, index=self._seq)
 
-	@asyncio.coroutine
-	def update(self, d1={}, _sync=True, **d2):
+	async def update(self, d1={}, _sync=True, **d2):
 		mod = None
 		for k,v in chain(d1.items(),d2.items()):
-			mod = yield from self.set(k,v, sync=False)
+			mod = await self.set(k,v, sync=False)
 		if _sync and mod:
 			root = self._root()
 			if root:
-				yield from root.wait(mod)
+				await root.wait(mod)
 
-	@asyncio.coroutine
-	def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
+	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
 		"""\
 			Delete a node.
 			Recursive=True: drop it sequentially
@@ -718,15 +708,15 @@ class mtDir(mtBase, MutableMapping):
 			raise FrozenError(self.path)
 		if key is not _NOTGIVEN:
 			res = self._data[key]
-			yield from res.delete(sync=sync,recursive=recursive, **kw)
+			await res.delete(sync=sync,recursive=recursive, **kw)
 			return
 		if recursive:
 			for v in list(self._data.values()):
-				yield from v.delete(sync=sync,recursive=recursive)
-		r = yield from root._conn.delete(self.path, dir=True, recursive=(recursive is None))
+				await v.delete(sync=sync,recursive=recursive)
+		r = await root._conn.delete(self.path, dir=True, recursive=(recursive is None))
 		r = r.modifiedIndex
 		if sync and root:
-			yield from root.wait(r)
+			await root.wait(r)
 		return r
 
 	def _ext_delete(self):
@@ -830,17 +820,15 @@ class mtRoot(mtDir):
 	def parent(self):
 		return None
 
-	@asyncio.coroutine
-	def close(self):
+	async def close(self):
 		w,self._watcher = self._watcher,None
 		if w is not None:
-			yield from w.close()
+			await w.close()
 
-	@asyncio.coroutine
-	def wait(self, mod=None, timeout=None):
+	async def wait(self, mod=None, timeout=None):
 		if self._tasks:
 			tasks,self._tasks = self._tasks,[]
-			done,tasks = yield from asyncio.wait(tasks, timeout=timeout, loop=self._loop)
+			done,tasks = await asyncio.wait(tasks, timeout=timeout, loop=self._loop)
 			self._tasks.extend(tasks)
 			while done:
 				t = done.pop()
@@ -853,7 +841,7 @@ class mtRoot(mtDir):
 				if mod is None or (r is not None and mod < r):
 					mod = r # pragma: no cover # because we pop off the end
 		if self._watcher is not None:
-			yield from self._watcher.sync(mod)
+			await self._watcher.sync(mod)
 
 	def __repr__(self): # pragma: no cover
 		try:
