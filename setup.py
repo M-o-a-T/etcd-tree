@@ -74,10 +74,19 @@ setup(
 etcTree is a dynamic, object-oriented view of an etcd (sub)tree
 with bi-directional updates.
 ''',
+    classifiers=[
+        "Topic :: System :: Distributed Computing",
+        "Topic :: Software Development :: Libraries",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
+        "Topic :: Database :: Front-Ends",
+    ],
+    keywords='etcd asyncio',
     author = 'Matthias Urlichs',
     author_email = 'matthias@urlichs.de',
     url = 'https://github.com/m-o-a-t/etcd-tree',
-    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=etcd_tree.git;a=snapshot;h=master',
+    download_url = 'https://github.com/M-o-a-T/etcd-tree/archive/master.zip',
     license = 'GPL',
 
     zip_safe = False, 
