@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 from sys import version
 import os
-from etcd_tree import VERSION
 
 #from distutils.core import setup
 from setuptools import setup
