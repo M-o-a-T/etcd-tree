@@ -45,7 +45,7 @@ def client(loop):
     kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
-    from etctree.etcd import EtcClient
+    from etcd_tree.etcd import EtcClient
     c = EtcClient(root=r, loop=loop, **kw)
     loop.run_until_complete(c._init())
     try:
@@ -54,10 +54,10 @@ def client(loop):
         pass
     loop.run_until_complete(c.client.write(c.root, dir=True, value=None))
     def dumper(client, path='', dump=False):
-        from etctree.util import from_etcd
+        from etcd_tree.util import from_etcd
         return from_etcd(client.client,client.root+path, dump=dump)
     def feeder(client,data, delete=False,subtree=""):
-        from etctree.util import to_etcd
+        from etcd_tree.util import to_etcd
         return to_etcd(client.client,client.root+subtree,data, delete=delete)
     type(c)._d = dumper
     type(c)._f = feeder
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     # quick&dirty test
     cfg = load_cfg("test.cfg.sample")
     d = dict
-    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etctree')))
+    d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etcd_tree')))
     assert cfg == d, (cfg,d)
 else:
     cfg = load_cfg(os.environ.get('ETCTREE_TEST_CFG',"test.cfg"))

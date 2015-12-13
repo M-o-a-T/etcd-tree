@@ -2,4 +2,4 @@ config:
   etcd:
     host: localhost
     port: 2379
-    root: /test/etctree
+    root: /test/etcd_tree

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 import asyncio
 import pytest
 import etcd
-from etctree.node import mtDir
+from etcd_tree.node import mtDir
 
 from .util import cfg,client
 
@@ -39,8 +39,8 @@ def test_basic_etcd(client):
 
 def test_invalid_etcd():
     kw = cfg['config']['etcd'].copy()
-    r = kw.pop('root','/etctree/test')
-    from etctree.etcd import EtcClient
+    r = kw.pop('root','/etcd_tree/test')
+    from etcd_tree.etcd import EtcClient
     with pytest.raises(AssertionError):
         EtcClient(root="nix", **kw)
 
@@ -65,13 +65,13 @@ def test_get_set(client):
     assert (yield from client._d()) == d(foo="dud",what=d(so="ever"))
     assert (yield from client._d("/what/so")) == "ever"
     assert (clean_dump((yield from client._d("/what/so",dump=True)))) == \
-        d(_=d(action='get', key='/test/etctree/what/so', value='ever'))
+        d(_=d(action='get', key='/test/etcd_tree/what/so', value='ever'))
     du = clean_dump((yield from client._d(dump=True)))
     assert du == d(
-        _=d(action='get', dir=True, key='/test/etctree'),
-        foo=d(key='/test/etctree/foo', value='dud'),
-        what= d(_=d(dir=True, key='/test/etctree/what'),
-          so=d(key='/test/etctree/what/so', value='ever')))
+        _=d(action='get', dir=True, key='/test/etcd_tree'),
+        foo=d(key='/test/etcd_tree/foo', value='dud'),
+        what= d(_=d(dir=True, key='/test/etcd_tree/what'),
+          so=d(key='/test/etcd_tree/what/so', value='ever')))
 
     v = yield from client.read("/foo")
     assert v.value == "dud"

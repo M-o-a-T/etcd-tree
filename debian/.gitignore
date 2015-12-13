@@ -2,4 +2,4 @@
 /*.log
 /*.debhelper
 /*.substvars
-/python3-etctree
+/python3-etcd_tree

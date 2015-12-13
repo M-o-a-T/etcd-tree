@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 from sys import version
 import os
-from etctree import VERSION
+from etcd_tree import VERSION
 
 #from distutils.core import setup
 from setuptools import setup
@@ -54,7 +54,7 @@ class PyTest(TestCommand):
         sys.exit(errno)
 
 
-name='etctree'
+name='etcd_tree'
 
 if version < '3.4':
     sys.exit('Error: Python-3.4 or newer is required. Current version:\n %s'
@@ -70,12 +70,12 @@ with bi-directional updates.
 ''',
     author = 'Matthias Urlichs',
     author_email = 'matthias@urlichs.de',
-    url = 'https://github.com/m-o-a-t/etctree',
-    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=etctree.git;a=snapshot;h=master',
+    url = 'https://github.com/m-o-a-t/etcd_tree',
+    download_url = 'http://netz.smurf.noris.de/cgi/gitweb?p=etcd_tree.git;a=snapshot;h=master',
     license = 'GPL',
 
     zip_safe = False, 
-    packages = ('etctree',),
+    packages = ('etcd_tree',),
     package_data = { '': ['*.glade']},
     scripts = (
         'viewer/etcd-tree',

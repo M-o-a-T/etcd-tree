@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 from aio_etcd.client import Client
 from yaml import safe_dump
 from yaml.representer import SafeRepresenter
-from etctree.util import from_etcd
+from etcd_tree.util import from_etcd
 import sys
 import asyncio
 

@@ -1,3 +1,9 @@
+etcd-tree (0.6.1-1) unstable; urgency=medium
+
+  * Rename to etcd_tree
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 13 Dec 2015 11:28:15 +0100
+
 etctree (0.5.15-1) unstable; urgency=medium
 
   * Travis test (doesn't work yet)

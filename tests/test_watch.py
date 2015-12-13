@@ -31,8 +31,8 @@ import pytest
 import etcd
 import time
 import asyncio
-from etctree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString, UnknownNodeError,FrozenError
-from etctree.etcd import EtcTypes
+from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString, UnknownNodeError,FrozenError
+from etcd_tree.etcd import EtcTypes
 
 from .util import cfg,client
 from unittest.mock import Mock
@@ -257,7 +257,7 @@ def test_update_watch(client, loop):
     yield from w['zwei'].wait(m)
     assert s != w['vier']._get('auch')._cseq
 
-    from etctree import client as rclient
+    from etcd_tree import client as rclient
     from .util import cfgpath
     tt = yield from rclient(cfgpath, loop=loop)
     w1 = yield from tt.tree("/two", immediate=True, types=types)

@@ -42,7 +42,7 @@ import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)
 
 @asyncio.coroutine
-def client(cfg="/etc/etctree.cfg", loop=None):
+def client(cfg="/etc/etcd_tree.cfg", loop=None):
 	if not isinstance(cfg,dict): # pragma: no branch
 		from .util import from_yaml
 		cfg = from_yaml(cfg)

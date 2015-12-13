@@ -27,7 +27,7 @@ install:
 test: all test.cfg
 	@rm -f test.log
 	$(PYTHON) tests/util.py
-	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etctree tests/
+	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
 
 test.cfg:
 	@echo "You need to create a configuration file for testing." >&2
