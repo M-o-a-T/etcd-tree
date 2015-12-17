@@ -305,20 +305,20 @@ class EtcWatcher(object):
 		conn = Client(loop=self.conn._loop, **self.conn.args)
 		key = self.extkey
 		try:
-			while True:
-				async def cb(x):
-					logger.debug("IN: %s",repr(x.__dict__))
-					try:
-						await self._watch_write(x)
-					except Exception as e:
-						logger.exception("Error in write watcher")
-						# XXX TODO trigger a major error
-						if not self.stopped.done():
-							self.stopped.set_exception(e)
-						raise etcd.StopWatching
-					self.last_read = x.modifiedIndex
+			async def cb(x):
+				logger.debug("IN: %s",repr(x.__dict__))
+				try:
+					await self._watch_write(x)
+				except Exception as e:
+					logger.exception("Error in write watcher")
+					if not self.stopped.done():
+						self.stopped.set_exception(e)
+					raise etcd.StopWatching
+				self.last_read = x.modifiedIndex
 
-				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
+			await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
+			if not self.stopped.done():
+				self.stopped.set_result("returned")
 
 		except GeneratorExit:
 			raise
