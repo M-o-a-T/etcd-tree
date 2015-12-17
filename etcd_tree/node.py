@@ -830,6 +830,10 @@ class mtRoot(mtDir):
 	def parent(self):
 		return None
 
+	@property
+	def stopped(self):
+		return self._watcher.stopped
+
 	async def close(self):
 		w,self._watcher = self._watcher,None
 		if w is not None:

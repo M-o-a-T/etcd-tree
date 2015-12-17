@@ -250,6 +250,7 @@ class EtcWatcher(object):
 
 		self.uptodate = asyncio.Condition(loop=conn._loop)
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
+		self.stopped = asyncio.Future(loop=conn._loop)
 
 	def __del__(self): # pragma: no cover
 		self._kill()
@@ -257,6 +258,8 @@ class EtcWatcher(object):
 	def _kill(self): # pragma: no cover
 		"""Tear down everything"""
 		#logger.warning("_KILL")
+		if not self.stopped.done():
+			self.stopped.set_result("_kill")
 		r,self._reader = self._reader,None
 		if r is not None:
 			try:
@@ -266,6 +269,8 @@ class EtcWatcher(object):
 			r = None
 
 	async def close(self):
+		if not self.stopped.done():
+			self.stopped.set_result("close")
 		r,self._reader = self._reader,None
 		if r is not None:
 			r.cancel()
@@ -308,8 +313,9 @@ class EtcWatcher(object):
 					except Exception as e:
 						logger.exception("Error in write watcher")
 						# XXX TODO trigger a major error
-						self.conn._kill()
-						raise
+						if not self.stopped.done():
+							self.stopped.set_exception(e)
+						raise etcd.StopWatching
 					self.last_read = x.modifiedIndex
 
 				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
@@ -320,9 +326,13 @@ class EtcWatcher(object):
 			logger.debug("READER cancelled")
 		except BaseException as e:
 			logger.exception("READER died")
+			if not self.stopped.done():
+				self.stopped.set_exception(e)
 			raise
 		else:
 			logger.debug("READER ended")
+			if not self.stopped.done():
+				self.stopped.set_result("end")
 
 	async def _watch_write(self, x):
 		"""\

@@ -1,3 +1,9 @@
+etcd-tree (0.7.2-1) unstable; urgency=medium
+
+  * Add a "stopped" argument to a watcher to tell whether it's no longer running.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 17 Dec 2015 23:25:17 +0100
+
 etcd-tree (0.7.0-1) unstable; urgency=medium
 
   * Add an "env" argument to pass a pointer to the local environment to mtRoot
