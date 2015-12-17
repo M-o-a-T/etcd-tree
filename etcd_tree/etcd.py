@@ -139,7 +139,7 @@ class EtcClient(object):
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	async def tree(self, key, types=None, immediate=True, static=False, create=None):
+	async def tree(self, key, types=None, immediate=True, static=False, create=None, env=None):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
@@ -187,7 +187,7 @@ class EtcClient(object):
 		else:
 			assert issubclass(cls,mtRoot)
 		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, cseq=res.createdIndex, types=types,
-			ttl=res.ttl if hasattr(res,'ttl') else None)
+			ttl=res.ttl if hasattr(res,'ttl') else None, env=env)
 
 		if immediate is True:
 			def d_add(tree, node):

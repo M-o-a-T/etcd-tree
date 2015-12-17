@@ -81,6 +81,7 @@ class mtBase(object):
 		"""
 	_later = 0
 	_frozen = False
+	_env = _NOTGIVEN
 
 	def __init__(self, parent=None, name=None, seq=None, cseq=None, ttl=None):
 		if name:
@@ -102,6 +103,12 @@ class mtBase(object):
 	async def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		return self
+
+	@property
+	def env(self):
+		if self._env is _NOTGIVEN:
+			self._env = self._root().env
+		return self._env
 
 	def _task(self,p,*a,**k):
 		f = asyncio.ensure_future(p(*a,**k), loop=self._loop)
@@ -797,13 +804,15 @@ class mtRoot(mtDir):
 
 		@conn: the connection this is attached to
 		@watcher: the watcher that's talking to me
+		@types: type lookup
+		@env: optional pointer to the caller's global environment
 		"""
 	_parent = None
 	name = ''
 	_path = ''
 	_types = None
 
-	def __init__(self,conn,watcher,types=None, **kw):
+	def __init__(self,conn,watcher,types=None, env=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
 		self.path = watcher.key if watcher else ''
@@ -814,6 +823,7 @@ class mtRoot(mtDir):
 			from .etcd import EtcTypes
 			types = EtcTypes()
 		self._types = types
+		self._env = env
 		super(mtRoot,self).__init__(**kw)
 
 	@property

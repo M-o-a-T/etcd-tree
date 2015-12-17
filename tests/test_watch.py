@@ -72,9 +72,11 @@ def test_basic_watch(client):
     class xRoot(mtRoot):
         pass
     types.register(cls=xRoot)
-    w = yield from t.tree("/two", immediate=False, static=True, types=types)
+    w = yield from t.tree("/two", immediate=False, static=True, types=types, env="foobar")
     assert isinstance(w,xRoot)
+    assert w.env == "foobar"
     assert w['zwei']['und'] == "drei"
+    assert w['zwei'].env == "foobar"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
         w['x']
