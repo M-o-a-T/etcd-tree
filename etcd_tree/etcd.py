@@ -291,11 +291,15 @@ class EtcWatcher(object):
 		try:
 			await self.uptodate.acquire()
 			while self._reader is not None and self.last_seen < mod:
-				await self.uptodate.wait() # pragma: no cover
+				if self.stopped.done():
+					return
+				await asyncio.wait([self.uptodate.wait(),self.stopped], loop=self.conn._loop, return_when=asyncio.FIRST_COMPLETED) # pragma: no cover
 				                                # processing got done during .acquire()
 		finally:
 			self.uptodate.release()
 		logger.debug("Syncing, done, at %d",self.last_seen)
+		if self.stopped.done():
+			raise RuntimeError("stopped: "+self.stopped.result())
 
 	async def _watch_read(self): # pragma: no cover
 		"""\
