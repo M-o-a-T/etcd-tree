@@ -225,7 +225,7 @@ class mtBase(object):
 					return
 			else:
 				# this node has a running timer. By the invariant it cannot
-				# have (had) blocked children, therefore trying to unblock this
+				# have (had) blocked children, therefore trying to unblock it
 				# node must be a bug.
 				assert not _force
 				p._later.cancel()
@@ -248,7 +248,13 @@ class mtBase(object):
 		# but we fix that later: if this is the last blocked child and
 		# _call_monitors() triggers another update, we'd create and then
 		# immediately destroy a timer
-		self._call_monitors()
+		try:
+			self._call_monitors()
+		except Exception as exc:
+			# A monitor died. The tree may be inconsistent.
+			r = self._root()
+			if r is not None:
+				r.propagate_exc(exc,self)
 
 		p = self._parent
 		if p is None:
@@ -260,19 +266,14 @@ class mtBase(object):
 		p.updated(seq=ls,_force=True)
 
 	def _call_monitors(self):
-		"""Actually run the monitoring code."""
-		try:
-			self.has_update()
-		except Exception: # pragma: no cover
-			logger.exception("Monitoring %s at %s",lp,ls)
+		"""\
+			Actually run the monitoring code.
+
+			Exceptions get propagated. They will kill the watcher."""
+		self.has_update()
 		if self._later_mon:
 			for k,f in list(self._later_mon.items()):
-				try:
-					#logger.debug("run_update %s: call %s",self.path,f)
-					f(self)
-				except Exception:
-					logger.exception("Monitoring %s at %s",f,k)
-					del self._later_mon[k]
+				f(self)
 
 	def add_monitor(self, callback):
 		"""\
@@ -877,3 +878,7 @@ class mtRoot(mtDir):
 			raise RuntimeError("You can't delete the root") # pragma: no cover
 		return super().delete(key=key, **kw)
 
+	def propagate_exc(self, exc,node):
+		w = self._watcher
+		if w is not None:
+			w.stop(exc,node.path)

@@ -41,6 +41,14 @@ from .node import mtRoot
 
 class _NOTGIVEN: pass
 
+class WatchStopped(RuntimeError):
+	"""Raised when calling sync() on a stopped EtcWatcher."""
+	pass
+
+class WatchError(RuntimeError):
+	"""Used when an external error stops an EtcWatcher."""
+	pass
+
 class CompareFailed(etcd.EtcdCompareFailed): # pragma: no cover ## hopefully
 	def __init__(self,*args):
 		self.args = args
@@ -80,7 +88,12 @@ class EtcClient(object):
 
 	def _extkey(self, key):
 		key = str(key)
-		assert (key == '' or key[0] == '/')
+		if key == '/':
+			key = ''
+		elif key != '':
+			assert key[0] == '/'
+			assert key[-1] != '/'
+			assert '//' not in key
 		return self.root+key
 
 	async def get(self, key, **kw):
@@ -154,7 +167,10 @@ class EtcClient(object):
 			that.
 			"""
 
-		assert key[0] == '/'
+		if key == '/':
+			key = ''
+			# root=='/' is more intuitive than root==''
+			# but etcd doesn't deal well with repeated slashes
 
 # disabled: closing requires waiting for the reader task
 #		if not static:
@@ -252,6 +268,16 @@ class EtcWatcher(object):
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
 
+	def stop(self, exc,cause):
+		if not self.stopped.done():
+			err = WatchError(cause)
+			err.__cause__ = exc
+			self.stopped.set_exception(err)
+		try:
+			self._reader.cancel()
+		except Exception:
+			pass
+
 	def __del__(self): # pragma: no cover
 		self._kill()
 
@@ -292,14 +318,14 @@ class EtcWatcher(object):
 			await self.uptodate.acquire()
 			while self._reader is not None and self.last_seen < mod:
 				if self.stopped.done():
-					return
+					raise WatchStopped() from self.stopped.exception()
 				await asyncio.wait([self.uptodate.wait(),self.stopped], loop=self.conn._loop, return_when=asyncio.FIRST_COMPLETED) # pragma: no cover
 				                                # processing got done during .acquire()
 		finally:
 			self.uptodate.release()
 		logger.debug("Syncing, done, at %d",self.last_seen)
 		if self.stopped.done():
-			raise RuntimeError("stopped: "+self.stopped.result())
+			raise WatchStopped() from self.stopped.exception()
 
 	async def _watch_read(self): # pragma: no cover
 		"""\

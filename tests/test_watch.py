@@ -32,20 +32,24 @@ import etcd
 import time
 import asyncio
 from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString, UnknownNodeError,FrozenError
-from etcd_tree.etcd import EtcTypes
+from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client
 from unittest.mock import Mock
 
 @pytest.mark.run_loop
 @asyncio.coroutine
-def test_basic_watch(client):
+def test_basic_watch(client,loop):
     """Watches which don't actually watch"""
     # object type registration
     types = EtcTypes()
     @types.register("two")
     class rTwo(mtDir):
         pass
+    @types.register("two","die")
+    class rDie(mtValue):
+        def has_update(self):
+            raise RuntimeError("RIP")
     # reg funcion shall return the right thing
     i = types.register("two","vier", cls=mtInteger)
     assert i is mtInteger
@@ -93,7 +97,7 @@ def test_basic_watch(client):
     assert w3['two']['sechs'] == "sieben"
     assert not w3['two'] == w2
     # which are different, but not because of the tree types
-    w4 = yield from t.tree("/", static=True, types=types)
+    w4 = yield from t.tree("/", types=types)
     assert not w3 is w4
     assert w3 == w4
 
@@ -115,6 +119,13 @@ def test_basic_watch(client):
         assert v == w3['two'][k]
     assert res == {"zwei","vier","sechs"}
 
+    # check what happens if an updater dies on us
+    yield from w4['two'].set('hello','one')
+    yield from w4['two'].set('die',42)
+    yield from asyncio.sleep(1.5, loop=loop)
+    with pytest.raises(WatchStopped):
+        yield from w4['two'].set('hello','two')
+    
     yield from w2.close()
     yield from w3.close()
     yield from w4.close()
