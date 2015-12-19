@@ -387,7 +387,10 @@ class EtcWatcher(object):
 				r._ext_delete()
 		else:
 			for n,k in enumerate(key):
-				r = r._ext_lookup(k, dir= True if x.dir else n<len(key)-1, value= None if x.dir or n<len(key)-1 else x.value)
+				if n < len(key)-1:
+					r = r._ext_lookup(k, dir=True, value=None, seq=0)
+				else:
+					r = r._ext_lookup(k, dir=x.dir, value= None if x.dir else x.value, seq=x.modifiedIndex, cseq=x.createdIndex)
 				if r is None:
 					break # pragma: no cover
 			else:

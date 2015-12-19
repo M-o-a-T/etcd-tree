@@ -332,9 +332,9 @@ class mtBase(object):
 				logger.info("Re-created %s",self.path)
 				for d in list(self._data.values()):
 					d._ext_delete()
-		if seq and self._seq and self._seq >= seq:
-			raise RuntimeError("Updates out of order") # pragma: no cover # hopefully
-		if seq: # pragma: no branch
+		if seq:
+			if self._seq and self._seq > seq:
+				raise RuntimeError("Updates out of order: saw %d, has %d" % (self._seq,seq)) # pragma: no cover # hopefully
 			self._seq = seq
 		if ttl is not _NOTGIVEN: # pragma: no branch
 			self._ttl = ttl
