@@ -1,3 +1,10 @@
+etcd-tree (0.7.5-1) unstable; urgency=medium
+
+  * Clean up seqnum handling
+  * stop a watcher without crashing
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 19 Dec 2015 16:21:20 +0100
+
 etcd-tree (0.7.4-2) unstable; urgency=medium
 
   * Errors from update handlers propagate to the watcher
