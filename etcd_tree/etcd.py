@@ -36,8 +36,12 @@ from aio_etcd.client import Client
 import asyncio
 import weakref
 import inspect
+from contextlib import suppress
 
 from .node import mtRoot
+
+class StopMe(BaseException):
+	pass
 
 class _NOTGIVEN: pass
 
@@ -314,15 +318,17 @@ class EtcWatcher(object):
 		if mod is None or mod < self.conn.last_mod:
 			mod = self.conn.last_mod
 		logger.debug("Syncing, wait for %d",mod)
-		try:
-			await self.uptodate.acquire()
+		w = None
+		async with self.uptodate:
 			while self._reader is not None and self.last_seen < mod:
 				if self.stopped.done():
 					raise WatchStopped() from self.stopped.exception()
-				await asyncio.wait([self.uptodate.wait(),self.stopped], loop=self.conn._loop, return_when=asyncio.FIRST_COMPLETED) # pragma: no cover
+				w = self.uptodate.wait()
+				await asyncio.wait([w,self.stopped], loop=self.conn._loop, return_when=asyncio.FIRST_COMPLETED) # pragma: no cover
+				with suppress(StopMe):
+					w.throw(StopMe())
+				await w
 				                                # processing got done during .acquire()
-		finally:
-			self.uptodate.release()
 		logger.debug("Syncing, done, at %d",self.last_seen)
 		if self.stopped.done():
 			raise WatchStopped() from self.stopped.exception()
@@ -402,13 +408,10 @@ class EtcWatcher(object):
 				r._ext_update(x.value, cseq=cseq, seq=x.modifiedIndex, **kw)
 				r._cseq = x.createdIndex
 
-		await self.uptodate.acquire()
-		try:
+		async with self.uptodate:
 			self.last_seen = x.modifiedIndex
 			self.uptodate.notify_all()
 			logger.debug("DONE %d",x.modifiedIndex)
-		finally:
-			self.uptodate.release()
 
 class EtcTypes(object):
 
