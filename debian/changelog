@@ -1,3 +1,9 @@
+etcd-tree (0.7.6-1) unstable; urgency=medium
+
+  * Tree: Allow setting an (existing) directory.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 19 Dec 2015 22:56:56 +0100
+
 etcd-tree (0.7.5-2) unstable; urgency=medium
 
   * mtRoot.__repr__: didn't show the actual path

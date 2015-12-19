@@ -90,14 +90,14 @@ def test_basic_watch(client,loop):
     assert w['vier'] == "5"
     assert w == w2
 
-    yield from t._f(d(two=d(sechs="sieben")))
     # use typed subtrees
+    w4 = yield from t.tree("/", types=types)
+    yield from w4.set('two',d(sechs="sieben"))
     w3 = yield from t.tree("/", static=True, types=types)
     assert w3['two']['vier'] == 5
     assert w3['two']['sechs'] == "sieben"
     assert not w3['two'] == w2
     # which are different, but not because of the tree types
-    w4 = yield from t.tree("/", types=types)
     assert not w3 is w4
     assert w3 == w4
 
@@ -276,7 +276,7 @@ def test_update_watch(client, loop):
     w1 = yield from tt.tree("/two", immediate=True, types=types)
     assert w is not w1
     assert w == w1
-    wx = yield from tt.tree("/two", immediate=True)
+    # wx = yield from tt.tree("/two", immediate=True)
     # assert wx is w1 ## no caching
     w2 = yield from t.tree("/two", static=True)
     assert w1 is not w2
@@ -296,7 +296,10 @@ def test_update_watch(client, loop):
     assert w2['zwei']['zehn']['zwanzig'] == "30"
     assert w1['vier']['auch'] == "ja2"
     assert w2['vier']['auch'] == "ja2"
+    w1['zwei']=d(und='noch weniger')
     yield from w1.wait()
+    assert w1['zwei']['und'] == "noch weniger"
+    assert w1['zwei'].get('und') == "noch weniger"
 
     logger.debug("Waiting for _update 2")
     yield from f
@@ -447,4 +450,6 @@ def test_append(client):
     yield from w.wait(mod=mod)
     assert w['zwei'][a] == 'value'
     assert w['zwei']['drei'][b]['some'] == 'data'
+
+    yield from w.close()
 

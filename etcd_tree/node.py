@@ -580,8 +580,12 @@ class mtDir(mtBase, MutableMapping):
 			This just tells etcd to update the value.
 			The actual update happens when the watcher sees it.
 
-			The value may be a dictionary, in which case the code
-			recursively descends into it.
+			If @value is a mapping, recursively add/update values.
+			No nodes are deleted!
+
+			Setting an atomic value to a dict, or vice versa, is not
+			supported; you need to explicitly delete the conflicting entry
+			first.
 
 			@key=None is not supported.
 			"""
@@ -611,8 +615,13 @@ class mtDir(mtBase, MutableMapping):
 					self._task(root._conn.set,path, t._dump(val), prevExist=False)
 			t_set(self.path,self._keypath,key, val)
 		else:
-			assert isinstance(res,mtValue)
-			res.value = val
+			if isinstance(res,mtValue):
+				assert not isinstance(val,dict)
+				res.value = val
+			else:
+				assert isinstance(val,dict)
+				for k,v in val.items():
+					res[k] = v
 
 	async def set(self, key,value, sync=True, **kw):
 		"""\
@@ -621,6 +630,13 @@ class mtDir(mtBase, MutableMapping):
 
 			If @key is None, this code will do an etcd "append" operation
 			and the return value will be a key,modIndex tuple.
+
+			If @value is a mapping, recursively add/update values.
+			No nodes are deleted!
+
+			Setting an atomic value to a dict, or vice versa, is not
+			supported; you need to explicitly delete the conflicting entry
+			first.
 			"""
 		root = self._root()
 		if self._frozen: # pragma: no cover
@@ -673,8 +689,14 @@ class mtDir(mtBase, MutableMapping):
 			else:
 				res = mod = await t_set(self.path,self._keypath,key, value)
 		else:
-			assert isinstance(res,mtValue)
-			res = mod = await res.set(value, **kw)
+			if isinstance(res,mtValue):
+				assert not isinstance(value,dict)
+				res = mod = await res.set(value, **kw)
+			else:
+				assert isinstance(value,dict)
+				for k,v in value.items():
+					res = mod = await res.set(k,v, **kw)
+
 		if sync and mod and root:
 			await root.wait(mod)
 		return res
