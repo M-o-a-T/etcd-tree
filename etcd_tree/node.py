@@ -860,7 +860,7 @@ class mtRoot(mtDir):
 
 	def __repr__(self): # pragma: no cover
 		try:
-			return "<{} @{}>".format(self.__class__.__name__,self._conn.root)
+			return "<{}:{} @{}>".format(self.__class__.__name__,self._conn.root, self.path)
 		except Exception as e:
 			logger.exception(e)
 			res = super(mtBase,self).__repr__()
