@@ -701,7 +701,7 @@ class mtDir(mtBase, MutableMapping):
 				for k,v in value.items():
 					res = mod = await res.set(k,v, **kw)
 
-		if sync and mod and root:
+		if sync and mod and root is not None:
 			await root.wait(mod)
 		return res
 
@@ -749,7 +749,7 @@ class mtDir(mtBase, MutableMapping):
 				await v.delete(sync=sync,recursive=recursive)
 		r = await root._conn.delete(self.path, dir=True, recursive=(recursive is None))
 		r = r.modifiedIndex
-		if sync and root:
+		if sync and root is not None:
 			await root.wait(r)
 		return r
 

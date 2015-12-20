@@ -1,3 +1,9 @@
+etcd-tree (0.7.8-1) unstable; urgency=medium
+
+  * Bugfix: Adding to an empty directory didn't sync
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 20 Dec 2015 17:10:37 +0100
+
 etcd-tree (0.7.7-1) unstable; urgency=medium
 
   * Add option to specify the delay for update handling
