@@ -171,6 +171,10 @@ class mtBase(object):
 			"""
 		pass
 
+	@property
+	def update_delay(self):
+		return self._root()._update_delay
+
 	def updated(self, seq=None, _force=False):
 		"""Call to schedule a call to the update monitors.
 			@_force: False: schedule a call
@@ -210,7 +214,7 @@ class mtBase(object):
 			assert not _force
 		self._later_seq = seq
 
-		self._later = self._loop.call_later(1,self._run_update)
+		self._later = self._loop.call_later(self.update_delay,self._run_update)
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -834,8 +838,9 @@ class mtRoot(mtDir):
 	name = ''
 	_path = ''
 	_types = None
+	_update_delay = 1
 
-	def __init__(self,conn,watcher,types=None, env=None, **kw):
+	def __init__(self,conn,watcher,types=None, env=None, update_delay=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
 		self.path = watcher.key if watcher else ''
@@ -847,6 +852,8 @@ class mtRoot(mtDir):
 			types = EtcTypes()
 		self._types = types
 		self._env = env
+		if update_delay is not None:
+			self._update_delay = update_delay
 		super(mtRoot,self).__init__(**kw)
 
 	@property

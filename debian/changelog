@@ -1,3 +1,9 @@
+etcd-tree (0.7.7-1) unstable; urgency=medium
+
+  * Add option to specify the delay for update handling
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 20 Dec 2015 09:58:18 +0100
+
 etcd-tree (0.7.6-1) unstable; urgency=medium
 
   * Tree: Allow setting an (existing) directory.
