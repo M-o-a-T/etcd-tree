@@ -79,6 +79,8 @@ class mtBase(object):
 		All mthods have a leading underscore, which is necessary because
 		non-underscored names are potential etcd node names.
 		"""
+	notify_seq = None
+
 	_later = 0
 	_frozen = False
 	_env = _NOTGIVEN
@@ -212,7 +214,7 @@ class mtBase(object):
 				p = None
 		else:
 			assert not _force
-		self._later_seq = seq
+		self.notify_seq = seq
 
 		self._later = self._loop.call_later(self.update_delay,self._run_update)
 
@@ -246,7 +248,7 @@ class mtBase(object):
 	def _run_update(self):
 		"""Timer callback to run a node's callback."""
 		#logger.debug("run_update %s",self.path)
-		ls = self._later_seq
+		ls = self.notify_seq
 		self._later = 0
 		# At this point our parent's invariant is temporarily violated,
 		# but we fix that later: if this is the last blocked child and
