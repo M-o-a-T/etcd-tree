@@ -423,7 +423,11 @@ class EtcTypes(object):
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
 	def step(self,key):
-		"""Lookup with auto-generation of new nodes"""
+		"""\
+			Lookup a single entry, with auto-generation of new nodes.
+			This is for registration only! For discovery, use
+			.lookup(raw=True).
+			"""
 		assert key != ''
 		res = self.nodes.get(key,None)
 		if res is None:
@@ -488,12 +492,16 @@ class EtcTypes(object):
 			raise RuntimeError("What exactly are you trying to register?")
 		return cls
 
-	def lookup(self, path, dir):
+	def lookup(self, *path, dir, raw=False):
 		"""\
 			Find the node type that's to be associated with a path below me.
 
 			This is called on the root node.
+			@dir must be True (a directory) or False (an end node).
+			If @raw is True, returns the EtcTypes entry instead of the class.
 			"""
+		if len(path) == 1 and not isinstance(path[0],str):
+			path = path[0]
 		nodes = [(".",self)]
 		for p in path:
 			cn = []
@@ -508,6 +516,6 @@ class EtcTypes(object):
 		for p,n in nodes:
 			t = n.type[dir]
 			if t is not None:
-				return t
+				return n if raw else t
 		return None
 

@@ -51,6 +51,8 @@ def test_basic_watch(client,loop):
         def has_update(self):
             raise RuntimeError("RIP")
     # reg funcion shall return the right thing
+    assert types.lookup(('two','die'),dir=False) is rDie
+    assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rDie
     i = types.register("two","vier", cls=mtInteger)
     assert i is mtInteger
     i = types.register("*/vierixx")(mtInteger)

@@ -34,7 +34,7 @@ This is the core of etcTree, the object tree.
 import os
 import asyncio
 
-__VERSION__ = (0,7,9)
+__VERSION__ = (0,7,10)
 
 import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)

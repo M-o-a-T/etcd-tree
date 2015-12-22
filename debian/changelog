@@ -1,3 +1,11 @@
+etcd-tree (0.7.10.1) unstable; urgency=medium
+
+  * Improvements to EtcTree.lookup():
+    * accept a list or varargs
+    * raw=True returns the node, for further processing
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 22 Dec 2015 15:53:18 +0100
+
 etcd-tree (0.7.9-1) unstable; urgency=medium
 
   * Renamed _later_seq to notify_seq
