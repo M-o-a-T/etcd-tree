@@ -36,6 +36,7 @@ import time
 import asyncio
 from itertools import chain
 from collections.abc import MutableMapping
+from contextlib import suppress
 import aio_etcd as etcd
 
 class _NOTGIVEN:
@@ -102,8 +103,9 @@ class mtBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 
-	async def __await__(self):
+	def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
+		yield
 		return self
 
 	@property
@@ -353,7 +355,7 @@ class mtAwaiter(mtBase):
 	"""\
 		A node that needs to be looked up via "await".
 
-		This implements lazy 
+		This implements lazy lookup.
 		"""
 	_done = None
 
@@ -377,24 +379,38 @@ class mtAwaiter(mtBase):
 		p = self.parent()
 		if type(p) is mtAwaiter:
 			p = await p
+			r = p._data[self.name]
+			if r is not self:
+				self._done = r
+				return r
 		res = await root._conn.get(self.path)
-		cls = root._types.lookup(self._keypath+(name,), dir=dir)
+		cls = root._types.lookup(self._keypath, dir=res.dir)
 		if cls is None:
 			cls = mtDir if res.dir else mtValue
 		else:
 			assert issubclass(cls, mtDir if res.dir else mtValue)
-		if dir:
-			value = cls._load(res.value)
-			obj = cls(parent=p,name=self.name)
-			obj._data = self._data
-			for c in res.children:
-				if c is res:
-					continue
-				n = c.key
-				n = n[n.rindex('/')+1:]
-				if n not in obj._data:
-					obj._data[n] = mtAwaiter(parent=obj,name=n)
+
+		if res.dir:
+			if isinstance(cls,mtTypedDir):
+				res = await root._conn.get(self.path, recursive=True)
+				obj = build_typed(self.parent,self.name,cls,res)
+				for k,v in self._data.items():
+					assert isinstance(v,mtAwaiter) and v._done is None
+					with suppress(KeyError):
+						# may have been removed in the meantime
+						v._done = obj._data[k]
+			else:
+				obj = cls(parent=p,name=self.name)
+				obj._data = self._data
+				for c in res.children:
+					if c is res:
+						continue
+					n = c.key
+					n = n[n.rindex('/')+1:]
+					if n not in obj._data:
+						obj._data[n] = mtAwaiter(parent=obj,name=n)
 		else:
+			value = cls._load(res.value)
 			obj = cls(parent=p,name=self.name, value=value)
 		p._data[self.name] = self._done = obj
 		p._later_mon.update(self._later_mon)
@@ -789,6 +805,10 @@ class mtDir(mtBase, MutableMapping):
 			if dir is not None:
 				assert isinstance(obj,mtDir if dir else mtValue)
 			return obj
+		if isinstance(value,mtBase):
+			self._data[name] = value
+
+			return value
 
 		if self._frozen: # pragma: no cover
 			raise FrozenError(self.path+'/'+name)
@@ -802,6 +822,8 @@ class mtDir(mtBase, MutableMapping):
 		else:
 			assert issubclass(cls,mtDir if dir else mtValue)
 
+		if issubclass(cls,mtTypedDir):
+			return cls
 		try:
 			value = cls._load(value)
 		except Exception as e: # pragma: no cover
@@ -826,6 +848,39 @@ class mtDir(mtBase, MutableMapping):
 		super(mtDir,self)._freeze()
 		for v in self._data.values():
 			v._freeze()
+
+##############################################################################
+
+class mtTypedDir(mtDir):
+	"""\
+		A directory which decides the types of its entries dynamically.
+		"""
+
+	@classmethod
+	def selftype(cls,parent,name,pre=None):
+		"""\
+			Decide which type to use for this entry.
+			@parent is obviously the parent, @name this entry's name.
+			@pre is a dict tree with (untyped) data.
+
+			The default is to do return self.
+			"""
+		return cls
+
+	def subtype(self,*path,dir=None,pre=None):
+		"""\
+			Decide which type to use for a new entry.
+			@path is the path to the sub-entry.
+			@pre is the (untyped) data to be stored at that entry.
+
+			The default is not to do anything special.
+			"""
+		cls = self._root()._types.lookup(*(self._keypath+path),dir=dir)
+		if cls is None:
+			cls = mtDir if dir else mtValue
+		return cls
+		
+##############################################################################
 
 class mtRoot(mtDir):
 	"""\

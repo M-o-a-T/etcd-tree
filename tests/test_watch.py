@@ -31,7 +31,8 @@ import pytest
 import etcd
 import time
 import asyncio
-from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString, UnknownNodeError,FrozenError
+from etcd_tree.node import mtRoot,mtDir,mtTypedDir,mtValue,mtInteger,mtFloat,mtString, \
+    UnknownNodeError,FrozenError
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client
@@ -460,4 +461,58 @@ def test_append(client):
     assert w['zwei']['drei'][b]['some'] == 'data'
 
     yield from w.close()
+
+@pytest.mark.run_loop
+@asyncio.coroutine
+def test_typed_basic(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,False,False)
+
+@pytest.mark.run_loop
+@asyncio.coroutine
+def test_typed_recursed(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,False,True)
+
+@pytest.mark.run_loop
+@asyncio.coroutine
+def test_typed_subtyped(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,True,False)
+
+@pytest.mark.run_loop
+@asyncio.coroutine
+def test_typed_recursed_subtyped(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,True,True)
+
+async def do_typed(client,loop, subtyped,recursed):
+    # object type registration
+    types = EtcTypes()
+    if subtyped:
+        class Sub(mtTypedDir):
+            @classmethod
+            def selftype(cls,parent,name,pre=None):
+                assert pre == {'my_value':'10','other_value':'20'}
+                return cls
+            def subtype(self,*path,dir=None,pre=None):
+                if path != ('my_value',):
+                    return super().subtype(*path,dir=dir,pre=pre)
+                assert pre=="10",pre
+                return mtInteger
+        types.register('here',cls=Sub)
+    else:
+        types.register('here','my_value',cls=mtInteger)
+
+    d=dict
+    t = client
+    d1=d(types=d(here=d(my_value='10',other_value='20')))
+    await t._f(d1)
+    w = await t.tree("/types", immediate=recursed, static=True, types=types)
+    v = await w['here']._get('my_value')
+    assert v.value == 10,w['here']._get('my_value')
+    v = await w['here']
+    assert v['my_value'] == 10, v._get('my_value')
+    assert v['other_value'] == '20', v._get('other_value')
+    assert isinstance(v, Sub if subtyped else mtDir)
 

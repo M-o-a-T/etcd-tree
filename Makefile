@@ -30,7 +30,7 @@ test: all test.cfg
 	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
 
 t: all test.cfg
-	py.test-3 -xv --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
+	py.test-3 -sxv tests/
 
 test.cfg:
 	@echo "You need to create a configuration file for testing." >&2

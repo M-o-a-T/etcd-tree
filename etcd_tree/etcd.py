@@ -175,6 +175,8 @@ class EtcClient(object):
 			actually being present.
 			"""
 
+		from .node import mtTypedDir
+
 		if key == '/':
 			key = ''
 			# root=='/' is more intuitive than root==''
@@ -227,7 +229,13 @@ class EtcClient(object):
 					if t.get('dir',False):
 						sd = node._ext_lookup(n, dir=True, cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-						d_add(t.get('nodes',()),sd)
+						if isinstance(sd,type) and issubclass(sd,mtTypedDir):
+							# Delegate.
+							node._ext_lookup(n, value=build_typed(node,n,sd,t), cseq=t['createdIndex'], seq=t['modifiedIndex'],
+								ttl=t['ttl'] if 'ttl' in t else None)
+
+						else:
+							d_add(t.get('nodes',()),sd)
 					else:
 						node._ext_lookup(n, dir=False, value=t['value'], cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
@@ -235,18 +243,27 @@ class EtcClient(object):
 			d_add(res._children,nroot)
 		elif immediate is False:
 			async def d_get(node, res):
-				for c in res.children:
+				for c in res._children:
 					if c is res:
 						continue # pragma: no cover
-					n = c.key
+					n = c['key']
 					n = n[n.rindex('/')+1:]
-					if c.dir:
+					if c.get('dir',False):
 						sd = node._ext_lookup(n,dir=True, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
-						data = await self.client.read(c.key)
-						await d_get(sd, data)
+
+						if isinstance(sd,type) and issubclass(sd,mtTypedDir):
+							# Delegate.
+							c = await self.client.read(c['key'], recursive=True)
+							node._ext_lookup(n, value=build_typed(node,n,sd,c.__dict__), cseq=c.createdIndex, seq=c.modifiedIndex,
+								ttl=c.ttl)
+
+
+						else:
+							data = await self.client.read(c['key'])
+							await d_get(sd, data)
 					else:
-						node._ext_lookup(n,dir=False, value=c.value, cseq=res.createdIndex, seq=res.modifiedIndex,
+						node._ext_lookup(n,dir=False, value=c.get('value',None), cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node.updated(seq=0)
 			await d_get(nroot, res)
@@ -261,6 +278,38 @@ class EtcClient(object):
 			w._set_root(nroot)
 #			self.watched[key] = root
 		return root
+
+# Helpers for constructing a self-typed sub-tree from a recursive sub(?)-listing
+
+def nodes_dir(t):
+	if t.get('dir',False):
+		res = {}
+		for st in t['nodes' if 'nodes' in t else '_children']:
+			n = st['key']
+			n = n[n.rindex('/')+1:]
+			res[n] = nodes_dir(st)
+		return res
+	else:
+		return t.get('value',None)
+
+def add_typed(subroot,node,path,td):
+	for k,v in td.items():
+		dir = isinstance(v,dict)
+		cls = subroot.subtype(*(path+(k,)),dir=dir,pre=v)
+		obj = cls(parent=node,name=k,value=None if dir else cls._load(v))
+		node._ext_lookup(k,value=obj)
+		if dir:
+			add_typed(subroot,obj,path+(k,),v)
+		node.updated(seq=0)
+
+def build_typed(node,name,cls,t):
+	td = nodes_dir(t)
+	cls = cls.selftype(node,name,td)
+	n = cls(parent=node,name=name, cseq=t['createdIndex'], seq=t['modifiedIndex'], ttl=t.get('ttl',None))
+	add_typed(n,n,(),td)
+	return n
+
+##############################################################################
 
 class EtcWatcher(object):
 	"""\
