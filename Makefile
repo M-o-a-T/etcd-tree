@@ -39,4 +39,7 @@ test.cfg:
 update:
 	scripts/update_boilerplate
 
+pypi:
+	$(PYTHON) setup.py sdist upload
+
 .PHONY: all install test tests update
