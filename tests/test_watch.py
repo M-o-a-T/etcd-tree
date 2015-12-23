@@ -58,6 +58,9 @@ def test_basic_watch(client,loop):
     i = types.register("*/vierixx")(mtInteger)
     assert i is mtInteger
     types['what/ever'] = mtFloat
+    types['what/ever'] = rTwo
+    assert types.lookup('what','ever', dir=False) is mtFloat
+    assert types.lookup('what','ever', dir=True) is rTwo
     assert types['what/ever'] is mtFloat
     with pytest.raises(AssertionError):
         types['/what/ever']
@@ -138,10 +141,11 @@ def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    w = yield from t.tree("/two", immediate=False, static=False)
+    wr = yield from t.tree("/", sub='two', immediate=False, static=False)
+    w = wr['two']
     d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
-    yield from w.wait(mod=mod)
+    yield from wr.wait(mod=mod)
 
     with pytest.raises(KeyError):
         yield from w.subdir('zwei','drei','der', name=":tag")
@@ -175,7 +179,7 @@ def test_update_watch_direct(client):
 
     
     m = yield from w.delete('vier')
-    yield from w.wait(m)
+    yield from wr.wait(m)
     with pytest.raises(KeyError):
         w['vier']
 
@@ -185,14 +189,14 @@ def test_update_watch_direct(client):
 
     with pytest.raises(etcd.EtcdDirNotEmpty):
         del w['zwei']
-        yield from w.wait(m)
+        yield from wr.wait(m)
 
     m = yield from w.delete('zwei', recursive=True)
-    yield from w.wait(m)
+    yield from wr.wait(m)
     with pytest.raises(KeyError):
         w['zwei']
 
-    yield from w.close()
+    yield from wr.close()
 
 @pytest.mark.run_loop
 @asyncio.coroutine

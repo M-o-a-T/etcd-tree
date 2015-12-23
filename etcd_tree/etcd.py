@@ -90,7 +90,7 @@ class EtcClient(object):
 		else: c.close()
 		self._kill()
 
-	def _extkey(self, key):
+	def _extkey(self, key, sub=()):
 		key = str(key)
 		if key == '/':
 			key = ''
@@ -98,7 +98,11 @@ class EtcClient(object):
 			assert key[0] == '/'
 			assert key[-1] != '/'
 			assert '//' not in key
-		return self.root+key
+		if sub:
+			sub = '/'+'/'.join(sub)
+		else:
+			sub = ''
+		return self.root+key+sub
 
 	async def get(self, key, **kw):
 		return (await self.client.get(self._extkey(key), **kw))
@@ -156,25 +160,28 @@ class EtcClient(object):
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	async def tree(self, key, types=None, immediate=True, static=False, create=None, **kw):
+	async def tree(self, key, sub=(), types=None, immediate=True, static=False, create=None, **kw):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
+			@sub can be a prefix that's added to the key.
 
 			If @immediate is set, run a recursive query and grab everything now.
 			Otherwise fill the tree in the background.
 			@static=True turns off the tree's auto-update.
 
 			*Warning*: If you update the tree by direct assignment, you
-			*must* call its `_wait()` coroutine in order to process them.
-			The tree may or may not contain your updates before you do
-			that.
+			must call its `wait()` coroutine before you can depend on them 
+			actually being present.
 			"""
 
 		if key == '/':
 			key = ''
 			# root=='/' is more intuitive than root==''
 			# but etcd doesn't deal well with repeated slashes
+
+		if isinstance(sub,str):
+			sub = tuple(sub.split('/'))
 
 # disabled: closing requires waiting for the reader task
 #		if not static:
@@ -183,22 +190,22 @@ class EtcClient(object):
 #				return res
 
 		if create is False:
-			res = await self.client.read(self._extkey(key), recursive=immediate)
+			res = await self.client.read(self._extkey(key,sub), recursive=immediate)
 		elif create is True:
-			res = await self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+			res = await self.client.write(self._extkey(key,sub), prevExist=False, dir=True, value=None)
 		else:
 			# etcd can't do "create-directory-if-it-does-not-exist", so
 			# if two jobs with create=None attempt this at the same time
 			# the whole thing gets interesting.
 			try:
-				res = await self.client.read(self._extkey(key), recursive=immediate)
+				res = await self.client.read(self._extkey(key,sub), recursive=immediate)
 			except etcd.EtcdKeyNotFound:
 				try:
-					res = await self.client.write(self._extkey(key), prevExist=False, dir=True, value=None)
+					res = await self.client.write(self._extkey(key,sub), prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover
-					res = await self.client.read(self._extkey(key), recursive=immediate)
+					res = await self.client.read(self._extkey(key,sub), recursive=immediate)
 
-		w = None if static else EtcWatcher(self,key,res.etcd_index)
+		w = None if static else EtcWatcher(self,key,sub,res.etcd_index)
 		cls = None
 		if types:
 			cls = types.type[True]
@@ -208,6 +215,9 @@ class EtcClient(object):
 			assert issubclass(cls,mtRoot)
 		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, cseq=res.createdIndex, types=types,
 			ttl=res.ttl if hasattr(res,'ttl') else None, **kw)
+		nroot = root
+		for s in sub:
+			nroot = nroot._ext_lookup(s, dir=True)
 
 		if immediate is True:
 			def d_add(tree, node):
@@ -222,7 +232,7 @@ class EtcClient(object):
 						node._ext_lookup(n, dir=False, value=t['value'], cseq=t['createdIndex'], seq=t['modifiedIndex'],
 							ttl=t['ttl'] if 'ttl' in t else None)
 				node.updated(seq=0)
-			d_add(res._children,root)
+			d_add(res._children,nroot)
 		elif immediate is False:
 			async def d_get(node, res):
 				for c in res.children:
@@ -239,16 +249,16 @@ class EtcClient(object):
 						node._ext_lookup(n,dir=False, value=c.value, cseq=res.createdIndex, seq=res.modifiedIndex,
 							ttl=res.ttl if hasattr(res,'ttl') else None)
 				node.updated(seq=0)
-			await d_get(root, res)
+			await d_get(nroot, res)
 		else:
 			for c in res.children:
 				if c is res:
 					continue
-				root._add_awaiter(c)
-				root.updated(seq=0)
+				nroot._add_awaiter(c)
+				nroot.updated(seq=0)
 
 		if w is not None:
-			w._set_root(root)
+			w._set_root(nroot)
 #			self.watched[key] = root
 		return root
 
@@ -261,10 +271,11 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
-	def __init__(self, conn,key,seq, types=None):
+	def __init__(self, conn,key,sub,seq, types=None):
 		self.conn = conn
 		self.key = key
-		self.extkey = self.conn._extkey(key)
+		self.sub = sub
+		self.extkey = self.conn._extkey(key,sub)
 		self.last_read = seq
 		self.last_seen = seq
 
