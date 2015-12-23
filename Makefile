@@ -29,6 +29,9 @@ test: all test.cfg
 	$(PYTHON) tests/util.py
 	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
 
+t: all test.cfg
+	py.test-3 -xv --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
+
 test.cfg:
 	@echo "You need to create a configuration file for testing." >&2
 	@echo "Use test.cfg.sample as an example." >&2
