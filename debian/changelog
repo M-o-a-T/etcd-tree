@@ -1,3 +1,9 @@
+etcd-tree (0.7.11.2) unstable; urgency=medium
+
+  * Allow pre-pending to an existing tree.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 23 Dec 2015 01:19:01 +0100
+
 etcd-tree (0.7.11.1) unstable; urgency=medium
 
   * Add a sub-tree option to .tree()

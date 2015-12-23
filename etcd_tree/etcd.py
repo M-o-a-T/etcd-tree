@@ -433,16 +433,23 @@ class EtcTypes(object):
 	def __repr__(self): # pragma: no cover
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
-	def step(self,key):
+	def step(self,key, dest=None):
 		"""\
 			Lookup a single entry, with auto-generation of new nodes.
 			This is for registration only! For discovery, use
 			.lookup(raw=True).
+
+			You can set @dest to an existing EtcTypes object if you want to
+			prepend to an existing tree.
 			"""
 		assert key != ''
 		res = self.nodes.get(key,None)
 		if res is None:
-			self.nodes[key] = res = EtcTypes()
+			if dest is None:
+				dest = EtcTypes()
+			self.nodes[key] = res = dest
+		else:
+			assert dest is None or dest is res
 		return res
 
 	def items(self,key):

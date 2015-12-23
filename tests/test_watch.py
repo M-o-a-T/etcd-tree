@@ -43,14 +43,16 @@ def test_basic_watch(client,loop):
     """Watches which don't actually watch"""
     # object type registration
     types = EtcTypes()
-    @types.register("two")
+    twotypes = EtcTypes()
+    @twotypes.register()
     class rTwo(mtDir):
         pass
-    @types.register("two","die")
+    @twotypes.register("die")
     class rDie(mtValue):
         def has_update(self):
             raise RuntimeError("RIP")
     # reg funcion shall return the right thing
+    types.step('two',dest=twotypes)
     assert types.lookup(('two','die'),dir=False) is rDie
     assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rDie
     i = types.register("two","vier", cls=mtInteger)
