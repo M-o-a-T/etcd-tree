@@ -398,7 +398,7 @@ def test_update_ttl(client, loop):
     assert w['timeout']['of'] == "data"
     assert w['timeout'].ttl is None
     assert w['nodes'] == "too"
-    mod = yield from w.set('some','data',ttl=1)
+    mod = yield from w.set('some','data',ttl=2)
     assert w._get('nodes').ttl is None
     logger.warning("_SET_TTL")
     w._get('timeout').ttl = 1
@@ -414,7 +414,7 @@ def test_update_ttl(client, loop):
     assert w['some'] == "data"
     assert w._get('nodes').ttl is not None
     del w._get('nodes').ttl
-    yield from asyncio.sleep(2, loop=loop)
+    yield from asyncio.sleep(2.5, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
     with pytest.raises(KeyError):
