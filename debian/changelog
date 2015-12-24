@@ -1,3 +1,9 @@
+etcd-tree (0.8.1-1) unstable; urgency=medium
+
+  * mtTypedDir: Provide for a "standard" way to override types
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 24 Dec 2015 05:57:02 +0100
+
 etcd-tree (0.8.0-1) unstable; urgency=medium
 
   * Add sub-typing, enabling a node to set its own class and type entries.

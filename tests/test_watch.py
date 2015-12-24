@@ -491,15 +491,18 @@ async def do_typed(client,loop, subtyped,recursed):
     types = EtcTypes()
     if subtyped:
         class Sub(mtTypedDir):
+            def __init__(self,*a,**k):
+                super().__init__(*a,**k)
+                self._types = EtcTypes()
+                self._types.register('my_value',cls=mtInteger)
             @classmethod
             def selftype(cls,parent,name,pre=None):
                 assert pre == {'my_value':'10','other_value':'20'}
                 return cls
             def subtype(self,*path,dir=None,pre=None):
-                if path != ('my_value',):
-                    return super().subtype(*path,dir=dir,pre=pre)
-                assert pre=="10",pre
-                return mtInteger
+                if path == ('my_value',):
+                    assert pre=="10",pre
+                return super().subtype(*path,dir=dir,pre=pre)
         types.register('here',cls=Sub)
     else:
         types.register('here','my_value',cls=mtInteger)

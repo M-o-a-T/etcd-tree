@@ -856,6 +856,8 @@ class mtTypedDir(mtDir):
 		A directory which decides the types of its entries dynamically.
 		"""
 
+	_types = None
+
 	@classmethod
 	def selftype(cls,parent,name,pre=None):
 		"""\
@@ -875,6 +877,10 @@ class mtTypedDir(mtDir):
 
 			The default is not to do anything special.
 			"""
+		if self._types is not None:
+			cls = self._types.lookup(*path,dir=dir)
+			if cls is not None:
+				return cls
 		cls = self._root()._types.lookup(*(self._keypath+path),dir=dir)
 		if cls is None:
 			cls = mtDir if dir else mtValue
