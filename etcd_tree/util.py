@@ -52,10 +52,9 @@ def to_etcd(conn, path, data, delete=False):
 			except EtcdKeyNotFound:
 				pass
 			else:
-				for c in r.children:
-					n = c.key
-					n = n[n.rindex('/')+1:]
-					if n not in data:
+				for c in r.child_nodes:
+					n = c.name
+					if c.name not in data:
 						modu((yield from conn.delete(c.key,dir=c.dir,recursive=True)).modifiedIndex)
 		for k,v in data.items():
 			modu((yield from to_etcd(conn, path+"/"+k, v, delete=delete)))

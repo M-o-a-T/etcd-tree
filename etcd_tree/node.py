@@ -38,6 +38,8 @@ from itertools import chain
 from collections.abc import MutableMapping
 from contextlib import suppress
 import aio_etcd as etcd
+from etcd import EtcdResult
+from functools import wraps
 
 class _NOTGIVEN:
 	pass
@@ -49,12 +51,55 @@ class UnknownNodeError(RuntimeError):
 		"""
 	pass
 
-class FrozenError(RuntimeError):
+class ReloadData(ReferenceError):
 	"""\
-		This tree is no longer updated due to an error.
-		You cannot access any of its leaf elements any more.
+		The data type of a subtree cannot be decided without having the
+		some data (first-level values) available.
 		"""
 	pass
+
+class ReloadRecursive(ReferenceError):
+	"""\
+		The data type of a subtree cannot be decided without having the
+		full data available.
+		"""
+	pass
+
+# etcd does not have a method to only enumerate direct children,
+# so monkeypatch that in until it does
+
+def child_nodes(self):
+	for n in self._children:
+		yield EtcdResult(None, n)
+EtcdResult.child_nodes = property(child_nodes)
+del child_nodes
+
+# etcd does not have a method to get the node name without the whole
+# keypath, so monkeypatch that in until it does
+
+def name(self):
+	if hasattr(self,'_name'):
+		return self._name
+	n = self.key
+	self._name = n = n[n.rindex('/')+1:]
+	return n
+EtcdResult.name = property(name)
+del name
+
+# etcd does not have a method to look up a child node within a result,
+# so monkeypatch that in until it does
+# This is inefficient but is probably used rarely enough that it doesn't matter
+
+def __getitem__(self, key):
+	key = self.key+'/'+key
+	for c in self._children:
+		if c['key'] == key:
+			return EtcdResult(None, c)
+	raise KeyError(key)
+EtcdResult.__getitem__ = __getitem__
+del __getitem__
+
+# Cancellable callback token
 
 class MonitorCallback(object):
 	def __init__(self, base,i,callback):
@@ -68,6 +113,8 @@ class MonitorCallback(object):
 		base.remove_monitor(self.i)
 	def __call__(self,x):
 		return self.callback(x)
+
+##############################################################################
 
 class mtBase(object):
 	"""\
@@ -83,23 +130,104 @@ class mtBase(object):
 	notify_seq = None
 
 	_later = 0
-	_frozen = False
 	_env = _NOTGIVEN
 
-	def __init__(self, parent=None, name=None, seq=None, cseq=None, ttl=None):
-		if name:
+	@classmethod
+	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, **kw):
+		"""\
+			This classmethod loads data (if necessary) and creates a class from a base.
+
+			If @parent is not given, load a root class from @conn and @key;
+			the actual class is looked up via cls.selftype().
+			Otherwise @key is the name of the child node; the class is
+			looked up via the parent's .subtype() method.
+
+			If @recursive is True, @pre needs to have been recursively
+			fetched from etcd.
+			"""
+		irec = recursive
+		aw = ()
+		if pre is not None:
+			kw['pre'] = pre
+			if key is None:
+				key = pre.name
+		else:
+			assert key is not None
+		if isinstance(key,tuple):
+			if key:
+				name = key[-1]
+			else:
+				name = ""
+		else:
+			try:
+				name = key[key.rindex('/')+1:]
+			except ValueError:
+				name = key
+		if conn is None:
+			assert key
+			assert '/' not in key
+			assert parent is not None, "specify conn or parent"
+			conn = parent._root()._conn
+			kw['parent'] = parent
+			cls_getter = lambda: parent.subtype(name, pre=pre,recursive=recursive)
+			if isinstance(key,str):
+				key = parent.path+(name,)
+		else:
+			assert parent is None, "specify either conn or parent, not both"
+			cls_getter = lambda: cls.selftype(parent=parent,name=name,pre=pre,recursive=recursive)
+			kw['conn'] = conn
+			kw['key'] = key
+		self = None
+		try:
+			if recursive and not pre:
+				raise ReloadRecursive
+			try:
+				self = cls_getter()(**kw)
+			except ReloadData:
+				assert pre is None
+				kw['pre'] = pre = await conn.read(key)
+				recursive = False
+				self = cls_getter()(**kw)
+				# This way, if determining the class requires
+				# recursive content, we do not read twice
+			if pre is None:
+				kw['pre'] = pre = await conn.read(key)
+			if pre.dir:
+				aw = await self._fill_result(pre=pre,recursive=recursive)
+		except ReloadRecursive:
+			assert not recursive
+			kw['pre'] = pre = await conn.read(key, recursive=True)
+			recursive = True
+			if self is None:
+				self = cls_getter()(**kw)
+			if pre.dir:
+				aw = await self._fill_result(pre=pre,recursive=recursive)
+
+		if irec is False:
+			for a in aw:
+				await a._load_data(recursive=False)
+		return self
+
+	def __init__(self, pre, name=None,parent=None):
+		if parent is not None:
 			self._parent = weakref.ref(parent)
 			self._loop = parent._loop
 			self._root = parent._root
+			if name is not None:
+				if pre is not None:
+					assert pre.name == name
+			else:
+				name = pre.name
 			self.name = name
-			self.path = parent.path+'/'+name
-			self._keypath = parent._keypath+(name,)
+			self.path = parent.path+(name,)
+			parent._data[name] = self
 		else:
 			# This is a root node
 			self._root = weakref.ref(self)
-		self._seq = seq
-		self._cseq = cseq
-		self._ttl = ttl
+		if pre is not None:
+			self._seq = pre.modifiedIndex
+			self._cseq = pre.createdIndex
+			self._ttl = pre.ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 
@@ -109,25 +237,30 @@ class mtBase(object):
 		return self
 
 	@property
+	def root(self):
+		return self._root()
+
+	@property
 	def env(self):
 		if self._env is _NOTGIVEN:
-			self._env = self._root().env
+			root = self.root
+			if root is None: # pragma: no cover
+				return None
+			self._env = root.env
 		return self._env
 
 	def _task(self,p,*a,**k):
-		f = asyncio.ensure_future(p(*a,**k), loop=self._loop)
-		f.args = (self,p,a,k)
-		self._root()._tasks.append(f)
+		self.root._task_do(p,*a,**k)
 
-	async def wait(self,mod=None,timeout=None):
-		await self._root().wait(mod, timeout=timeout)
+	async def wait(self,mod=None):
+		await self.root.wait(mod=mod)
 
 	def __repr__(self): ## pragma: no cover
 		try:
-			return "<{} @{}>".format(self.__class__.__name__,self.path)
+			return "<{} @{}>".format(self.__class__.__name__,'/'.join(self.path))
 		except Exception as e:
 			logger.exception(e)
-			res = super(mtBase,self).__repr__()
+			res = super().__repr__()
 			return res[:-1]+" ?? "+res[-1]
 
 	def _get_ttl(self):
@@ -140,14 +273,14 @@ class mtBase(object):
 			kw['prev'] = None
 		else:
 			kw['index'] = self._seq
-		self._task(self._root()._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		self._task(self.root._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
 
 	async def set_ttl(self, ttl, sync=True):
 		"""Coroutine to set/update this node's TTL"""
-		root=self._root()
+		root=self.root
 		kw = {}
 		if self._is_dir:
 			kw['prev'] = None
@@ -162,9 +295,6 @@ class mtBase(object):
 	async def del_ttl(self, sync=True):
 		return (await self.set_ttl('', sync=True))
 
-	def _freeze(self):
-		self._frozen = True
-
 	def has_update(self):
 		"""\
 			Override this method to get notified after the value changes
@@ -177,12 +307,13 @@ class mtBase(object):
 
 	@property
 	def update_delay(self):
-		return self._root()._update_delay
+		return self.root._update_delay
 
 	def updated(self, seq=None, _force=False):
-		"""Call to schedule a call to the update monitors.
+		"""\
+			Call to schedule a call to the update monitors.
 			@_force: False: schedule a call
-				      True: child scheduler is done (DO NOT USE)
+			         True: child scheduler is done (DO NOT USE)
 			"""
 		# Invariant: _later is the number of direct children which are blocked.
 		# If that is zero, it may be an asyncio call_later token instead.
@@ -260,9 +391,9 @@ class mtBase(object):
 			self._call_monitors()
 		except Exception as exc:
 			# A monitor died. The tree may be inconsistent.
-			r = self._root()
-			if r is not None:
-				r.propagate_exc(exc,self)
+			root = self.root
+			if root is not None:
+				root.propagate_exc(exc,self)
 
 		p = self._parent
 		if p is None:
@@ -330,23 +461,23 @@ class mtBase(object):
 			return # pragma: no cover
 		p._ext_del_node(self)
 
-	def _ext_update(self, seq=None, cseq=None, ttl=_NOTGIVEN):
+	def _ext_update(self, pre):
 		#logger.debug("UPDATE %s",self.path)
-		if cseq is not None:
+		if pre.createdIndex is not None:
 			if self._cseq is None:
-				self._cseq = cseq
-			elif self._cseq != cseq:
-				# this happens if a parent directory gets deleted and re-created
-				logger.info("Re-created %s",self.path)
-				for d in list(self._data.values()):
-					d._ext_delete()
-		if seq:
-			if self._seq and self._seq > seq:
+				self._cseq = pre.createdIndex
+			elif self._cseq != pre.createdIndex:
+				# this happens if a parent gets deleted and re-created
+				logger.info("Re-created %s: %s %s",self.path, self._cseq,pre.createdIndex)
+				if hasattr(self,'_data'):
+					for d in list(self._data.values()):
+						d._ext_delete()
+		if pre.modifiedIndex:
+			if self._seq and self._seq > pre.modifiedIndex:
 				raise RuntimeError("Updates out of order: saw %d, has %d" % (self._seq,seq)) # pragma: no cover # hopefully
-			self._seq = seq
-		if ttl is not _NOTGIVEN: # pragma: no branch
-			self._ttl = ttl
-		self.updated(seq=seq)
+			self._seq = pre.modifiedIndex
+		self._ttl = pre.ttl
+		self.updated(seq=pre.modifiedIndex)
 		return True
 
 ##############################################################################
@@ -356,12 +487,15 @@ class mtAwaiter(mtBase):
 		A node that needs to be looked up via "await".
 
 		This implements lazy lookup.
+
+		Note that an mtAwaiter is a placeholder for a directory node.
+		However, a nested mtAwaiter might actually be a value, so this code
+		accepts that.
 		"""
 	_done = None
 
-	def __init__(self,parent,name):
-		super().__init__(parent=parent, name=name)
-		self.parent = lambda: parent # no weakref
+	def __init__(self,parent,pre=None,name=None):
+		super().__init__(parent=parent, pre=pre,name=name)
 		self._data = {}
 
 	def __getitem__(self,key):
@@ -369,52 +503,34 @@ class mtAwaiter(mtBase):
 		if v is _NOTGIVEN:
 			self._data[key] = v = mtAwaiter(self, name=key)
 		return v
+	_get = __getitem__
 
-	async def __await__(self):
+	def __await__(self):
+		return self._load_data(None).__await__()
+	def __iter__(self):
+		return self._load_data(None).__await__()
+
+	async def _load_data(self,recursive, pre=None):
 		if self._done is not None:
 			return self._done
-		root = self._root()
+		root = self.root
 		if root is None:
 			return None # pragma: no cover
-		p = self.parent()
+		p = self.parent
 		if type(p) is mtAwaiter:
 			p = await p
 			r = p._data[self.name]
 			if r is not self:
 				self._done = r
 				return r
-		res = await root._conn.get(self.path)
-		cls = root._types.lookup(self._keypath, dir=res.dir)
-		if cls is None:
-			cls = mtDir if res.dir else mtValue
-		else:
-			assert issubclass(cls, mtDir if res.dir else mtValue)
-
-		if res.dir:
-			if isinstance(cls,mtTypedDir):
-				res = await root._conn.get(self.path, recursive=True)
-				obj = build_typed(self.parent,self.name,cls,res)
-				for k,v in self._data.items():
-					assert isinstance(v,mtAwaiter) and v._done is None
-					with suppress(KeyError):
-						# may have been removed in the meantime
-						v._done = obj._data[k]
-			else:
-				obj = cls(parent=p,name=self.name)
-				obj._data = self._data
-				for c in res.children:
-					if c is res:
-						continue
-					n = c.key
-					n = n[n.rindex('/')+1:]
-					if n not in obj._data:
-						obj._data[n] = mtAwaiter(parent=obj,name=n)
-		else:
-			value = cls._load(res.value)
-			obj = cls(parent=p,name=self.name, value=value)
+		obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre)
 		p._data[self.name] = self._done = obj
-		p._later_mon.update(self._later_mon)
+		obj._later_mon.update(self._later_mon)
 		return obj
+
+	def _ext_del_node(self, child):
+		"""Called by the child to tell us that it vanished"""
+		self._data.pop(child.name)
 
 ##############################################################################
 
@@ -424,9 +540,13 @@ class mtValue(mtBase):
 	_is_dir = False
 
 	_seq = None
-	def __init__(self, value=_NOTGIVEN, **kw):
-		super().__init__(**kw)
-		self._value = value
+	def __init__(self, pre=None,**kw):
+		super().__init__(pre=pre, **kw)
+		self._value = self._load(pre.value)
+		self.updated(0)
+
+	async def _load_data(self,recursive):
+		return # nothing to do
 
 	# used for testing
 	def __eq__(self, other):
@@ -443,26 +563,18 @@ class mtValue(mtBase):
 
 	def _get_value(self):
 		# TODO: no cover
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
 		if self._value is _NOTGIVEN: # pragma: no cover
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
-		self._task(self._root()._conn.set,self.path,self._dump(value), index=self._seq)
+		self._task(self.root._conn.set,self.path,self._dump(value), index=self._seq)
 	def _del_value(self):
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
-		self._task(self._root()._conn.delete,self.path, index=self._seq)
+		self._task(self.root._conn.delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for mtDir.delete
 
 	async def set(self, value, sync=True, ttl=None):
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
-		root = self._root()
+		root = self.root
 		if root is None:
 			return # pragma: no cover
 		r = await root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
@@ -472,9 +584,7 @@ class mtValue(mtBase):
 		return r
 
 	async def delete(self, sync=True, recursive=None, **kw):
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
-		root = self._root()
+		root = self.root
 		if root is None:
 			return # pragma: no cover
 		r = await root._conn.delete(self.path, index=self._seq, **kw)
@@ -483,14 +593,14 @@ class mtValue(mtBase):
 			await root.wait(r)
 		return r
 
-	def _ext_update(self, value, **kw):
+	def _ext_update(self, pre):
 		"""\
 			An updated value arrives.
 			(It may be late.)
 			"""
-		if not super(mtValue,self)._ext_update(**kw): # pragma: no cover
+		if not super()._ext_update(pre): # pragma: no cover
 			return
-		self._value = self._load(value)
+		self._value = self._load(pre.value)
 
 mtString = mtValue
 class mtInteger(mtValue):
@@ -504,20 +614,22 @@ class mtDir(mtBase, MutableMapping):
 	"""\
 		A node with other nodes below it.
 
-		If @_final is set, you cannot add unknown entries.
-		If true, they also won't be added when the arrive from etcd.
-
 		Map lookup will return a leaf node's mtValue node.
 		Access by attribute will return the value directly.
 		"""
-	_final = None
 	_value = None
 	_is_dir = True
 
 	def __init__(self, value=None, **kw):
 		assert value is None
-		super().__init__(**kw)
 		self._data = {}
+		super().__init__(**kw)
+
+	async def _load_data(self,recursive):
+		if not recursive:
+			return
+		for k,v in list(self._data.items()):
+			v = await v._load_data(True)
 
 	def __iter__(self):
 		return iter(self._data.keys())
@@ -562,24 +674,43 @@ class mtDir(mtBase, MutableMapping):
 		return v
 	__getitem__ = get
 
-	async def subdir(self, *_name, name=(), create=False):
-		"""Utility function to find/create a sub-node."""
-		root=self._root()
+	async def subdir(self, *_name, name=(), create=False, recursive=None):
+		"""\
+			Utility function to find/create a sub-node.
+			@recursive decides what to do if the node thus encountered
+			hasn't been loaded before.
+			"""
+		root=self.root
 
 		if isinstance(name,str):
 			name = name.split('/')
 		if len(_name) == 1:
 			_name = _name[0].split('/')
-		for n in chain(_name,name):
-			if create and n not in self:
+
+		async def step(n,last=False):
+			nonlocal self
+			if type(self) is mtAwaiter:
+				self = await self._load_data(None)
+			if last and create and n in self:
+				pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
+				raise RuntimeError("This should exist")
+			elif create is not False and n not in self:
 				try:
-					res = await root._conn.set(self.path+'/'+n, prevExist=False, dir=True, value=None)
+					pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
-					res = await root._conn.get(self.path+'/'+n)
-				await root.wait(res.modifiedIndex)
+					pre = await root._conn.get(self.path+(n,))
+				await root.wait(pre.modifiedIndex)
 			self = self[n]
-			if isinstance(self,mtAwaiter):
-				self = await self.__await__()
+		n = None
+		for nn in chain(_name,name):
+			if n is not None:
+				await step(n)
+			n = nn
+		if n is not None:
+			await step(n,True)
+
+		if isinstance(self,mtAwaiter):
+			self = await self._load_data(recursive)
 		return self
 
 	def tagged(self,tag):
@@ -611,31 +742,25 @@ class mtDir(mtBase, MutableMapping):
 
 			@key=None is not supported.
 			"""
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
 		try:
 			res = self._data[key]
 		except KeyError:
 			# new node. Send a "set" command for the data item.
 			# (or items, if it's a dict)
-			root = self._root()
-			def t_set(path,keypath,key,val):
-				keypath += (key,)
-				path += '/'+key
+			root = self.root
+			def t_set(path,key,val):
+				path += (key,)
+
 				if isinstance(val,dict):
-					if val:
-						for k,v in val.items():
-							t_set(path,keypath,k,v)
-					else:
-						self._task(root._conn.set,path, None, prevExist=False, dir=True)
+					root._task_do(root._conn.set,self.path+path, None, prevExist=False, dir=True)
+					for k,v in val.items():
+						t_set(path,k,v)
 				else:
-					t = root._types.lookup(keypath, dir=False)
+					t = self.subtype(path, dir=False)
 					if t is None:
-						if self._final is not None:
-							raise UnknownNodeError(key)
 						t = mtValue
-					self._task(root._conn.set,path, t._dump(val), prevExist=False)
-			t_set(self.path,self._keypath,key, val)
+					root._task_do(self._task_set,path, t._dump(val))
+			t_set((),key, val)
 		else:
 			if isinstance(res,mtValue):
 				assert not isinstance(val,dict)
@@ -644,6 +769,13 @@ class mtDir(mtBase, MutableMapping):
 				assert isinstance(val,dict)
 				for k,v in val.items():
 					res[k] = v
+
+	async def _task_set(self, path,val):
+		for p in path[:-1]:
+			self = self[p]
+		self = await self # in case it's an mtAwaiter
+		res = await self.set(path[-1], val, sync=False)
+		return res
 
 	async def set(self, key,value, sync=True, **kw):
 		"""\
@@ -660,9 +792,7 @@ class mtDir(mtBase, MutableMapping):
 			supported; you need to explicitly delete the conflicting entry
 			first.
 			"""
-		root = self._root()
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
+		root = self.root
 		try:
 			if key is None:
 				raise KeyError
@@ -672,8 +802,9 @@ class mtDir(mtBase, MutableMapping):
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
 			async def t_set(path,keypath,key,value):
-				path += '/'+key
-				keypath += (key,)
+				path += (key,)
+				keypath += 1
+
 				mod = None
 				if isinstance(value,dict):
 					if value:
@@ -685,23 +816,24 @@ class mtDir(mtBase, MutableMapping):
 						r = await root._conn.set(path, None, dir=True, **kw)
 						mod = r.modifiedIndex
 				else:
-					t = root._types.lookup(keypath, dir=False)
+					t = self.subtype(*path[keypath:], dir=False)
 					if t is None:
-						if self._final is not None:
-							raise UnknownNodeError(key)
 						t = mtValue
-					r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
+					try:
+						r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
+					except TypeError:
+						r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
 				if isinstance(value,dict):
 					r = await root._conn.set(self.path, None, append=True, dir=True)
 					res = r.key.rsplit('/',1)[1]
-					mod = await t_set(self.path,self._keypath,res, value)
+					mod = await t_set(self.path,len(self.path),res, value)
 					if mod is None:
 						mod = r.modifiedIndex # pragma: no cover
 				else:
-					t = root._types.lookup(self._keypath+('0',), dir=False)
+					t = self.subtype(('0',), dir=False)
 					if t is None:
 						t = mtValue
 					r = await root._conn.set(self.path, t._dump(value), append=True, **kw)
@@ -709,7 +841,7 @@ class mtDir(mtBase, MutableMapping):
 					mod = r.modifiedIndex
 				res = res,mod
 			else:
-				res = mod = await t_set(self.path,self._keypath,key, value)
+				res = mod = await t_set(self.path,len(self.path),key, value)
 		else:
 			if isinstance(res,mtValue):
 				assert not isinstance(value,dict)
@@ -731,20 +863,18 @@ class mtDir(mtBase, MutableMapping):
 
 			This will fail if the directory is not empty.
 			"""
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
 		if key is not _NOTGIVEN:
 			res = self._data[key]
 			res.__delitem__()
 			return
-		self._task(self._root()._conn.delete,self.path,dir=True, index=self._seq)
+		self._task(self.root._conn.delete,self.path,dir=True, index=self._seq)
 
 	async def update(self, d1={}, _sync=True, **d2):
 		mod = None
 		for k,v in chain(d1.items(),d2.items()):
 			mod = await self.set(k,v, sync=False)
 		if _sync and mod:
-			root = self._root()
+			root = self.root
 			if root:
 				await root.wait(mod)
 
@@ -755,9 +885,7 @@ class mtDir(mtBase, MutableMapping):
 			Recursive=False: don't do anything if I have sub-nodes
 			Recursive=None(default): let etcd handle it
 			"""
-		root = self._root()
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path)
+		root = self.root
 		if key is not _NOTGIVEN:
 			res = self._data[key]
 			await res.delete(sync=sync,recursive=recursive, **kw)
@@ -786,105 +914,72 @@ class mtDir(mtBase, MutableMapping):
 			return False # pragma: no cover
 		return self._data == other._data
 
-	def _ext_lookup(self, name, dir=None, value=None, **kw):
-		"""\
-			Do a node lookup.
-
-			@name: my name, as seen by my parent.
-			@cls: the class the object is supposed to have.
-			@dir: The node type.
-
-			If @cls or @dir is passed in, the node is created if it doesn't
-			already exist, else an AttributeError is raised.
-
-			Returns: the child node plus a "created" flag.
-			"""
-		assert name != ""
-		obj = self._data.get(name,None)
-		if obj is not None:
-			if dir is not None:
-				assert isinstance(obj,mtDir if dir else mtValue)
-			return obj
-		if isinstance(value,mtBase):
-			self._data[name] = value
-
-			return value
-
-		if self._frozen: # pragma: no cover
-			raise FrozenError(self.path+'/'+name)
-		if dir is None: # pragma: no cover
-			return None
-		cls = self._root()._types.lookup(self._keypath+(name,), dir=dir)
-		if cls is None:
-			if self._final:
-				return None
-			cls = mtDir if dir else mtValue
-		else:
-			assert issubclass(cls,mtDir if dir else mtValue)
-
-		if issubclass(cls,mtTypedDir):
-			return cls
-		try:
-			value = cls._load(value)
-		except Exception as e: # pragma: no cover
-			logger.error("Could not load '%s' as %s at %s/%s", value, str(cls),self.path,name)
-			value = repr(value)
-			cls = mtDir if dir else mtValue
-		obj = cls(parent=self,name=name, value=value, **kw)
-		self._data[name] = obj
-		return obj
-
-	def _ext_update(self, value=None, **kw):
+	def _ext_update(self, pre, **kw):
 		"""processed for doing a TTL update"""
-		assert value is None
-		super(mtDir,self)._ext_update(**kw)
+		if pre:
+			assert pre.value is None
+		super()._ext_update(pre=pre, **kw)
 
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
 		node = self._data.pop(child.name)
 		node._deleted()
 
-	def _freeze(self):
-		super(mtDir,self)._freeze()
-		for v in self._data.values():
-			v._freeze()
-
-##############################################################################
-
-class mtTypedDir(mtDir):
-	"""\
-		A directory which decides the types of its entries dynamically.
-		"""
+	# The following code implements type lookup.
 
 	_types = None
+	_types_from_parent = True
+	_types_recursive = False
 
 	@classmethod
-	def selftype(cls,parent,name,pre=None):
+	def selftype(cls,parent,name, pre=None,recursive=None):
 		"""\
 			Decide which type to use for this entry.
 			@parent is obviously the parent, @name this entry's name.
 			@pre is a dict tree with (untyped) data.
 
-			The default is to do return self.
+			The default is to return self.
+			@pre shall be a dict with raw values filled.
 			"""
 		return cls
 
-	def subtype(self,*path,dir=None,pre=None):
+	def subtype(self,*path,dir=None,pre=None,recursive=None):
 		"""\
 			Decide which type to use for a new entry.
 			@path is the path to the sub-entry.
-			@pre is the (untyped) data to be stored at that entry.
+			@pre is the EtcdResult for that location.
+			@recursive is True if the data was retrieved
+			recursively.
 
-			The default is not to do anything special.
+			The default is to look up the path in _types;
+			if that doesn't work, ask the parent node.
 			"""
+		if dir is None and pre is not None:
+			dir = pre.dir
 		if self._types is not None:
+			if dir is None:
+				raise ReloadData
 			cls = self._types.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
-		cls = self._root()._types.lookup(*(self._keypath+path),dir=dir)
-		if cls is None:
-			cls = mtDir if dir else mtValue
-		return cls
+		p = self.parent if self._types_from_parent else None
+		if p is None:
+			return mtDir if dir else mtValue
+		return p.subtype(*((self.name,)+path),dir=dir,pre=pre)
+	
+	async def _fill_result(self,pre,recursive):
+		"""Fill in result data. This may require re-reading recursively."""
+		aw = []
+		conn_get = self._root()._conn.get
+		for c in pre.child_nodes:
+			n = c.name
+			if c.dir and recursive is None:
+				self._data[n] = a = mtAwaiter(parent=self,pre=c)
+				aw.append(a)
+			else:
+				obj = await self._new(parent=self, key=c.name, pre=(c if recursive else None), recursive=recursive)
+		self.updated(seq=0)
+		return aw
 		
 ##############################################################################
 
@@ -902,12 +997,14 @@ class mtRoot(mtDir):
 	_path = ''
 	_types = None
 	_update_delay = 1
+	_tasks = None
+	_task_now = None
+	_task_done = None
 
-	def __init__(self,conn,watcher,types=None, env=None, update_delay=None, **kw):
+	def __init__(self,conn,watcher=None,key=(),types=None, env=None, update_delay=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
-		self.path = watcher.key if watcher else ''
-		self._keypath = ()
+		self.path = key
 		self._tasks = []
 		self._loop = conn._loop
 		if types is None:
@@ -917,7 +1014,55 @@ class mtRoot(mtDir):
 		self._env = env
 		if update_delay is not None:
 			self._update_delay = update_delay
-		super(mtRoot,self).__init__(**kw)
+		super().__init__(**kw)
+
+	# Progress of task handling:
+	# * _task_done is None.
+	# * _task_next() sets _done to a future and runs tasks.
+	# * An exception or running out of tasks sets _done to
+	#   the exception, or the last result / None.
+	# * wait() processed the result and sets _done to None.
+	# * repeat as necessary.
+	# 
+	def _task_next(self,f=None):
+		logger.debug("Task D %s",f)
+		if self._task_done is not None and self._task_done.done():
+			# wait for .wait()
+			return
+		if f is None:
+			f = self._task_now
+		if self._task_done is None:
+			self._task_done = asyncio.Future(loop=self._loop)
+		if f is not None:
+			if not f.done():
+				return
+			if f.cancelled():
+				self._task_done.cancel()
+				self._task_now = None
+				return
+			exc = f.exception()
+			if exc is not None:
+				self._task_done.set_exception(exc)
+				self._task_now = None
+				return
+		# 
+		if not self._tasks:
+			self._task_now = None
+			self._task_done.set_result(f.result() if f else None)
+			return
+		p,a,k = self._tasks.pop(0)
+		logger.debug("Task R %s %s %s",p,a,k)
+		try:
+			self._task_now = asyncio.ensure_future(self.run_with_wait(p,*a,**k), loop=self._loop)
+			self._task_now.add_done_callback(self._task_next)
+		except Exception as exc:
+			logger.debug("Task F %s %s %s",exc)
+			self._task_done.set_exception(exc)
+
+	def _task_do(self,p,*a,**k):
+		logger.debug("Task Q %s %s %s",p,a,k)
+		self._tasks.append((p,a,k))
+		self._task_next()
 
 	@property
 	def parent(self):
@@ -932,35 +1077,39 @@ class mtRoot(mtDir):
 		if w is not None:
 			await w.close()
 
-	async def wait(self, mod=None, timeout=None):
-		if self._tasks:
-			tasks,self._tasks = self._tasks,[]
-			done,tasks = await asyncio.wait(tasks, timeout=timeout, loop=self._loop)
-			self._tasks.extend(tasks)
-			while done:
-				t = done.pop()
-				try:
-					r = t.result()
-				except Exception as exc: # pragma: no cover
-					self._tasks.extend(done)
-					raise
-				r = getattr(r,'modifiedIndex',None)
-				if mod is None or (r is not None and mod < r):
-					mod = r # pragma: no cover # because we pop off the end
+	async def wait(self, mod=None):
+		# Here 
+		while True:
+			logger.debug("Task W %s",self._task_done)
+			if self._task_done is None:
+				if not self._tasks and self._task_now is None:
+					break
+				self._task_next()
+				continue
+			try:
+				logger.debug("Task @ %s",self._task_done)
+				await self._task_done
+			finally:
+				logger.debug("Task A %s",self._task_done)
+				self._task_done = None
+		logger.debug("Task Z %s",mod)
 		if self._watcher is not None:
 			await self._watcher.sync(mod)
+		logger.debug("Task ZZ")
 
 	def __repr__(self): # pragma: no cover
 		try:
 			return "<{}:{} @{}>".format(self.__class__.__name__,self._conn.root, self.path)
 		except Exception as e:
 			logger.exception(e)
-			res = super(mtBase,self).__repr__()
+			res = super().__repr__()
 			return res[:-1]+" ?? "+res[-1]
 
 	def __del__(self):
 		self._kill()
 	def _kill(self):
+		if not hasattr(self,'_watcher'):
+			return
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			w._kill() # pragma: no cover # as the tests call close()
@@ -970,7 +1119,21 @@ class mtRoot(mtDir):
 			raise RuntimeError("You can't delete the root") # pragma: no cover
 		return super().delete(key=key, **kw)
 
+	def _ext_delete(self):
+		if self._watcher:
+			self._watcher.stop(RuntimeError(),"deleted")
+
 	def propagate_exc(self, exc,node):
 		w = self._watcher
 		if w is not None:
 			w.stop(exc,node.path)
+
+	async def run_with_wait(self, p,*a,**k):
+		res = await p(*a,**k)
+		logger.debug("Task G %s",res)
+		if res is not None:
+			res = getattr(res,'modifiedIndex',res)
+			if isinstance(res,int) and self._watcher is not None:
+				logger.debug("Task H %s",res)
+				await self._watcher.sync(res)
+		logger.debug("Task I %s",res)

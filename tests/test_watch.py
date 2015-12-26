@@ -31,8 +31,8 @@ import pytest
 import etcd
 import time
 import asyncio
-from etcd_tree.node import mtRoot,mtDir,mtTypedDir,mtValue,mtInteger,mtFloat,mtString, \
-    UnknownNodeError,FrozenError
+from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString,mtAwaiter, \
+    UnknownNodeError
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client
@@ -98,6 +98,12 @@ def test_basic_watch(client,loop):
     assert w['vier'] == "5"
     assert w == w2
 
+    # basic access, read it on demand
+    w5 = yield from t.tree("/two", immediate=None, static=True, types=types)
+    assert isinstance(w5['zwei']['und'],mtAwaiter)
+    assert (yield from w5['zwei']['und']).value == "drei"
+    assert w5['vier'] == "5"
+
     # use typed subtrees
     w4 = yield from t.tree("/", types=types)
     yield from w4.set('two',d(sechs="sieben"))
@@ -144,14 +150,13 @@ def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    wr = yield from t.tree("/", sub='two', immediate=False, static=False)
-    w = wr['two']
+    wr,w = yield from t.tree("/", sub='two', immediate=False, static=False)
     d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from wr.wait(mod=mod)
 
     with pytest.raises(KeyError):
-        yield from w.subdir('zwei','drei','der', name=":tag")
+        yield from w.subdir('zwei','drei','der', name=":tag", create=False)
     tag = yield from w.subdir("zwei/drei",name="der/:tag", create=True)
     tug = yield from w.subdir("zwei/drei/vier",name="das/:tagg", create=True)
     yield from tag.set("hello","kitty")
@@ -186,11 +191,8 @@ def test_update_watch_direct(client):
     with pytest.raises(KeyError):
         w['vier']
 
-    w._get('drei')._freeze()
-    with pytest.raises(FrozenError):
-        w['drei']['cold'] = 'nee'
-
-    with pytest.raises(etcd.EtcdDirNotEmpty):
+    # etcd.EtcdNotFile is stupid. Bug in etcd (issue#4075).
+    with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['zwei']
         yield from wr.wait(m)
 
@@ -257,7 +259,7 @@ def test_update_watch(client, loop):
         logger.debug("CHECK acht")
         w['acht']
     # deleting a whole subtree is not yet implemented
-    with pytest.raises(etcd.EtcdDirNotEmpty):
+    with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['vier']
         yield from w.wait()
     del w['vier']['oder']
@@ -323,18 +325,12 @@ def test_update_watch(client, loop):
     assert not w['zwei']._later_mon
     assert not w['zwei']._get('und')._later_mon
 
-    # _final=false means I can't add new untyped nodes
     types.register("**","new_a", cls=mtString)
     types.register("**","new_b", cls=mtString)
-    w1._get('vier')._final = False
     mod = yield from t._f(d2,delete=True)
     yield from w1.wait(mod)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
-    with pytest.raises(UnknownNodeError):
-        w1['vier']['nix'] = "da"
-    with pytest.raises(UnknownNodeError):
-        yield from w1['vier'].set('nix', "da")
     w1['vier']['new_a'] = "e_a"
     yield from w1.wait()
     assert w1['vier']['auch'] == "nein"
@@ -349,18 +345,11 @@ def test_update_watch(client, loop):
     with pytest.raises(KeyError):
         w1['vier']['new_b']
 
-    # _final=true means external additions don't come through either
-    w1._get('vier')._final = True
     d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
     mod = yield from t._f(d1)
     yield from w1.wait(mod)
     assert w1['vier']['c'] == "x"
-    with pytest.raises(KeyError):
-        w1['vier']['d']
-    with pytest.raises(UnknownNodeError):
-        w1['vier']['nixy'] = "daz"
-    with pytest.raises(UnknownNodeError):
-        yield from w1['vier'].set('nixy', "daz")
+    assert w1['vier']['d'] == "y"
     assert w1['vier']['new_b'] == "z"
     yield from w.wait(mod)
 
@@ -490,18 +479,16 @@ async def do_typed(client,loop, subtyped,recursed):
     # object type registration
     types = EtcTypes()
     if subtyped:
-        class Sub(mtTypedDir):
+        class Sub(mtDir):
             def __init__(self,*a,**k):
                 super().__init__(*a,**k)
+                assert pre['my_value'].value == '10'
+                assert pre['other_value'].value == '20'
                 self._types = EtcTypes()
                 self._types.register('my_value',cls=mtInteger)
-            @classmethod
-            def selftype(cls,parent,name,pre=None):
-                assert pre == {'my_value':'10','other_value':'20'}
-                return cls
             def subtype(self,*path,dir=None,pre=None):
                 if path == ('my_value',):
-                    assert pre=="10",pre
+                    assert pre.value=="10",pre
                 return super().subtype(*path,dir=dir,pre=pre)
         types.register('here',cls=Sub)
     else:

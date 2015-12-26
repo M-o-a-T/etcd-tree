@@ -37,11 +37,19 @@ import asyncio
 import weakref
 import inspect
 from contextlib import suppress
+from itertools import chain
 
 from .node import mtRoot
 
-class StopMe(BaseException):
-	pass
+# Requiring a lock is bad for our health.
+
+if not hasattr(asyncio.Condition,'notify_unlocked'):
+	def notify_unlocked(self):
+		for fut in self._waiters:
+			if not fut.done():
+				fut.set_result(False)
+asyncio.Condition.notify_unlocked = notify_unlocked
+del notify_unlocked
 
 class _NOTGIVEN: pass
 
@@ -90,27 +98,35 @@ class EtcClient(object):
 		else: c.close()
 		self._kill()
 
-	def _extkey(self, key, sub=()):
-		key = str(key)
-		if key == '/':
-			key = ''
-		elif key != '':
-			assert key[0] == '/'
-			assert key[-1] != '/'
-			assert '//' not in key
-		if sub:
-			sub = '/'+'/'.join(sub)
+	def _extkey(self, key, sub=(), _prefix=False):
+		if isinstance(key,str):
+			key = str(key)
+			if key == '/':
+				key = ''
+			elif key != '':
+				assert key[0] == '/'
+				assert key[-1] != '/'
+				assert '//' not in key
+			if sub:
+				key += '/'+'/'.join(sub)
 		else:
-			sub = ''
-		return self.root+key+sub
+			if key or sub:
+				key = '/'+'/'.join((str(x) for x in chain(key,sub)))
+			else:
+				key = ''
+		if _prefix:
+			assert (key+'/').startswith(self.root+'/')
+			return key
+		else:
+			return self.root+key
 
-	async def get(self, key, **kw):
-		return (await self.client.get(self._extkey(key), **kw))
+	async def get(self, key, _prefix=False, **kw):
+		return (await self.client.get(self._extkey(key,_prefix=_prefix), **kw))
 
-	async def read(self, key, **kw):
-		return (await self.client.read(self._extkey(key), **kw))
+	async def read(self, key, _prefix=False, **kw):
+		return (await self.client.read(self._extkey(key,_prefix=_prefix), **kw))
 
-	async def delete(self, key, prev=_NOTGIVEN, index=None, **kw):
+	async def delete(self, key, prev=_NOTGIVEN, _prefix=False, index=None, **kw):
 		"""\
 			Delete a value.
 
@@ -124,11 +140,11 @@ class EtcClient(object):
 			kw['prevValue'] = prev
 		if index is not None:
 			kw['prevIndex'] = index
-		res = await self.client.delete(self._extkey(key), **kw)
+		res = await self.client.delete(self._extkey(key, _prefix=_prefix), **kw)
 		self.last_mod = res.modifiedIndex
 		return res
 
-	async def set(self, key, value, prev=_NOTGIVEN, index=None, **kw):
+	async def set(self, key, value, prev=_NOTGIVEN, _prefix=False, index=None, **kw):
 		"""\
 			Either create or update a value.
 
@@ -141,7 +157,7 @@ class EtcClient(object):
 			@dir=True: generate a directory entry
 
 			"""
-		key = self._extkey(key)
+		key = self._extkey(key, _prefix=_prefix)
 		logger.debug("Write %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
 		if prev is _NOTGIVEN and index is None:
 			kw['prevExist'] = False
@@ -160,11 +176,12 @@ class EtcClient(object):
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	async def tree(self, key, sub=(), types=None, immediate=True, static=False, create=None, **kw):
+	async def tree(self, key, sub=_NOTGIVEN, _prefix=False, types=None, immediate=True, static=False, create=None, **kw):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
-			@sub can be a prefix that's added to the key.
+			@sub can be a prefix that's added to the key; in that case,
+			both the "real" root and the prefixed root are returned.
 
 			If @immediate is set, run a recursive query and grab everything now.
 			Otherwise fill the tree in the background.
@@ -175,39 +192,34 @@ class EtcClient(object):
 			actually being present.
 			"""
 
-		from .node import mtTypedDir
-
-		if key == '/':
-			key = ''
-			# root=='/' is more intuitive than root==''
-			# but etcd doesn't deal well with repeated slashes
+		key = tuple((k for k in key.split('/') if k != ""))
+		xkey = self._extkey(key, _prefix=_prefix)
 
 		if isinstance(sub,str):
 			sub = tuple(sub.split('/'))
 
-# disabled: closing requires waiting for the reader task
-#		if not static:
-#			res = self.watched.get(key,None)
-#			if res is not None:
-#				return res
+		if sub is _NOTGIVEN:
+			rec = immediate
+		else:
+			rec = None
 
 		if create is False:
-			res = await self.client.read(self._extkey(key,sub), recursive=immediate)
+			res = await self.client.read(xkey, recursive=rec)
 		elif create is True:
-			res = await self.client.write(self._extkey(key,sub), prevExist=False, dir=True, value=None)
+			res = await self.client.write(xkey, prevExist=False, dir=True, value=None)
 		else:
 			# etcd can't do "create-directory-if-it-does-not-exist", so
 			# if two jobs with create=None attempt this at the same time
 			# the whole thing gets interesting.
 			try:
-				res = await self.client.read(self._extkey(key,sub), recursive=immediate)
+				res = await self.client.read(xkey, recursive=rec)
 			except etcd.EtcdKeyNotFound:
 				try:
-					res = await self.client.write(self._extkey(key,sub), prevExist=False, dir=True, value=None)
+					res = await self.client.write(xkey, prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover
-					res = await self.client.read(self._extkey(key,sub), recursive=immediate)
+					res = await self.client.read(xkey, recursive=rec)
 
-		w = None if static else EtcWatcher(self,key,sub,res.etcd_index)
+		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
 		cls = None
 		if types:
 			cls = types.type[True]
@@ -215,99 +227,27 @@ class EtcClient(object):
 			cls = mtRoot
 		else:
 			assert issubclass(cls,mtRoot)
-		root = cls(conn=self, watcher=w, name=None, seq=res.modifiedIndex, cseq=res.createdIndex, types=types,
-			ttl=res.ttl if hasattr(res,'ttl') else None, **kw)
-		nroot = root
-		for s in sub:
-			nroot = nroot._ext_lookup(s, dir=True)
-
-		if immediate is True:
-			def d_add(tree, node):
-				for t in tree:
-					n = t['key']
-					n = n[n.rindex('/')+1:]
-					if t.get('dir',False):
-						sd = node._ext_lookup(n, dir=True, cseq=t['createdIndex'], seq=t['modifiedIndex'],
-							ttl=res.ttl if hasattr(res,'ttl') else None)
-						if isinstance(sd,type) and issubclass(sd,mtTypedDir):
-							# Delegate.
-							node._ext_lookup(n, value=build_typed(node,n,sd,t), cseq=t['createdIndex'], seq=t['modifiedIndex'],
-								ttl=t['ttl'] if 'ttl' in t else None)
-
-						else:
-							d_add(t.get('nodes',()),sd)
-					else:
-						node._ext_lookup(n, dir=False, value=t['value'], cseq=t['createdIndex'], seq=t['modifiedIndex'],
-							ttl=t['ttl'] if 'ttl' in t else None)
-				node.updated(seq=0)
-			d_add(res._children,nroot)
-		elif immediate is False:
-			async def d_get(node, res):
-				for c in res._children:
-					if c is res:
-						continue # pragma: no cover
-					n = c['key']
-					n = n[n.rindex('/')+1:]
-					if c.get('dir',False):
-						sd = node._ext_lookup(n,dir=True, cseq=res.createdIndex, seq=res.modifiedIndex,
-							ttl=res.ttl if hasattr(res,'ttl') else None)
-
-						if isinstance(sd,type) and issubclass(sd,mtTypedDir):
-							# Delegate.
-							c = await self.client.read(c['key'], recursive=True)
-							node._ext_lookup(n, value=build_typed(node,n,sd,c.__dict__), cseq=c.createdIndex, seq=c.modifiedIndex,
-								ttl=c.ttl)
-
-
-						else:
-							data = await self.client.read(c['key'])
-							await d_get(sd, data)
-					else:
-						node._ext_lookup(n,dir=False, value=c.get('value',None), cseq=res.createdIndex, seq=res.modifiedIndex,
-							ttl=res.ttl if hasattr(res,'ttl') else None)
-				node.updated(seq=0)
-			await d_get(nroot, res)
-		else:
-			for c in res.children:
-				if c is res:
-					continue
-				nroot._add_awaiter(c)
-				nroot.updated(seq=0)
+		root = await cls._new(conn=self, watcher=w, key=key, pre=res,
+				recursive=rec, types=types, **kw)
 
 		if w is not None:
-			w._set_root(nroot)
-#			self.watched[key] = root
-		return root
+			w._set_root(root)
+
+		if sub is _NOTGIVEN:
+			return root
+
+		r = await root.subdir(*sub,create=create)
+		# re-attach the watcher to the new root
+		if w is not None:
+			w._set_root(r)
+		return root,r
 
 # Helpers for constructing a self-typed sub-tree from a recursive sub(?)-listing
 
-def nodes_dir(t):
-	if t.get('dir',False):
-		res = {}
-		for st in t['nodes' if 'nodes' in t else '_children']:
-			n = st['key']
-			n = n[n.rindex('/')+1:]
-			res[n] = nodes_dir(st)
-		return res
-	else:
-		return t.get('value',None)
-
-def add_typed(subroot,node,path,td):
-	for k,v in td.items():
-		dir = isinstance(v,dict)
-		cls = subroot.subtype(*(path+(k,)),dir=dir,pre=v)
-		obj = cls(parent=node,name=k,value=None if dir else cls._load(v))
-		node._ext_lookup(k,value=obj)
-		if dir:
-			add_typed(subroot,obj,path+(k,),v)
-		node.updated(seq=0)
-
-def build_typed(node,name,cls,t):
-	td = nodes_dir(t)
-	cls = cls.selftype(node,name,td)
-	n = cls(parent=node,name=name, cseq=t['createdIndex'], seq=t['modifiedIndex'], ttl=t.get('ttl',None))
-	add_typed(n,n,(),td)
-	return n
+async def build_typed(node,name,cls,t,rec):
+	obj = cls(parent=node, pre=td, recursive=rec)
+	await obj._fill_result(t,recursive=rec)
+	return obj
 
 ##############################################################################
 
@@ -320,17 +260,16 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
-	def __init__(self, conn,key,sub,seq, types=None):
+	def __init__(self, conn,key,seq=0, types=None):
 		self.conn = conn
-		self.key = key
-		self.sub = sub
-		self.extkey = self.conn._extkey(key,sub)
+		self.extkey = key
 		self.last_read = seq
 		self.last_seen = seq
 
 		self.uptodate = asyncio.Condition(loop=conn._loop)
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
+		self.stopped.add_done_callback(lambda _: self.uptodate.notify_unlocked())
 
 	def stop(self, exc,cause):
 		if not self.stopped.done():
@@ -372,6 +311,7 @@ class EtcWatcher(object):
 
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
+		self.extkey = self.conn._extkey(root.path)
 
 	async def sync(self, mod=None):
 		"""Wait for pending updates"""
@@ -383,11 +323,7 @@ class EtcWatcher(object):
 			while self._reader is not None and self.last_seen < mod:
 				if self.stopped.done():
 					raise WatchStopped() from self.stopped.exception()
-				w = self.uptodate.wait()
-				await asyncio.wait([w,self.stopped], loop=self.conn._loop, return_when=asyncio.FIRST_COMPLETED) # pragma: no cover
-				with suppress(StopMe):
-					w.throw(StopMe())
-				await w
+				await self.uptodate.wait()
 				                                # processing got done during .acquire()
 		logger.debug("Syncing, done, at %d",self.last_seen)
 		if self.stopped.done():
@@ -399,7 +335,11 @@ class EtcWatcher(object):
 			"""
 		logger.debug("READER started")
 		conn = Client(loop=self.conn._loop, **self.conn.args)
+
 		key = self.extkey
+		# Initially, if creating a sub-tree, the watcher is attached to
+		# the main tree until looking up / creating the intermediate nodes
+		# is completed. Thus we need to restart watching at the subtree.
 		try:
 			async def cb(x):
 				logger.debug("IN: %s",repr(x.__dict__))
@@ -411,10 +351,13 @@ class EtcWatcher(object):
 						self.stopped.set_exception(e)
 					raise etcd.StopWatching
 				self.last_read = x.modifiedIndex
+				if self.extkey != key:
+					raise etcd.StopWatching
 
-			await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
-			if not self.stopped.done():
-				self.stopped.set_result("returned")
+			while not self.stopped.done():
+				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
+				# restart at the subtree
+				key = self.extkey
 
 		except GeneratorExit:
 			raise
@@ -434,39 +377,49 @@ class EtcWatcher(object):
 		"""\
 			Callback which processes incoming events
 			"""
+		from .node import mtAwaiter
+
 		# Drop references so that termination works
 		r = self.root()
 		if r is None: # pragma: no cover
 			raise etcd.StopWatching
 
 		logger.debug("RUN: %s",repr(x.__dict__))
-		if not x.key.startswith(self.extkey+'/'):
+		if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
 			return # sometimes we get the parent
 		key = x.key[len(self.extkey):]
 		key = tuple(k for k in key.split('/') if k != '')
+
 		if x.action in {'compareAndDelete','delete','expire'}:
-			for n,k in enumerate(key):
-				r = r._ext_lookup(k)
-				if r is None: # pragma: no cover
-					break
-			else:
-				r._ext_delete()
+			for k in key:
+				try:
+					r = r._get(k)
+				except KeyError:
+					return
+			r._ext_delete()
 		else:
-			for n,k in enumerate(key):
-				if n < len(key)-1:
-					r = r._ext_lookup(k, dir=True, value=None, seq=0)
+#			if not x.createdIndex:
+#				pn = getattr(x,'_prev_node',None)
+#				if pn is not None:
+#					x.createdIndex = pn.createdIndex
+			for k in key[:-1]:
+				try:
+					r = r[k]
+				except KeyError:
+					r = await r._new(parent=r,key=k,recursive=None)
+			if key:
+				try:
+					# don't resolve mtValue
+					r = r._get(key[-1])
+				except KeyError:
+					r = await r._new(parent=r,key=key,pre=x,recursive=None)
 				else:
-					r = r._ext_lookup(k, dir=x.dir, value= None if x.dir else x.value, seq=x.modifiedIndex, cseq=x.createdIndex)
-				if r is None:
-					break # pragma: no cover
+					if type(r) is mtAwaiter:
+						r = await r._load_data(pre=x,recursive=None)
+					else:
+						r._ext_update(x)
 			else:
-				kw = {}
-				if hasattr(x,'ttl'): # pragma: no branch
-					kw['ttl'] = x.ttl
-				pn = getattr(x,'_prev_node',None)
-				cseq=pn.createdIndex if pn is not None else x.createdIndex
-				r._ext_update(x.value, cseq=cseq, seq=x.modifiedIndex, **kw)
-				r._cseq = x.createdIndex
+				r._ext_update(x)
 
 		async with self.uptodate:
 			self.last_seen = x.modifiedIndex
