@@ -39,7 +39,7 @@ import inspect
 from contextlib import suppress
 from itertools import chain
 
-from .node import mtRoot
+from .node import EtcRoot
 
 # Requiring a lock is bad for our health.
 
@@ -224,9 +224,9 @@ class EtcClient(object):
 		if types:
 			cls = types.type[True]
 		if cls is None:
-			cls = mtRoot
+			cls = EtcRoot
 		else:
-			assert issubclass(cls,mtRoot)
+			assert issubclass(cls,EtcRoot)
 		root = await cls._new(conn=self, watcher=w, key=key, pre=res,
 				recursive=rec, types=types, **kw)
 
@@ -381,7 +381,7 @@ class EtcWatcher(object):
 		"""\
 			Callback which processes incoming events
 			"""
-		from .node import mtAwaiter
+		from .node import EtcAwaiter
 
 		# Drop references so that termination works
 		r = self.root()
@@ -413,12 +413,12 @@ class EtcWatcher(object):
 					r = await r._new(parent=r,key=k,recursive=None)
 			if key:
 				try:
-					# don't resolve mtValue
+					# don't resolve EtcValue
 					r = r._get(key[-1])
 				except KeyError:
 					r = await r._new(parent=r,key=key,pre=x,recursive=None)
 				else:
-					if type(r) is mtAwaiter:
+					if type(r) is EtcAwaiter:
 						r = await r._load_data(pre=x,recursive=None)
 					else:
 						r._ext_update(x)
@@ -504,12 +504,12 @@ class EtcTypes(object):
 
 	def _register(self, cls):
 		"""Register a callback on this node"""
-		from .node import mtDir,mtValue
+		from .node import EtcDir,EtcValue
 		done = False
-		if issubclass(cls,mtValue):
+		if issubclass(cls,EtcValue):
 			self.type[0] = cls
 			done = True
-		if issubclass(cls,mtDir):
+		if issubclass(cls,EtcDir):
 			self.type[1] = cls
 			done = True
 		if not done:

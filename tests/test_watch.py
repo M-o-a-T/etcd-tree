@@ -31,7 +31,7 @@ import pytest
 import etcd
 import time
 import asyncio
-from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString,mtAwaiter, \
+from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,EtcString,EtcAwaiter, \
     UnknownNodeError,ReloadData,ReloadRecursive
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
@@ -46,34 +46,34 @@ def test_basic_watch(client,loop):
     types = EtcTypes()
     twotypes = EtcTypes()
     @twotypes.register()
-    class rTwo(mtDir):
+    class rTwo(EtcDir):
         pass
     @twotypes.register("die")
-    class rDie(mtValue):
+    class rDie(EtcValue):
         def has_update(self):
             raise RuntimeError("RIP")
     # reg funcion shall return the right thing
     types.step('two',dest=twotypes)
     assert types.lookup(('two','die'),dir=False) is rDie
     assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rDie
-    i = types.register("two","vier", cls=mtInteger)
-    assert i is mtInteger
-    i = types.register("*/vierixx")(mtInteger)
-    assert i is mtInteger
-    types['what/ever'] = mtFloat
+    i = types.register("two","vier", cls=EtcInteger)
+    assert i is EtcInteger
+    i = types.register("*/vierixx")(EtcInteger)
+    assert i is EtcInteger
+    types['what/ever'] = EtcFloat
     types['what/ever'] = rTwo
-    assert types.lookup('what','ever', dir=False) is mtFloat
+    assert types.lookup('what','ever', dir=False) is EtcFloat
     assert types.lookup('what','ever', dir=True) is rTwo
-    assert types['what/ever'] is mtFloat
+    assert types['what/ever'] is EtcFloat
     with pytest.raises(AssertionError):
         types['/what/ever']
     with pytest.raises(AssertionError):
         types['what/ever/']
     with pytest.raises(AssertionError):
         types['what//ever']
-    types['something/else'] = mtInteger
-    assert types['two/vier'] is mtInteger
-    assert types['something/else'] is mtInteger
+    types['something/else'] = EtcInteger
+    assert types['two/vier'] is EtcInteger
+    assert types['something/else'] is EtcInteger
     assert types['not/not'] is None
 
     d=dict
@@ -81,7 +81,7 @@ def test_basic_watch(client,loop):
     d1=d(one="eins",two=d(zwei=d(und="drei"),vier="5"),x="y")
     yield from t._f(d1)
     # basic access, each directory separately
-    class xRoot(mtRoot):
+    class xRoot(EtcRoot):
         pass
     types.register(cls=xRoot)
     w = yield from t.tree("/two", immediate=False, static=True, types=types, env="foobar")
@@ -100,7 +100,7 @@ def test_basic_watch(client,loop):
 
     # basic access, read it on demand
     w5 = yield from t.tree("/two", immediate=None, static=True, types=types)
-    assert isinstance(w5['zwei']['und'],mtAwaiter)
+    assert isinstance(w5['zwei']['und'],EtcAwaiter)
     assert (yield from w5['zwei']['und']).value == "drei"
     assert w5['vier'] == "5"
 
@@ -118,7 +118,7 @@ def test_basic_watch(client,loop):
     # check basic node iterators
     res=set()
     for v in w3['two']['zwei'].values():
-        assert not isinstance(v,mtValue)
+        assert not isinstance(v,EtcValue)
         res.add(v)
     assert res == {"drei"}
 
@@ -241,7 +241,7 @@ def test_update_watch(client, loop):
     yield from w.wait(mod)
     # and check that they're here
     assert w['three']['four']['fiver'] == "what"
-    assert isinstance(w['three']['four']['five']['six']['seven'], mtDir)
+    assert isinstance(w['three']['four']['five']['six']['seven'], EtcDir)
 
     logger.debug("Waiting for _update 1")
     yield from f
@@ -325,8 +325,8 @@ def test_update_watch(client, loop):
     assert not w['zwei']._later_mon
     assert not w['zwei']._get('und')._later_mon
 
-    types.register("**","new_a", cls=mtString)
-    types.register("**","new_b", cls=mtString)
+    types.register("**","new_a", cls=EtcString)
+    types.register("**","new_b", cls=EtcString)
     mod = yield from t._f(d2,delete=True)
     yield from w1.wait(mod)
     w1['vier']['auch'] = "nein"
@@ -502,12 +502,12 @@ async def do_typed(client,loop, subtyped,recursed):
     # object type registration
     types = EtcTypes()
     if subtyped:
-        class Sub(mtDir):
+        class Sub(EtcDir):
             def __init__(self,*a,pre=None,**k):
                 super().__init__(*a,**k,pre=pre)
                 assert pre['my_value'].value == '10'
                 self._types = EtcTypes()
-                self._types.register('my_value',cls=mtInteger)
+                self._types.register('my_value',cls=EtcInteger)
             def subtype(self,*path,pre=None,recursive=None,**kw):
                 if path == ('my_value',):
                     if pre is None:
@@ -523,7 +523,7 @@ async def do_typed(client,loop, subtyped,recursed):
                 return super().subtype(*path,pre=pre,recursive=recursive,**kw)
         types.register('here',cls=Sub)
     else:
-        types.register('here','my_value',cls=mtInteger)
+        types.register('here','my_value',cls=EtcInteger)
 
     d=dict
     t = client
@@ -534,11 +534,11 @@ async def do_typed(client,loop, subtyped,recursed):
     assert v.value == 10,w['here']._get('my_value')
     v = await w['here']
     assert v['my_value'] == 10, v._get('my_value')
-    assert (recursed is None) == (type(v['a']['b']['c']) is mtAwaiter)
+    assert (recursed is None) == (type(v['a']['b']['c']) is EtcAwaiter)
     await v['a']['b']['c']
-    assert not type(v['a']['b']['c']) is mtAwaiter
-    assert (type(v['a']['b']['c']['d']) is mtAwaiter) == (recursed is None and not subtyped)
+    assert not type(v['a']['b']['c']) is EtcAwaiter
+    assert (type(v['a']['b']['c']['d']) is EtcAwaiter) == (recursed is None and not subtyped)
     await v['a']['b']['c']['d'] # no-op
     assert v['a']['b']['c']['d']['e'] == '20'
-    assert isinstance(v, Sub if subtyped else mtDir)
+    assert isinstance(v, Sub if subtyped else EtcDir)
 

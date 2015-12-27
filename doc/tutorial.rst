@@ -56,7 +56,7 @@ testing.
 
 The three lines which correct the speling misteak do the same thing in
 different ways. The first is preferred in an async context. The second
-way accesses the data item's underlying ``mtValue`` object. The third
+way accesses the data item's underlying ``EtcValue`` object. The third
 uses synchronous code to modify your data and sends your change to the
 server later.
 
@@ -76,7 +76,7 @@ There are three ways to read the initial object tree:
   isn't too large.
 
 * Later. Data which haven't been accessed yet are replaced with an
-  ``mtAwaiter`` placeholder.
+  ``EtcAwaiter`` placeholder.
 
   .. code:: python
 
@@ -91,17 +91,17 @@ There are three ways to read the initial object tree:
       # … or …
       data = root['the']['answer']['is']
       data = await data
-      assert isinstance(data,mtValue)
+      assert isinstance(data,EtcValue)
       assert data.value == 'unknown'
       await data.set(42)
 
-      if type(data) is mtAwaiter:
+      if type(data) is EtcAwaiter:
           data = await data
-          if isinstance(data,mtDir):
+          if isinstance(data,EtcDir):
               # all non-directory children of this directory
               # will be accessible directly
               pass
-          if isinstance(data,mtValue):
+          if isinstance(data,EtcValue):
               data = data.value
   
   Note that this code …
@@ -118,11 +118,11 @@ There are three ways to read the initial object tree:
 Subsequent changes on data which you have not yet accessed are
 **not** processed and your code will **not** be notified when they happen.
 
-An ``mtAwaiter`` is an incomplete placeholder. Specifically, you cannot set
+An ``EtcAwaiter`` is an incomplete placeholder. Specifically, you cannot set
 any values on it. This is intentional.
 
 `etcd-tree` guarantees that no data you've loaded will ever be replaced
-with an ``mtAwaiter``. Also, an update which directly adds new data to
+with an ``EtcAwaiter``. Also, an update which directly adds new data to
 something you already have awaited will add the actual data.
 
 Data typing
@@ -132,10 +132,10 @@ Strings are boring. Fortunately, we can define our own (atomic) types.
 
 .. code:: python
 
-    from etcd_tree.node import mtFloat
+    from etcd_tree.node import EtcFloat
 
     types = etcd.EtcTypes()
-    types.register('number','**','is', cls=mtInteger)
+    types.register('number','**','is', cls=EtcInteger)
 
     view = await client.tree("/num",types=types)
     await client.set("/num/number/wilma/is","42")
@@ -153,9 +153,9 @@ the other, but which one is undefined and may change without notice.
 Use a typed subdirectory to resolve the conflict (below).
 
 If you want to subclass a whole directory, derive your class from
-``mtDir``. 
+``EtcDir``. 
 
-    class myDir(mtDir):
+    class myDir(EtcDir):
         my_data=the_data
     types.register(…, cls=myDir)
 
@@ -168,7 +168,7 @@ If you need access to private data, you can to pass an environment to ``.tree()`
     the_data = …whatever…
     view = await client.tree("/num",types=types,env=the_data)
 
-    class myDir(mtDir):
+    class myDir(EtcDir):
         def some_method(self):
             assert self.env is the_data
 

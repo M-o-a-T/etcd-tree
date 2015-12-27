@@ -209,7 +209,7 @@ class mtBase(object):
 				await a._load_data(recursive=False)
 		if _fill is not None:
 			for k,v in getattr(_fill,'_data',{}).items():
-				if k not in self._data and type(v) is mtAwaiter:
+				if k not in self._data and type(v) is EtcAwaiter:
 					self._data[k] = v
 			self._later_mon.update(_fill._later_mon)
 		return self
@@ -488,14 +488,14 @@ class mtBase(object):
 
 ##############################################################################
 
-class mtAwaiter(mtBase):
+class EtcAwaiter(mtBase):
 	"""\
 		A node that needs to be looked up via "await".
 
 		This implements lazy lookup.
 
-		Note that an mtAwaiter is a placeholder for a directory node.
-		However, a nested mtAwaiter might actually be a value, so this code
+		Note that an EtcAwaiter is a placeholder for a directory node.
+		However, a nested EtcAwaiter might actually be a value, so this code
 		accepts that.
 		"""
 	_done = None
@@ -508,7 +508,7 @@ class mtAwaiter(mtBase):
 	def __getitem__(self,key):
 		v = self._data.get(key,_NOTGIVEN)
 		if v is _NOTGIVEN:
-			self._data[key] = v = mtAwaiter(self, name=key)
+			self._data[key] = v = EtcAwaiter(self, name=key)
 		return v
 	_get = __getitem__
 
@@ -525,13 +525,13 @@ class mtAwaiter(mtBase):
 			if root is None:
 				return None # pragma: no cover
 			p = self.parent
-			if type(p) is mtAwaiter:
+			if type(p) is EtcAwaiter:
 				p = await p
 				r = p._data.get(self.name,self)
-				if type(r) is not mtAwaiter:
+				if type(r) is not EtcAwaiter:
 					self._done = r
 					return r
-			# _fill carries over any monitors and existing mtAwaiter instances
+			# _fill carries over any monitors and existing EtcAwaiter instances
 			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
 			self._done = obj
 			assert p._data[self.name] is obj
@@ -543,7 +543,7 @@ class mtAwaiter(mtBase):
 
 ##############################################################################
 
-class mtValue(mtBase):
+class EtcValue(mtBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
 	_is_dir = False
@@ -577,7 +577,7 @@ class mtValue(mtBase):
 	def _del_value(self):
 		self._task(self.root._conn.delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
-	__delitem__ = _del_value # for mtDir.delete
+	__delitem__ = _del_value # for EtcDir.delete
 
 	async def set(self, value, sync=True, ttl=None):
 		root = self.root
@@ -608,19 +608,19 @@ class mtValue(mtBase):
 			return
 		self._value = self._load(pre.value)
 
-mtString = mtValue
-class mtInteger(mtValue):
+EtcString = EtcValue
+class EtcInteger(EtcValue):
 	type = int
-class mtFloat(mtValue):
+class EtcFloat(EtcValue):
 	type = float
 
 ##############################################################################
 
-class mtDir(mtBase, MutableMapping):
+class EtcDir(mtBase, MutableMapping):
 	"""\
 		A node with other nodes below it.
 
-		Map lookup will return a leaf node's mtValue node.
+		Map lookup will return a leaf node's EtcValue node.
 		Access by attribute will return the value directly.
 		"""
 	_value = None
@@ -648,17 +648,17 @@ class mtDir(mtBase, MutableMapping):
 
 	def _add_awaiter(self, c):
 		assert c not in self._data
-		self._data[c] = mtAwaiter(self,c)
+		self._data[c] = EtcAwaiter(self,c)
 	def keys(self):
 		return self._data.keys()
 	def values(self):
 		for v in self._data.values():
-			if isinstance(v,mtValue):
+			if isinstance(v,EtcValue):
 				v = v.value
 			yield v
 	def items(self):
 		for k,v in self._data.items():
-			if isinstance(v,mtValue):
+			if isinstance(v,EtcValue):
 				v = v.value
 			yield k,v
 	def _get(self,key,default=_NOTGIVEN):
@@ -669,7 +669,7 @@ class mtDir(mtBase, MutableMapping):
 
 	def get(self,key,default=_NOTGIVEN):
 		v = self._get(key,default)
-		if isinstance(v,mtValue):
+		if isinstance(v,EtcValue):
 			v = v.value
 		return v
 	__getitem__ = get
@@ -689,7 +689,7 @@ class mtDir(mtBase, MutableMapping):
 
 		async def step(n,last=False):
 			nonlocal self
-			if type(self) is mtAwaiter:
+			if type(self) is EtcAwaiter:
 				self = await self._load_data(None)
 			if last and create and n in self:
 				pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
@@ -709,7 +709,7 @@ class mtDir(mtBase, MutableMapping):
 		if n is not None:
 			await step(n,True)
 
-		if isinstance(self,mtAwaiter):
+		if isinstance(self,EtcAwaiter):
 			self = await self._load_data(recursive)
 		return self
 
@@ -721,7 +721,7 @@ class mtDir(mtBase, MutableMapping):
 				yield v
 			elif k[0] == ':':
 				pass
-			elif isinstance(v,mtDir):
+			elif isinstance(v,EtcDir):
 				yield from v.tagged(tag)
 
 	def __contains__(self,key):
@@ -760,7 +760,7 @@ class mtDir(mtBase, MutableMapping):
 					root._task_do(self._task_set,path, t._dump(val))
 			t_set((),key, val)
 		else:
-			if isinstance(res,mtValue):
+			if isinstance(res,EtcValue):
 				assert not isinstance(val,dict)
 				res.value = val
 			else:
@@ -771,7 +771,7 @@ class mtDir(mtBase, MutableMapping):
 	async def _task_set(self, path,val):
 		for p in path[:-1]:
 			self = self[p]
-		self = await self # in case it's an mtAwaiter
+		self = await self # in case it's an EtcAwaiter
 		res = await self.set(path[-1], val, sync=False)
 		return res
 
@@ -834,7 +834,7 @@ class mtDir(mtBase, MutableMapping):
 			else:
 				res = mod = await t_set(self.path,len(self.path),key, value)
 		else:
-			if isinstance(res,mtValue):
+			if isinstance(res,EtcValue):
 				assert not isinstance(value,dict)
 				res = mod = await res.set(value, **kw)
 			else:
@@ -955,7 +955,7 @@ class mtDir(mtBase, MutableMapping):
 				return cls
 		p = self.parent if self._types_from_parent else None
 		if p is None:
-			return mtDir if dir else mtValue
+			return EtcDir if dir else EtcValue
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
 	
 	async def _fill_result(self,pre,recursive):
@@ -965,7 +965,7 @@ class mtDir(mtBase, MutableMapping):
 		for c in pre.child_nodes:
 			n = c.name
 			if c.dir and recursive is None:
-				self._data[n] = a = mtAwaiter(parent=self,pre=c)
+				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
 				aw.append(a)
 			else:
 				obj = await self._new(parent=self, key=c.name, pre=(c if recursive else None), recursive=recursive)
@@ -974,7 +974,7 @@ class mtDir(mtBase, MutableMapping):
 		
 ##############################################################################
 
-class mtRoot(mtDir):
+class EtcRoot(EtcDir):
 	"""\
 		Root node for a (watched) config tree.
 

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 import asyncio
 import pytest
 import etcd
-from etcd_tree.node import mtDir
+from etcd_tree.node import EtcDir
 
 from .util import cfg,client
 
