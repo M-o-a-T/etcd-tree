@@ -193,15 +193,16 @@ class mtBase(object):
 			if pre is None:
 				kw['pre'] = pre = await conn.read(key)
 			if pre.dir:
-				aw = await self._fill_result(pre=pre,recursive=recursive)
+				aw = await self._fill_result(pre=pre,recursive=irec)
 		except ReloadRecursive:
-			assert not recursive
+			if recursive:
+				raise RuntimeError("You raised got recursive data but raised ReloadRecursive (%s)" % pre.key)
 			kw['pre'] = pre = await conn.read(key, recursive=True)
 			recursive = True
 			if self is None:
 				self = cls_getter()(**kw)
 			if pre.dir:
-				aw = await self._fill_result(pre=pre,recursive=recursive)
+				aw = await self._fill_result(pre=pre,recursive=True)
 
 		if irec is False:
 			for a in aw:
@@ -965,7 +966,7 @@ class mtDir(mtBase, MutableMapping):
 		p = self.parent if self._types_from_parent else None
 		if p is None:
 			return mtDir if dir else mtValue
-		return p.subtype(*((self.name,)+path),dir=dir,pre=pre)
+		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
 	
 	async def _fill_result(self,pre,recursive):
 		"""Fill in result data. This may require re-reading recursively."""
