@@ -32,7 +32,7 @@ import etcd
 import time
 import asyncio
 from etcd_tree.node import mtRoot,mtDir,mtValue,mtInteger,mtFloat,mtString,mtAwaiter, \
-    UnknownNodeError
+    UnknownNodeError,ReloadData,ReloadRecursive
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client
@@ -469,6 +469,12 @@ def test_typed_recursed(client,loop):
 
 @pytest.mark.run_loop
 @asyncio.coroutine
+def test_typed_preload(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,False,None)
+
+@pytest.mark.run_loop
+@asyncio.coroutine
 def test_typed_subtyped(client,loop):
     """Watches which don't actually watch"""
     yield from do_typed(client,loop,True,False)
@@ -479,34 +485,53 @@ def test_typed_recursed_subtyped(client,loop):
     """Watches which don't actually watch"""
     yield from do_typed(client,loop,True,True)
 
+@pytest.mark.run_loop
+@asyncio.coroutine
+def test_typed_preload_subtyped(client,loop):
+    """Watches which don't actually watch"""
+    yield from do_typed(client,loop,True,None)
+
 async def do_typed(client,loop, subtyped,recursed):
     # object type registration
     types = EtcTypes()
     if subtyped:
         class Sub(mtDir):
-            def __init__(self,*a,**k):
-                super().__init__(*a,**k)
+            def __init__(self,*a,pre=None,**k):
+                super().__init__(*a,**k,pre=pre)
                 assert pre['my_value'].value == '10'
-                assert pre['other_value'].value == '20'
                 self._types = EtcTypes()
                 self._types.register('my_value',cls=mtInteger)
-            def subtype(self,*path,dir=None,pre=None):
+            def subtype(self,*path,pre=None,recursive=None,**kw):
                 if path == ('my_value',):
+                    if pre is None:
+                        raise ReloadData
                     assert pre.value=="10",pre
-                return super().subtype(*path,dir=dir,pre=pre)
+                elif path == ('a','b','c'):
+                    if pre is None:
+                        raise ReloadData # yes, I'm bad
+                    elif not recursive:
+                        raise ReloadRecursive
+                elif not recursive:
+                    assert len(path)<3
+                return super().subtype(*path,pre=pre,recursive=recursive,**kw)
         types.register('here',cls=Sub)
     else:
         types.register('here','my_value',cls=mtInteger)
 
     d=dict
     t = client
-    d1=d(types=d(here=d(my_value='10',other_value='20')))
+    d1=d(types=d(here=d(my_value='10',a=d(b=d(c=d(d=d(e='20')))))))
     await t._f(d1)
     w = await t.tree("/types", immediate=recursed, static=True, types=types)
     v = await w['here']._get('my_value')
     assert v.value == 10,w['here']._get('my_value')
     v = await w['here']
     assert v['my_value'] == 10, v._get('my_value')
-    assert v['other_value'] == '20', v._get('other_value')
+    assert (recursed is None) == (type(v['a']['b']['c']) is mtAwaiter)
+    await v['a']['b']['c']
+    assert not type(v['a']['b']['c']) is mtAwaiter
+    assert (type(v['a']['b']['c']['d']) is mtAwaiter) == (recursed is None and not subtyped)
+    await v['a']['b']['c']['d'] # no-op
+    assert v['a']['b']['c']['d']['e'] == '20'
     assert isinstance(v, Sub if subtyped else mtDir)
 
