@@ -49,5 +49,6 @@ async def client(cfg="/etc/etcd_tree.cfg", loop=None):
 	await c._init()
 	return c
 
-from .etcd import EtcTypes
+from .etcd import *
+from .node import *
 

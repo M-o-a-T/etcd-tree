@@ -41,6 +41,10 @@ import aio_etcd as etcd
 from etcd import EtcdResult
 from functools import wraps
 
+__all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue',
+	'EtcString','EtcFloat','EtcInteger',
+	)
+
 class _NOTGIVEN:
 	pass
 _later_idx = 1
@@ -116,7 +120,7 @@ class MonitorCallback(object):
 
 ##############################################################################
 
-class mtBase(object):
+class EtcBase(object):
 	"""\
 		Abstract base class for an etcd node.
 
@@ -488,7 +492,7 @@ class mtBase(object):
 
 ##############################################################################
 
-class EtcAwaiter(mtBase):
+class EtcAwaiter(EtcBase):
 	"""\
 		A node that needs to be looked up via "await".
 
@@ -543,7 +547,7 @@ class EtcAwaiter(mtBase):
 
 ##############################################################################
 
-class EtcValue(mtBase):
+class EtcValue(EtcBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
 	_is_dir = False
@@ -616,7 +620,7 @@ class EtcFloat(EtcValue):
 
 ##############################################################################
 
-class EtcDir(mtBase, MutableMapping):
+class EtcDir(EtcBase, MutableMapping):
 	"""\
 		A node with other nodes below it.
 

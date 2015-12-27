@@ -1,3 +1,9 @@
+etcd-tree (0.9.0-2) unstable; urgency=medium
+
+  * Fix another name, add external exports
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Dec 2015 09:43:45 +0100
+
 etcd-tree (0.9.0-1) unstable; urgency=medium
 
   * Major rewrite of the object loader.
