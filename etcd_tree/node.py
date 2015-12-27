@@ -554,9 +554,6 @@ class mtValue(mtBase):
 		self._value = self._load(pre.value)
 		self.updated(0)
 
-	async def _load_data(self,recursive):
-		return # nothing to do
-
 	# used for testing
 	def __eq__(self, other):
 		if type(self) != type(other):
@@ -634,12 +631,6 @@ class mtDir(mtBase, MutableMapping):
 		self._data = {}
 		super().__init__(**kw)
 
-	async def _load_data(self,recursive):
-		if not recursive:
-			return
-		for k,v in list(self._data.items()):
-			v = await v._load_data(True)
-
 	def __iter__(self):
 		return iter(self._data.keys())
 
@@ -647,7 +638,7 @@ class mtDir(mtBase, MutableMapping):
 		return len(self._data)
 
 	@classmethod
-	def _load(cls,value):
+	def _load(cls,value): # pragma: no cover
 		assert value is None
 		return None
 	@classmethod
@@ -766,8 +757,6 @@ class mtDir(mtBase, MutableMapping):
 						t_set(path,k,v)
 				else:
 					t = self.subtype(path, dir=False)
-					if t is None:
-						t = mtValue
 					root._task_do(self._task_set,path, t._dump(val))
 			t_set((),key, val)
 		else:
@@ -826,12 +815,7 @@ class mtDir(mtBase, MutableMapping):
 						mod = r.modifiedIndex
 				else:
 					t = self.subtype(*path[keypath:], dir=False)
-					if t is None:
-						t = mtValue
-					try:
-						r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
-					except TypeError:
-						r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
+					r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
@@ -843,8 +827,6 @@ class mtDir(mtBase, MutableMapping):
 						mod = r.modifiedIndex # pragma: no cover
 				else:
 					t = self.subtype(('0',), dir=False)
-					if t is None:
-						t = mtValue
 					r = await root._conn.set(self.path, t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
@@ -1034,7 +1016,6 @@ class mtRoot(mtDir):
 	# * repeat as necessary.
 	# 
 	def _task_next(self,f=None):
-		logger.debug("Task D %s",f)
 		if self._task_done is not None and self._task_done.done():
 			# wait for .wait()
 			return
@@ -1060,16 +1041,13 @@ class mtRoot(mtDir):
 			self._task_done.set_result(f.result() if f else None)
 			return
 		p,a,k = self._tasks.pop(0)
-		logger.debug("Task R %s %s %s",p,a,k)
 		try:
 			self._task_now = asyncio.ensure_future(self.run_with_wait(p,*a,**k), loop=self._loop)
 			self._task_now.add_done_callback(self._task_next)
 		except Exception as exc:
-			logger.debug("Task F %s %s %s",exc)
 			self._task_done.set_exception(exc)
 
 	def _task_do(self,p,*a,**k):
-		logger.debug("Task Q %s %s %s",p,a,k)
 		self._tasks.append((p,a,k))
 		self._task_next()
 
@@ -1100,22 +1078,17 @@ class mtRoot(mtDir):
 	async def wait(self, mod=None):
 		# Here 
 		while True:
-			logger.debug("Task W %s",self._task_done)
 			if self._task_done is None:
 				if not self._tasks and self._task_now is None:
 					break
 				self._task_next()
 				continue
 			try:
-				logger.debug("Task @ %s",self._task_done)
 				await self._task_done
 			finally:
-				logger.debug("Task A %s",self._task_done)
 				self._task_done = None
-		logger.debug("Task Z %s",mod)
 		if self._watcher is not None:
 			await self._watcher.sync(mod)
-		logger.debug("Task ZZ")
 
 	def __repr__(self): # pragma: no cover
 		try:
@@ -1129,7 +1102,7 @@ class mtRoot(mtDir):
 		self._kill()
 	def _kill(self):
 		if not hasattr(self,'_watcher'):
-			return
+			return # pragma: no cover
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			w._kill() # pragma: no cover # as the tests call close()
@@ -1150,10 +1123,8 @@ class mtRoot(mtDir):
 
 	async def run_with_wait(self, p,*a,**k):
 		res = await p(*a,**k)
-		logger.debug("Task G %s",res)
 		if res is not None:
 			res = getattr(res,'modifiedIndex',res)
 			if isinstance(res,int) and self._watcher is not None:
-				logger.debug("Task H %s",res)
 				await self._watcher.sync(res)
-		logger.debug("Task I %s",res)
+
