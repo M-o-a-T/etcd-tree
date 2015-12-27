@@ -133,7 +133,7 @@ class mtBase(object):
 	_env = _NOTGIVEN
 
 	@classmethod
-	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, **kw):
+	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, _fill=None, **kw):
 		"""\
 			This classmethod loads data (if necessary) and creates a class from a base.
 
@@ -207,6 +207,11 @@ class mtBase(object):
 		if irec is False:
 			for a in aw:
 				await a._load_data(recursive=False)
+		if _fill is not None:
+			for k,v in getattr(_fill,'_data',{}).items():
+				if k not in self._data and type(v) is mtAwaiter:
+					self._data[k] = v
+			self._later_mon.update(_fill._later_mon)
 		return self
 
 	def __init__(self, pre, name=None,parent=None):
@@ -520,13 +525,14 @@ class mtAwaiter(mtBase):
 		p = self.parent
 		if type(p) is mtAwaiter:
 			p = await p
-			r = p._data[self.name]
-			if r is not self:
+			r = p._data.get(self.name,self)
+			if type(r) is not mtAwaiter:
 				self._done = r
 				return r
-		obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre)
-		p._data[self.name] = self._done = obj
-		obj._later_mon.update(self._later_mon)
+		# _fill carries over any monitors and existing mtAwaiter instances
+		obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
+		self._done = obj
+		assert p._data[self.name] is obj
 		return obj
 
 	def _ext_del_node(self, child):
