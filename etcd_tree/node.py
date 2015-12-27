@@ -1071,7 +1071,18 @@ class mtRoot(mtDir):
 
 	@property
 	def stopped(self):
+		"""Future which triggers if/when this tree does not monitor etcd"""
+		if self._watcher is None:
+			# yes we're stopped
+			f = asyncio.Future(loop=self._loop)
+			f.set_result(False)
+			return f
 		return self._watcher.stopped
+
+	@property
+	def running(self):
+		"""Flag that tells whether this tree still monitors etcd"""
+		return self._watcher is not None and self._watcher.running
 
 	async def close(self):
 		w,self._watcher = self._watcher,None

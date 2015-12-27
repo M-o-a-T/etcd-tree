@@ -281,6 +281,10 @@ class EtcWatcher(object):
 		except Exception:
 			pass
 
+	@property
+	def running(self):
+		return not self.stopped.done()
+
 	def __del__(self): # pragma: no cover
 		self._kill()
 

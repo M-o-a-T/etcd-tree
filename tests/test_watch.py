@@ -371,6 +371,10 @@ def test_update_watch(client, loop):
     yield from w.wait(m)
     with pytest.raises(KeyError):
         w['vier']
+    assert w.running
+    yield from t.delete("/two",recursive=True)
+    yield from asyncio.sleep(0.3,loop=loop)
+    assert not w.running
 
     yield from w.close()
     yield from w1.close()
