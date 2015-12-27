@@ -1,3 +1,11 @@
+etcd-tree (0.9.1-1) unstable; urgency=medium
+
+  * more tutorial
+  * more exports
+  * drop selftype()
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Dec 2015 10:47:31 +0100
+
 etcd-tree (0.9.0-2) unstable; urgency=medium
 
   * Fix another name, add external exports

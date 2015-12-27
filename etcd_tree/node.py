@@ -43,17 +43,12 @@ from functools import wraps
 
 __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue',
 	'EtcString','EtcFloat','EtcInteger',
+	'ReloadData','ReloadRecursive',
 	)
 
 class _NOTGIVEN:
 	pass
 _later_idx = 1
-
-class UnknownNodeError(RuntimeError):
-	"""\
-		This node does not accept this member.
-		"""
-	pass
 
 class ReloadData(ReferenceError):
 	"""\
@@ -141,8 +136,7 @@ class EtcBase(object):
 		"""\
 			This classmethod loads data (if necessary) and creates a class from a base.
 
-			If @parent is not given, load a root class from @conn and @key;
-			the actual class is looked up via cls.selftype().
+			If @parent is not given, load a root class from @conn and @key.
 			Otherwise @key is the name of the child node; the class is
 			looked up via the parent's .subtype() method.
 
@@ -178,7 +172,7 @@ class EtcBase(object):
 				key = parent.path+(name,)
 		else:
 			assert parent is None, "specify either conn or parent, not both"
-			cls_getter = lambda: cls.selftype(parent=parent,name=name,pre=pre,recursive=recursive)
+			cls_getter = lambda: cls
 			kw['conn'] = conn
 			kw['key'] = key
 		self = None
@@ -894,6 +888,9 @@ class EtcDir(EtcBase, MutableMapping):
 			await root.wait(r)
 		return r
 
+	def throw_away(self):
+		return EtcAwaiter(self.parent,name=self.name)
+		
 	def _ext_delete(self):
 		"""We vanished. Oh well."""
 		for d in list(self._data.values()):
@@ -925,18 +922,6 @@ class EtcDir(EtcBase, MutableMapping):
 	_types = None
 	_types_from_parent = True
 	_types_recursive = False
-
-	@classmethod
-	def selftype(cls,parent,name, pre=None,recursive=None):
-		"""\
-			Decide which type to use for this entry.
-			@parent is obviously the parent, @name this entry's name.
-			@pre is a dict tree with (untyped) data.
-
-			The default is to return self.
-			@pre shall be a dict with raw values filled.
-			"""
-		return cls
 
 	def subtype(self,*path,dir=None,pre=None,recursive=None):
 		"""\
