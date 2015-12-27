@@ -502,6 +502,7 @@ class mtAwaiter(mtBase):
 
 	def __init__(self,parent,pre=None,name=None):
 		super().__init__(parent=parent, pre=pre,name=name)
+		self._lock = asyncio.Lock(loop=self._loop)
 		self._data = {}
 
 	def __getitem__(self,key):
@@ -517,23 +518,24 @@ class mtAwaiter(mtBase):
 		return self._load_data(None).__await__()
 
 	async def _load_data(self,recursive, pre=None):
-		if self._done is not None:
-			return self._done
-		root = self.root
-		if root is None:
-			return None # pragma: no cover
-		p = self.parent
-		if type(p) is mtAwaiter:
-			p = await p
-			r = p._data.get(self.name,self)
-			if type(r) is not mtAwaiter:
-				self._done = r
-				return r
-		# _fill carries over any monitors and existing mtAwaiter instances
-		obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
-		self._done = obj
-		assert p._data[self.name] is obj
-		return obj
+		async with self._lock:
+			if self._done is not None:
+				return self._done # pragma: no cover ## concurrency
+			root = self.root
+			if root is None:
+				return None # pragma: no cover
+			p = self.parent
+			if type(p) is mtAwaiter:
+				p = await p
+				r = p._data.get(self.name,self)
+				if type(r) is not mtAwaiter:
+					self._done = r
+					return r
+			# _fill carries over any monitors and existing mtAwaiter instances
+			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
+			self._done = obj
+			assert p._data[self.name] is obj
+			return obj
 
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
