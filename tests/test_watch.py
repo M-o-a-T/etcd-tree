@@ -150,7 +150,7 @@ def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    wr,w = yield from t.tree("/", sub='two', immediate=False, static=False)
+    wr,w = yield from t.tree("/", sub='two', immediate=False, static=False,update_delay=0.25)
     d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
     mod = yield from t._f(d2,delete=True)
     yield from wr.wait(mod=mod)
