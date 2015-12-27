@@ -367,14 +367,19 @@ def test_update_watch(client, loop):
     yield from w['vier'].delete('d')
     yield from w['vier'].delete('new_a')
     yield from w['vier'].delete('new_b')
-    m = yield from w['vier'].delete(recursive=False)
+    m = yield from w.delete('vier',recursive=False)
     yield from w.wait(m)
     with pytest.raises(KeyError):
         w['vier']
+    with pytest.raises(RuntimeError):
+        yield from w.delete()
+
     assert w.running
+    assert not w.stopped.done()
     yield from t.delete("/two",recursive=True)
     yield from asyncio.sleep(0.3,loop=loop)
     assert not w.running
+    assert w.stopped.done()
 
     yield from w.close()
     yield from w1.close()
@@ -426,6 +431,8 @@ def test_create(client):
         yield from t.tree("/not/here", immediate=True, static=True, create=False)
     w1 = yield from t.tree("/not/here", immediate=True, static=True, create=True)
     w2 = yield from t.tree("/not/here", immediate=True, static=True, create=False)
+    assert not w2.running
+    assert w2.stopped.done()
 
     w2 = yield from t.tree("/not/there", immediate=True, static=True)
     w3 = yield from t.tree("/not/there", immediate=True, static=True, create=False)
