@@ -691,7 +691,7 @@ class EtcDir(EtcBase, MutableMapping):
 		return v
 	__getitem__ = get
 
-	async def subdir(self, *_name, name=(), create=False, recursive=None):
+	async def subdir(self, *_name, name=(), create=None, recursive=None):
 		"""\
 			Utility function to find/create a sub-node.
 			@recursive decides what to do if the node thus encountered
