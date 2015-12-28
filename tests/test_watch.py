@@ -84,10 +84,14 @@ def test_basic_watch(client,loop):
     class xRoot(EtcRoot):
         pass
     types.register(cls=xRoot)
+    @xRoot.register("zwei","und")
+    class xUnd(EtcString):
+        pass
     w = yield from t.tree("/two", immediate=False, static=True, types=types, env="foobar")
     assert isinstance(w,xRoot)
     assert w.env == "foobar"
     assert w['zwei']['und'] == "drei"
+    assert type(w['zwei']._get('und')) is xUnd
     assert w['zwei'].env == "foobar"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
