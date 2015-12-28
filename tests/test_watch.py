@@ -109,7 +109,7 @@ def test_basic_watch(client,loop):
     assert w5['vier'] == "5"
 
     # use typed subtrees
-    w4 = yield from t.tree("/", types=types)
+    w4 = yield from t.tree((), types=types)
     yield from w4.set('two',d(sechs="sieben"))
     w3 = yield from t.tree("/", static=True, types=types)
     assert w3['two']['vier'] == 5
@@ -217,7 +217,7 @@ def test_update_watch(client, loop):
     d=dict
     types = EtcTypes()
     t = client
-    w = yield from t.tree("/two", immediate=False, static=False)
+    w = yield from t.tree(("two",), immediate=False, static=False)
     d1=d(zwei=d(und="drei",oder={}),vier="fünf",sechs="sieben",acht=d(neun="zehn"))
     yield from w.update(d1)
 
@@ -435,13 +435,13 @@ def test_create(client):
     t = client
     with pytest.raises(etcd.EtcdKeyNotFound):
         yield from t.tree("/not/here", immediate=True, static=True, create=False)
-    w1 = yield from t.tree("/not/here", immediate=True, static=True, create=True)
+    w1 = yield from t.tree(('not','here'), immediate=True, static=True, create=True)
     w2 = yield from t.tree("/not/here", immediate=True, static=True, create=False)
     assert not w2.running
     assert w2.stopped.done()
 
     w2 = yield from t.tree("/not/there", immediate=True, static=True)
-    w3 = yield from t.tree("/not/there", immediate=True, static=True, create=False)
+    w3 = yield from t.tree(('not','there'), immediate=True, static=True, create=False)
     w4 = yield from t.tree("/not/there", immediate=True, static=True)
     with pytest.raises(etcd.EtcdAlreadyExist):
         yield from t.tree("/not/there", immediate=True, static=True, create=True)

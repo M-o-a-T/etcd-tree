@@ -194,7 +194,8 @@ class EtcClient(object):
 			actually being present.
 			"""
 
-		key = tuple((k for k in key.split('/') if k != ""))
+		if isinstance(key,str):
+			key = tuple((k for k in key.split('/') if k != ""))
 		xkey = self._extkey(key, _prefix=_prefix)
 
 		if isinstance(sub,str):

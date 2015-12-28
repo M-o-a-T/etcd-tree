@@ -1,3 +1,9 @@
+etcd-tree (0.9.4-1) unstable; urgency=medium
+
+  * Teach .tree() to accept tuples as key.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 28 Dec 2015 22:33:24 +0100
+
 etcd-tree (0.9.3-1) unstable; urgency=medium
 
   * Don't error out when a node's root has gone away during update processing
