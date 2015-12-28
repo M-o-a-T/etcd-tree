@@ -45,7 +45,7 @@ parser.add_option("-p", "--port", dest="port", action="store",
 parser.add_option("-d", "--dump", dest="dump", action="store_true",
     help="show internal data")
 parser.add_option("-i", "--index", dest="index", action="store",
-    type=int, default=None, help="etcd index to start at")
+    type=int, default=0, help="etcd index to start at. If negative, show the newest N entries")
 parser.add_option("-r", "--root", dest="root", action="store",
     default='/', help="Subtree to dump")
 
@@ -69,5 +69,8 @@ async def callback(r):
 		print(r.modifiedIndex,r.action,r.key[len(opts.root):],r.value)
 	else:
 		print(r.modifiedIndex,r.action,r.key[len(opts.root):],r._prev_node.value)
+if opts.index < 0:
+	r = loop.run_until_complete(et.get('/'))
+	opts.index += r.etcd_index+1
 loop.run_until_complete(et.eternal_watch(opts.root, index=opts.index, callback=callback,recursive=True))
 

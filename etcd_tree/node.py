@@ -372,7 +372,14 @@ class EtcBase(object):
 			assert not _force
 		self.notify_seq = seq
 
-		self._later = self._loop.call_later(self.update_delay,self._run_update)
+		try:
+			ud = self.update_delay
+		except AttributeError:
+			# this happens when the root has gone away. Exit.
+			return
+		else:
+			self._later = self._loop.call_later(self.update_delay,self._run_update)
+
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -388,7 +395,7 @@ class EtcBase(object):
 			else:
 				# this node has a running timer. By the invariant it cannot
 				# have (had) blocked children, therefore trying to unblock it
-				# node must be a bug.
+				# now must be a bug.
 				assert not _force
 				p._later.cancel()
 				# The call will be re-scheduled later, when the node unblocks

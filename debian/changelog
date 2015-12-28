@@ -1,3 +1,9 @@
+etcd-tree (0.9.3-1) unstable; urgency=medium
+
+  * Don't error out when a node's root has gone away during update processing
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 28 Dec 2015 16:11:39 +0100
+
 etcd-tree (0.9.2-3) unstable; urgency=medium
 
   * Default for subdir() is create=None
