@@ -32,7 +32,7 @@ import etcd
 import time
 import asyncio
 from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,EtcString,EtcAwaiter, \
-    UnknownNodeError,ReloadData,ReloadRecursive
+    ReloadData,ReloadRecursive
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client

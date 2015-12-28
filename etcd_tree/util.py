@@ -113,6 +113,26 @@ from yaml import safe_load
 from yaml.constructor import SafeConstructor
 
 def from_yaml(path):
-    with open(path) as f:
-        return yaml.safe_load(f)
+	with open(path) as f:
+		return yaml.safe_load(f)
 
+# this is a decorator for an instance-or-class method
+
+from functools import wraps
+
+class hybridmethod(object):
+	def __init__(self, func):
+		self.func = func
+
+	def __get__(self, obj, cls):
+		context = obj if obj is not None else cls
+
+		@wraps(self.func)
+		def hybrid(*args, **kw):
+			return self.func(context, *args, **kw)
+
+		# optional, mimic methods some more
+		hybrid.__func__ = hybrid.im_func = self.func
+		hybrid.__self__ = hybrid.im_self = context
+
+		return hybrid

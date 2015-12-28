@@ -40,6 +40,7 @@ from contextlib import suppress
 import aio_etcd as etcd
 from etcd import EtcdResult
 from functools import wraps
+from .util import hybridmethod
 
 __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue',
 	'EtcString','EtcFloat','EtcInteger',
@@ -221,6 +222,8 @@ class EtcBase(object):
 				if pre is not None:
 					assert pre.name == name
 			else:
+				if pre is None:
+					import pdb;pdb.set_trace()
 				name = pre.name
 			self.name = name
 			self.path = parent.path+(name,)
@@ -235,6 +238,22 @@ class EtcBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 
+	async def _fill_result(self,pre,recursive):
+		"""Copy result data to the object. This may require re-reading recursively."""
+		aw = []
+		conn_get = self._root()._conn.get
+		for c in pre.child_nodes:
+			n = c.name
+			if c.dir and recursive is None:
+				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
+				aw.append(a)
+			else:
+				obj = await self._new(parent=self, key=c.name,
+					pre=(c if recursive or not c.dir else None),
+					recursive=recursive)
+		self.updated(seq=0)
+		return aw
+		
 	def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		yield
@@ -921,8 +940,14 @@ class EtcDir(EtcBase, MutableMapping):
 
 	_types = None
 	_types_from_parent = True
-	_types_recursive = False
 
+	@hybridmethod
+	def register(self, *path,**kw):
+		"""Register a typed lookup."""
+		if self.types is None:
+			self.types = EtcTypes()
+		return self.types.register(*path, **kw)
+		
 	def subtype(self,*path,dir=None,pre=None,recursive=None):
 		"""\
 			Decide which type to use for a new entry.
@@ -931,15 +956,23 @@ class EtcDir(EtcBase, MutableMapping):
 			@recursive is True if the data was retrieved
 			recursively.
 
-			The default is to look up the path in _types;
+			The default is to look up the path in the _types
+			class attribute (use .register() for adding a type);
 			if that doesn't work, ask the parent node.
 			"""
-		if dir is None and pre is not None:
-			dir = pre.dir
-		if self._types is not None:
-			if dir is None:
+		if dir is None:
+			if pre is not None:
+				dir = pre.dir
+			else:
 				raise ReloadData
-			cls = self._types.lookup(*path,dir=dir)
+		types = self._types
+		if types is not None:
+			cls = types.lookup(*path,dir=dir)
+			if cls is not None:
+				return cls
+		ctypes = type(self)._types
+		if ctypes is not None and ctypes is not types:
+			cls = ctypes.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
 		p = self.parent if self._types_from_parent else None
@@ -947,20 +980,6 @@ class EtcDir(EtcBase, MutableMapping):
 			return EtcDir if dir else EtcValue
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
 	
-	async def _fill_result(self,pre,recursive):
-		"""Fill in result data. This may require re-reading recursively."""
-		aw = []
-		conn_get = self._root()._conn.get
-		for c in pre.child_nodes:
-			n = c.name
-			if c.dir and recursive is None:
-				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
-				aw.append(a)
-			else:
-				obj = await self._new(parent=self, key=c.name, pre=(c if recursive else None), recursive=recursive)
-		self.updated(seq=0)
-		return aw
-		
 ##############################################################################
 
 class EtcRoot(EtcDir):
