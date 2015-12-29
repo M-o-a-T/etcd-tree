@@ -967,6 +967,8 @@ class EtcDir(EtcBase, MutableMapping):
 			The default is to look up the path in the _types
 			class attribute (use .register() for adding a type);
 			if that doesn't work, ask the parent node.
+
+			TODO: add a cache with a coalesced _types list.
 			"""
 		if dir is None:
 			if pre is not None:
@@ -978,9 +980,11 @@ class EtcDir(EtcBase, MutableMapping):
 			cls = types.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
-		ctypes = type(self)._types
-		if ctypes is not None and ctypes is not types:
-			cls = ctypes.lookup(*path,dir=dir)
+		for sup in type(self).mro():
+			types = sup.__dict__.get('_types',None)
+			if types is None:
+				continue
+			cls = types.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
 		p = self.parent if self._types_from_parent else None

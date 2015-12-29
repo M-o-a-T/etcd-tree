@@ -1,3 +1,9 @@
+etcd-tree (0.9.5-1) unstable; urgency=medium
+
+  * Subtype lookup: check all superclasses
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 29 Dec 2015 12:03:37 +0100
+
 etcd-tree (0.9.4-1) unstable; urgency=medium
 
   * Teach .tree() to accept tuples as key.
