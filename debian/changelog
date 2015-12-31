@@ -1,3 +1,9 @@
+etcd-tree (0.9.6-1) unstable; urgency=medium
+
+  * Type lookup: allow path strings
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 31 Dec 2015 07:40:37 +0100
+
 etcd-tree (0.9.5-1) unstable; urgency=medium
 
   * Subtype lookup: check all superclasses

@@ -54,8 +54,12 @@ def test_basic_watch(client,loop):
             raise RuntimeError("RIP")
     # reg funcion shall return the right thing
     types.step('two',dest=twotypes)
+    assert types[('two','die')] is rDie
     assert types.lookup(('two','die'),dir=False) is rDie
+    assert types.lookup('two','die',dir=False) is rDie
+    assert types.lookup('two/die',dir=False) is rDie
     assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rDie
+    assert types.lookup('two/die',dir=False,raw=True).lookup(dir=False) is rDie
     i = types.register("two","vier", cls=EtcInteger)
     assert i is EtcInteger
     i = types.register("*/vierixx")(EtcInteger)

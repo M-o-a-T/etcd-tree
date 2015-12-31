@@ -444,19 +444,32 @@ class EtcTypes(object):
 
 	def step(self,key, dest=None):
 		"""\
-			Lookup a single entry, with auto-generation of new nodes.
+			Lookup a path, with auto-generation of new nodes.
 			This is for registration only! For discovery, use
 			.lookup(raw=True).
 
 			You can set @dest to an existing EtcTypes object if you want to
 			prepend to an existing tree.
 			"""
-		assert key != ''
-		res = self.nodes.get(key,None)
+		if not key:
+			assert dest is None or dest is self
+			return self
+		if isinstance(key,str):
+			key = key.split('/')
+		for k in key[:-1]:
+			assert k != ''
+			res = self.nodes.get(k,None)
+			if res is None:
+				res = EtcTypes()
+				self.nodes[k] = res
+			self = res
+		k = key[-1]
+		assert k != ''
+		res = self.nodes.get(k,None)
 		if res is None:
 			if dest is None:
 				dest = EtcTypes()
-			self.nodes[key] = res = dest
+			self.nodes[k] = res = dest
 		else:
 			assert dest is None or dest is res
 		return res
@@ -480,26 +493,19 @@ class EtcTypes(object):
 
 	def __getitem__(self,path):
 		"""Shortcut to directly lookup a non-directory node"""
-		path = tuple(p for p in path.split('/'))
-		for p in path:
-			self = self.step(p)
+		self = self.step(path)
 		return self.type[0]
 
 	def __setitem__(self,path,value):
 		"""Shortcut to register a non-directory node"""
-		path = tuple(p for p in path.split('/'))
-		for p in path:
-			self = self.step(p)
+		self = self.step(path)
 		self._register(value)
 
 	def register(self, *path, cls=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
-		if len(path) == 1:
-			path = tuple(p for p in path[0].split('/'))
-		for p in path:
-			self = self.step(p)
+		self = self.step(path)
 		if cls is None:
 			return self._register
 		else:
@@ -527,10 +533,13 @@ class EtcTypes(object):
 			@dir must be True (a directory) or False (an end node).
 			If @raw is True, returns the EtcTypes entry instead of the class.
 			"""
-		if len(path) == 1 and not isinstance(path[0],str):
+		if len(path) == 1:
 			path = path[0]
+			if isinstance(path,str):
+				path = path.split('/')
 		nodes = [(".",self)]
 		for p in path:
+			assert p != ''
 			cn = []
 			for k,n in nodes:
 				for nk,nn in n.items(p):
