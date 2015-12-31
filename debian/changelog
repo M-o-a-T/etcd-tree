@@ -1,3 +1,10 @@
+etcd-tree (0.9.7-1) unstable; urgency=medium
+
+  * Export EtcAwaiter.load.
+  * Add a stub so that the caller doesn't need to test.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 31 Dec 2015 19:57:54 +0100
+
 etcd-tree (0.9.6-1) unstable; urgency=medium
 
   * Type lookup: allow path strings

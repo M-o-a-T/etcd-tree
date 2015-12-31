@@ -205,7 +205,7 @@ class EtcBase(object):
 
 		if irec is False:
 			for a in aw:
-				await a._load_data(recursive=False)
+				await a.load(recursive=False)
 		if _fill is not None:
 			for k,v in getattr(_fill,'_data',{}).items():
 				if k not in self._data and type(v) is EtcAwaiter:
@@ -257,6 +257,10 @@ class EtcBase(object):
 	def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		yield
+		return self
+
+	async def load(self, recursive=None, pre=None):
+		"Loader stub for code that's too lazy for testing. Do nothing."
 		return self
 
 	@property
@@ -537,11 +541,11 @@ class EtcAwaiter(EtcBase):
 	_get = __getitem__
 
 	def __await__(self):
-		return self._load_data(None).__await__()
+		return self.load(None).__await__()
 	def __iter__(self):
-		return self._load_data(None).__await__()
+		return self.load(None).__await__()
 
-	async def _load_data(self,recursive, pre=None):
+	async def load(self,recursive=None, pre=None):
 		async with self._lock:
 			if self._done is not None:
 				return self._done # pragma: no cover ## concurrency
@@ -714,7 +718,7 @@ class EtcDir(EtcBase, MutableMapping):
 		async def step(n,last=False):
 			nonlocal self
 			if type(self) is EtcAwaiter:
-				self = await self._load_data(None)
+				self = await self.load(None)
 			if last and create and n in self:
 				pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
 				raise RuntimeError("This should exist")
@@ -734,7 +738,7 @@ class EtcDir(EtcBase, MutableMapping):
 			await step(n,True)
 
 		if isinstance(self,EtcAwaiter):
-			self = await self._load_data(recursive)
+			self = await self.load(recursive)
 		return self
 
 	def tagged(self,tag):

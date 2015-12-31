@@ -401,7 +401,10 @@ class EtcWatcher(object):
 			for k in key:
 				try:
 					r = r._get(k)
+					# will not create an EtcAwaiter
 				except KeyError:
+					return
+				if type(r) is EtcAwaiter:
 					return
 			r._ext_delete()
 		else:
@@ -409,20 +412,20 @@ class EtcWatcher(object):
 #				pn = getattr(x,'_prev_node',None)
 #				if pn is not None:
 #					x.createdIndex = pn.createdIndex
-			for k in key[:-1]:
-				try:
-					r = r[k]
-				except KeyError:
-					r = await r._new(parent=r,key=k,recursive=None)
 			if key:
+				for k in key[:-1]:
+					try:
+						r = r[k]
+					except KeyError:
+						r = await r._new(parent=r,key=k,recursive=None)
 				try:
-					# don't resolve EtcValue
+					# don't resolve EtcValue or EtcAwaiter
 					r = r._get(key[-1])
 				except KeyError:
-					r = await r._new(parent=r,key=key,pre=x,recursive=None)
+					r = await r._new(parent=r,key=key,pre=x,recursive=False)
 				else:
 					if type(r) is EtcAwaiter:
-						r = await r._load_data(pre=x,recursive=None)
+						r = await r.load(pre=x,recursive=False)
 					else:
 						r._ext_update(x)
 			else:
