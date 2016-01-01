@@ -211,6 +211,7 @@ class EtcBase(object):
 				if k not in self._data and type(v) is EtcAwaiter:
 					self._data[k] = v
 			self._later_mon.update(_fill._later_mon)
+		await self.init()
 		return self
 
 	def __init__(self, pre, name=None,parent=None):
@@ -252,9 +253,13 @@ class EtcBase(object):
 				obj = await self._new(parent=self, key=c.name,
 					pre=(c if recursive or not c.dir else None),
 					recursive=recursive)
-		self.updated(seq=0)
 		return aw
 		
+	async def init(self):
+		"""Last step after loading.
+			Do things like querying the remote system here."""
+		self.updated(seq=0)
+
 	def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		yield
