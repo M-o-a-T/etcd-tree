@@ -192,7 +192,7 @@ class EtcBase(object):
 			if pre is None:
 				kw['pre'] = pre = await conn.read(key)
 			if pre.dir:
-				aw = await self._fill_result(pre=pre,recursive=irec)
+				aw = await self._fill_data(pre=pre,recursive=irec)
 		except ReloadRecursive:
 			if recursive:
 				raise RuntimeError("You got recursive data but raised ReloadRecursive (%s)" % pre.key)
@@ -201,7 +201,7 @@ class EtcBase(object):
 			if self is None:
 				self = cls_getter()(**kw)
 			if pre.dir:
-				aw = await self._fill_result(pre=pre,recursive=True)
+				aw = await self._fill_data(pre=pre,recursive=True)
 
 		if irec is False:
 			for a in aw:
@@ -239,7 +239,7 @@ class EtcBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 
-	async def _fill_result(self,pre,recursive):
+	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
 		aw = []
 		conn_get = self._root()._conn.get
