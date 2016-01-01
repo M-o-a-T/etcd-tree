@@ -1,3 +1,9 @@
+etcd-tree (0.9.9-1) unstable; urgency=medium
+
+  * Allow passing a list to EtcDir.subdir().
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 01 Jan 2016 19:52:54 +0100
+
 etcd-tree (0.9.8-1) unstable; urgency=medium
 
   * Add an async .init() method to tre nodes

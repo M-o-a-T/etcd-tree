@@ -712,7 +712,9 @@ class EtcDir(EtcBase, MutableMapping):
 		if isinstance(name,str):
 			name = name.split('/')
 		if len(_name) == 1:
-			_name = _name[0].split('/')
+			_name = _name[0]
+			if isinstance(_name,str):
+				_name = _name.split('/')
 
 		async def step(n,last=False):
 			nonlocal self

@@ -167,6 +167,7 @@ def test_update_watch_direct(client):
         yield from w.subdir('zwei','drei','der', name=":tag", create=False)
     tag = yield from w.subdir("zwei/drei",name="der/:tag", create=True)
     tug = yield from w.subdir("zwei/drei/vier",name="das/:tagg")
+    tug = yield from w.subdir(('zwei','drei','vier'),name="das/:tagg")
     tug2 = yield from w.subdir("zwei/drei/vier",name="das/:tagg")
     yield from tag.set("hello","kitty")
     yield from tug.set("hello","kittycat")
