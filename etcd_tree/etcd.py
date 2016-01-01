@@ -445,7 +445,7 @@ class EtcTypes(object):
 	def __repr__(self): # pragma: no cover
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
-	def step(self,key, dest=None):
+	def step(self,*key, dest=None):
 		"""\
 			Lookup a path, with auto-generation of new nodes.
 			This is for registration only! For discovery, use
@@ -454,6 +454,8 @@ class EtcTypes(object):
 			You can set @dest to an existing EtcTypes object if you want to
 			prepend to an existing tree.
 			"""
+		if len(key) == 1:
+			key = key[0]
 		if not key:
 			assert dest is None or dest is self
 			return self
