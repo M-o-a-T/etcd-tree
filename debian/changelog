@@ -1,3 +1,10 @@
+etcd-tree (0.9.8-1) unstable; urgency=medium
+
+  * Add an async .init() method to tre nodes
+  * teach EtcTypes.step() to accept multiple arguments
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 01 Jan 2016 18:37:43 +0100
+
 etcd-tree (0.9.7-1) unstable; urgency=medium
 
   * Export EtcAwaiter.load.
