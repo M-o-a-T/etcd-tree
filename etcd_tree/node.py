@@ -248,6 +248,7 @@ class EtcBase(object):
 				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
 				aw.append(a)
 			else:
+				# TODO: do this in parallel.
 				obj = await self._new(parent=self, key=c.name,
 					pre=(c if recursive or not c.dir else None),
 					recursive=recursive)
