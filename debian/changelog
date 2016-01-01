@@ -1,3 +1,9 @@
+etcd-tree (0.9.10-1) unstable; urgency=medium
+
+  * Add an EtcBase.this_class() classmethod to facilitate overriding
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 01 Jan 2016 21:13:38 +0100
+
 etcd-tree (0.9.9-1) unstable; urgency=medium
 
   * Allow passing a list to EtcDir.subdir().

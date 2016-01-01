@@ -48,18 +48,22 @@ def test_basic_watch(client,loop):
     @twotypes.register()
     class rTwo(EtcDir):
         pass
-    @twotypes.register("die")
     class rDie(EtcValue):
         def has_update(self):
             raise RuntimeError("RIP")
+    @twotypes.register("die")
+    class rPreDie(EtcValue):
+        @classmethod
+        async def this_class(cls,**kw):
+            return rDie
     # reg funcion shall return the right thing
     types.step('two',dest=twotypes)
-    assert types[('two','die')] is rDie
-    assert types.lookup(('two','die'),dir=False) is rDie
-    assert types.lookup('two','die',dir=False) is rDie
-    assert types.lookup('two/die',dir=False) is rDie
-    assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rDie
-    assert types.lookup('two/die',dir=False,raw=True).lookup(dir=False) is rDie
+    assert types[('two','die')] is rPreDie
+    assert types.lookup(('two','die'),dir=False) is rPreDie
+    assert types.lookup('two','die',dir=False) is rPreDie
+    assert types.lookup('two/die',dir=False) is rPreDie
+    assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rPreDie
+    assert types.lookup('two/die',dir=False,raw=True).lookup(dir=False) is rPreDie
     i = types.register("two","vier", cls=EtcInteger)
     assert i is EtcInteger
     i = types.register("*/vierixx")(EtcInteger)

@@ -175,17 +175,23 @@ class EtcBase(object):
 			cls_getter = lambda: cls
 			kw['conn'] = conn
 			kw['key'] = key
+
+		async def get_cls():
+			cls = cls_getter()
+			cls = await cls.this_class(pre=pre,recursive=recursive)
+			return cls(**kw)
+
 		self = None
 		try:
 			if recursive and not pre:
 				raise ReloadRecursive
 			try:
-				self = cls_getter()(**kw)
+				self = await get_cls()
 			except ReloadData:
 				assert pre is None
 				kw['pre'] = pre = await conn.read(key)
 				recursive = False
-				self = cls_getter()(**kw)
+				self = await get_cls()
 				# This way, if determining the class requires
 				# recursive content, we do not read twice
 			if pre is None:
@@ -198,7 +204,7 @@ class EtcBase(object):
 			kw['pre'] = pre = await conn.read(key, recursive=True)
 			recursive = True
 			if self is None:
-				self = cls_getter()(**kw)
+				self = await get_cls()
 			if pre.dir:
 				await self._fill_data(pre=pre,recursive=True)
 
@@ -234,6 +240,11 @@ class EtcBase(object):
 			self._ttl = pre.ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
+
+	@classmethod
+	async def this_class(cls,pre,recursive):
+		"""A method to intercept class creation."""
+		return cls
 
 	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
