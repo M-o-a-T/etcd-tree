@@ -114,6 +114,51 @@ class MonitorCallback(object):
 	def __call__(self,x):
 		return self.callback(x)
 
+# Helper for possibly-asynchronously iterating through a tree
+
+class _tagged_iter:
+	def __init__(self,tree,tag):
+		import pdb;pdb.set_trace()
+		assert tag[0] == ':'
+		self.trees = [tree]
+		self.tag = tag
+		self.dirs = []
+	async def __aiter__(self):
+		return self
+	def __iter__(self):
+		return self
+	async def __anext__(self):
+		while not self.dirs:
+			if not self.trees:
+				raise StopAsyncIteration
+			t = await self.trees.pop()
+			for k,v in t.items():
+				if k == self.tag:
+					self.dirs.append(v)
+				elif k[0] == ':':
+					pass
+				elif type(v) is EtcAwaiter:
+					self.trees.append(await v)
+				elif isinstance(v,EtcDir):
+					self.trees.append(v)
+		return (await self.dirs.pop())
+
+	def __next__(self):
+		while not self.dirs:
+			if not self.trees:
+				raise StopIteration
+			t = self.trees.pop()
+			for k,v in t.items():
+				if k == self.tag:
+					self.dirs.append(v)
+				elif k[0] == ':':
+					pass
+				elif isinstance(v,EtcAwaiter):
+					raise RuntimeError("'%s' is not preloaded. Use 'async for'." % ('/'.join(v.path),))
+				elif isinstance(v,EtcDir):
+					self.trees.append(v)
+		return self.dirs.pop()
+
 ##############################################################################
 
 class EtcBase(object):
@@ -754,15 +799,8 @@ class EtcDir(EtcBase, MutableMapping):
 		return self
 
 	def tagged(self,tag):
-		"""Generator to find all sub-nodes with a tag"""
-		assert tag[0] == ':'
-		for k,v in self.items():
-			if k == tag:
-				yield v
-			elif k[0] == ':':
-				pass
-			elif isinstance(v,EtcDir):
-				yield from v.tagged(tag)
+		"""async Generator to find all sub-nodes with a tag"""
+		return _tagged_iter(self,tag)
 
 	def __contains__(self,key):
 		return key in self._data

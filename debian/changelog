@@ -1,3 +1,9 @@
+etcd-tree (0.9.11-1) unstable; urgency=medium
+
+  * Convert the .tagged() generator to a sync+async iterator.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 01 Jan 2016 22:11:59 +0100
+
 etcd-tree (0.9.10-1) unstable; urgency=medium
 
   * Add an EtcBase.this_class() classmethod to facilitate overriding

@@ -157,37 +157,37 @@ def test_basic_watch(client,loop):
     yield from w4.close()
 
 @pytest.mark.run_loop
-@asyncio.coroutine
-def test_update_watch_direct(client):
+async def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    wr,w = yield from t.tree("/", sub='two', immediate=False, static=False,update_delay=0.25)
+    wr,w = await t.tree("/", sub='two', immediate=False, static=False,update_delay=0.25)
+    wi = await t.tree('/two', immediate=None)
     d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
-    mod = yield from t._f(d2,delete=True)
-    yield from wr.wait(mod=mod)
+    mod = await t._f(d2,delete=True)
+    await wr.wait(mod=mod)
 
     with pytest.raises(KeyError):
-        yield from w.subdir('zwei','drei','der', name=":tag", create=False)
-    tag = yield from w.subdir("zwei/drei",name="der/:tag", create=True)
-    tug = yield from w.subdir("zwei/drei/vier",name="das/:tagg")
-    tug = yield from w.subdir(('zwei','drei','vier'),name="das/:tagg")
-    tug2 = yield from w.subdir("zwei/drei/vier",name="das/:tagg")
-    yield from tag.set("hello","kitty")
-    yield from tug.set("hello","kittycat")
+        await w.subdir('zwei','drei','der', name=":tag", create=False)
+    tag = await w.subdir("zwei/drei",name="der/:tag", create=True)
+    tug = await w.subdir("zwei/drei/vier",name="das/:tagg")
+    tug = await w.subdir(('zwei','drei','vier'),name="das/:tagg")
+    tug2 = await w.subdir("zwei/drei/vier",name="das/:tagg")
+    await tag.set("hello","kitty")
+    await tug.set("hello","kittycat")
     assert tug2['hello'] == 'kittycat'
 
     w['vier']
     w['vier']['auch']
-    yield from w['vier'].delete('auch',prev='xxx')
+    await w['vier'].delete('auch',prev='xxx')
     with pytest.raises(KeyError):
         w['vier']['auch']
     with pytest.raises(KeyError):
         w['zwei']['zehn']
     # Now test that adding a node does the right thing
-    yield from w['vier'].set('auch',"ja1")
-    yield from w['zwei'].set('zehn',d(zwanzig=30,vierzig=d(fuenfzig=60)))
-    yield from w['zwei'].set('und', "weniger")
+    await w['vier'].set('auch',"ja1")
+    await w['zwei'].set('zehn',d(zwanzig=30,vierzig=d(fuenfzig=60)))
+    await w['zwei'].set('und', "weniger")
 
     assert w['zwei']['und'] == "weniger"
     assert w['zwei']['zehn']['zwanzig'] == "30"
@@ -199,24 +199,29 @@ def test_update_watch_direct(client):
         n += 1
         assert k['hello']=='kitty'
     assert n==1
+    n = 0
+    async for k in wi.tagged(':tag'):
+        n += 1
+        assert k['hello']=='kitty'
+    assert n==1
 
-    
-    m = yield from w.delete('vier')
-    yield from wr.wait(m)
+    m = await w.delete('vier')
+    await wr.wait(m)
     with pytest.raises(KeyError):
         w['vier']
 
     # etcd.EtcdNotFile is stupid. Bug in etcd (issue#4075).
     with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['zwei']
-        yield from wr.wait(m)
+        await wr.wait(m)
 
-    m = yield from w.delete('zwei', recursive=True)
-    yield from wr.wait(m)
+    m = await w.delete('zwei', recursive=True)
+    await wr.wait(m)
     with pytest.raises(KeyError):
         w['zwei']
 
-    yield from wr.close()
+    await wr.close()
+    await wi.close()
 
 @pytest.mark.run_loop
 @asyncio.coroutine
