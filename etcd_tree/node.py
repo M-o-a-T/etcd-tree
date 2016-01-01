@@ -145,7 +145,6 @@ class EtcBase(object):
 			fetched from etcd.
 			"""
 		irec = recursive
-		aw = ()
 		if pre is not None:
 			kw['pre'] = pre
 			if key is None:
@@ -192,7 +191,7 @@ class EtcBase(object):
 			if pre is None:
 				kw['pre'] = pre = await conn.read(key)
 			if pre.dir:
-				aw = await self._fill_data(pre=pre,recursive=irec)
+				await self._fill_data(pre=pre,recursive=irec)
 		except ReloadRecursive:
 			if recursive:
 				raise RuntimeError("You got recursive data but raised ReloadRecursive (%s)" % pre.key)
@@ -201,11 +200,8 @@ class EtcBase(object):
 			if self is None:
 				self = cls_getter()(**kw)
 			if pre.dir:
-				aw = await self._fill_data(pre=pre,recursive=True)
+				await self._fill_data(pre=pre,recursive=True)
 
-		if irec is False:
-			for a in aw:
-				await a.load(recursive=False)
 		if _fill is not None:
 			for k,v in getattr(_fill,'_data',{}).items():
 				if k not in self._data and type(v) is EtcAwaiter:
@@ -241,19 +237,16 @@ class EtcBase(object):
 
 	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
-		aw = []
 		conn_get = self._root()._conn.get
 		for c in pre.child_nodes:
 			n = c.name
 			if c.dir and recursive is None:
 				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
-				aw.append(a)
 			else:
 				# TODO: do this in parallel.
 				obj = await self._new(parent=self, key=c.name,
 					pre=(c if recursive or not c.dir else None),
 					recursive=recursive)
-		return aw
 		
 	async def init(self):
 		"""Last step after loading.
