@@ -978,6 +978,9 @@ class EtcDir(EtcBase, MutableMapping):
 			class attribute (use .register() for adding a type);
 			if that doesn't work, ask the parent node.
 
+			This method is used for looking up value conversions.
+			Thus, value types should never depend on non-path data.
+
 			TODO: add a cache with a coalesced _types list.
 			"""
 		if dir is None:
