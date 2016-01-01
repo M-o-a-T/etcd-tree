@@ -1,3 +1,9 @@
+etcd-tree (0.9.12-1) unstable; urgency=medium
+
+  * Forgot to remove two pdb calls. Owch.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 01 Jan 2016 22:16:16 +0100
+
 etcd-tree (0.9.11-1) unstable; urgency=medium
 
   * Convert the .tagged() generator to a sync+async iterator.

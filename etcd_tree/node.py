@@ -118,7 +118,6 @@ class MonitorCallback(object):
 
 class _tagged_iter:
 	def __init__(self,tree,tag):
-		import pdb;pdb.set_trace()
 		assert tag[0] == ':'
 		self.trees = [tree]
 		self.tag = tag
@@ -270,8 +269,6 @@ class EtcBase(object):
 				if pre is not None:
 					assert pre.name == name
 			else:
-				if pre is None:
-					import pdb;pdb.set_trace()
 				name = pre.name
 			self.name = name
 			self.path = parent.path+(name,)
