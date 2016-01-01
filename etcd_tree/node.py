@@ -195,7 +195,7 @@ class EtcBase(object):
 				aw = await self._fill_result(pre=pre,recursive=irec)
 		except ReloadRecursive:
 			if recursive:
-				raise RuntimeError("You raised got recursive data but raised ReloadRecursive (%s)" % pre.key)
+				raise RuntimeError("You got recursive data but raised ReloadRecursive (%s)" % pre.key)
 			kw['pre'] = pre = await conn.read(key, recursive=True)
 			recursive = True
 			if self is None:
