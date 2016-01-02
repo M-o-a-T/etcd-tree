@@ -365,6 +365,8 @@ class EtcWatcher(object):
 				logger.debug("IN: %s",repr(x.__dict__))
 				try:
 					await self._watch_write(x)
+				except asyncio.CancelledError as e:
+					logger.debug("Write watcher cancelled")
 				except Exception as e:
 					logger.exception("Error in write watcher")
 					if not self.stopped.done():
