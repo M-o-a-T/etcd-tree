@@ -367,6 +367,7 @@ class EtcWatcher(object):
 					await self._watch_write(x)
 				except asyncio.CancelledError as e:
 					logger.debug("Write watcher cancelled")
+					raise
 				except Exception as e:
 					logger.exception("Error in write watcher")
 					if not self.stopped.done():
@@ -385,6 +386,7 @@ class EtcWatcher(object):
 			raise
 		except asyncio.CancelledError:
 			logger.debug("READER cancelled")
+			raise
 		except BaseException as e:
 			logger.exception("READER died")
 			if not self.stopped.done():
