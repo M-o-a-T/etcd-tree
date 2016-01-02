@@ -1,3 +1,9 @@
+etcd-tree (0.9.13-1) unstable; urgency=medium
+
+  * client.set: add an explicit create=True/False/None argument
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 02 Jan 2016 17:34:24 +0100
+
 etcd-tree (0.9.12-1) unstable; urgency=medium
 
   * Forgot to remove two pdb calls. Owch.

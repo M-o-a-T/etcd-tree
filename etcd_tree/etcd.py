@@ -146,28 +146,41 @@ class EtcClient(object):
 		self.last_mod = res.modifiedIndex
 		return res
 
-	async def set(self, key, value, prev=_NOTGIVEN, _prefix=False, index=None, **kw):
+	async def set(self, key, value, prev=None, create=None, _prefix=False, index=None, **kw):
 		"""\
 			Either create or update a value.
 
 			@key: the object path.
 
+			@value: the value of the node, for non-directories
+
 			@ttl: time-to-live in seconds.
 
 			@append=True: generate a new guaranteed-unique and sequential entry.
 
-			@dir=True: generate a directory entry
+			@dir=True: generate/update a directory entry
+
+			@prev: the previous value; only when @dir=False and @create!=True
+
+			@index: the previous modification stamp; only when @dir=False and @create!=True
 
 			"""
 		key = self._extkey(key, _prefix=_prefix)
 		logger.debug("Write %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
-		if prev is _NOTGIVEN and index is None:
+		if kw.get('append',False):
+			assert prev is None, prev
+			assert index is None, index
+			assert create is not False, create
+		elif create is True:
 			kw['prevExist'] = False
-		elif not kw.get('append',False):
-			kw['prevExist'] = True
+			assert prev is None
+			assert index is None
+		else:
+			if create is False:
+				kw['prevExist'] = True
 			if index is not None:
 				kw['prevIndex'] = index
-			if prev not in (None,_NOTGIVEN):
+			if prev is not None:
 				kw['prevValue'] = prev
 
 		try:

@@ -348,11 +348,9 @@ class EtcBase(object):
 		return self._ttl - (time.time()-self._timestamp)
 	def _set_ttl(self,ttl):
 		kw = {}
-		if self._is_dir:
-			kw['prev'] = None
-		else:
+		if not self._is_dir:
 			kw['index'] = self._seq
-		self._task(self.root._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		self._task(self.root._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
@@ -361,11 +359,9 @@ class EtcBase(object):
 		"""Coroutine to set/update this node's TTL"""
 		root=self.root
 		kw = {}
-		if self._is_dir:
-			kw['prev'] = None
-		else:
+		if not self._is_dir:
 			kw['index'] = self._seq
-		r = await root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, **kw)
+		r = await root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
