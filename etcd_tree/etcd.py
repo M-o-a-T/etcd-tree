@@ -527,7 +527,7 @@ class EtcTypes(object):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
-		self = self.step(path)
+		self = self.step(*path)
 		if cls is None:
 			return self._register
 		else:

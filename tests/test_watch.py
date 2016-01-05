@@ -345,18 +345,18 @@ def test_update_watch(client, loop):
     assert not w['zwei']._later_mon
     assert not w['zwei']._get('und')._later_mon
 
-    types.register("**","new_a", cls=EtcString)
-    types.register("**","new_b", cls=EtcString)
+    types.register("**","new_a", cls=EtcInteger)
+    types.register(("**","new_b"), cls=EtcInteger)
     mod = yield from t._f(d2,delete=True)
     yield from w1.wait(mod)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
-    w1['vier']['new_a'] = "e_a"
+    w1['vier']['new_a'] = 4242
     yield from w1.wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
-    assert w1['vier']['new_a'] == "e_a"
+    assert w1['vier']['new_a'] == 4242
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = yield from t._f(d1)
@@ -365,12 +365,12 @@ def test_update_watch(client, loop):
     with pytest.raises(KeyError):
         w1['vier']['new_b']
 
-    d1=d(two=d(vier=d(c="x",d="y",new_b="z")))
+    d1=d(two=d(vier=d(c="x",d="y",new_b=123)))
     mod = yield from t._f(d1)
     yield from w1.wait(mod)
     assert w1['vier']['c'] == "x"
     assert w1['vier']['d'] == "y"
-    assert w1['vier']['new_b'] == "z"
+    assert w1['vier']['new_b'] == 123
     yield from w.wait(mod)
 
     assert len(w['vier']) == 7,list(w['vier'])
