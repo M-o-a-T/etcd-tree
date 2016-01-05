@@ -1,3 +1,9 @@
+etcd-tree (0.9.16-1) unstable; urgency=medium
+
+  * Allow EtcBase.env to be overridden in subtrees
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 05 Jan 2016 04:38:24 +0100
+
 etcd-tree (0.9.15-1) unstable; urgency=medium
 
   * Missed a call to .step

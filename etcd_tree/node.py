@@ -306,6 +306,9 @@ class EtcBase(object):
 			Do things like querying the remote system here."""
 		self.updated(seq=0)
 
+	def __hash__(self):
+		return hash(self.path)
+
 	def __await__(self):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		yield
@@ -316,17 +319,24 @@ class EtcBase(object):
 		return self
 
 	@property
+	def parent(self):
+		p = self._parent
+		return None if p is None else p()
+
+	@property
 	def root(self):
 		return self._root()
 
 	@property
 	def env(self):
 		if self._env is _NOTGIVEN:
-			root = self.root
-			if root is None: # pragma: no cover
-				return None
-			self._env = root.env
+			self._env = self.parent.env
 		return self._env
+	@env.setter
+	def env(self, value):
+		if self._env is not _NOTGIVEN:
+			raise RuntimeError("Tried to update env from %s to %s"%(self._env,value))
+		self._env = value
 
 	def _task(self,p,*a,**k):
 		self.root._task_do(p,*a,**k)
@@ -454,11 +464,6 @@ class EtcBase(object):
 				p._later = 1
 				return
 			p = p._parent
-
-	@property
-	def parent(self):
-		p = self._parent
-		return None if p is None else p()
 
 	def _run_update(self):
 		"""Timer callback to run a node's callback."""
@@ -629,6 +634,9 @@ class EtcValue(EtcBase):
 		super().__init__(pre=pre, **kw)
 		self._value = self._load(pre.value)
 		self.updated(0)
+
+	def __hash__(self):
+		return hash(self.path)
 
 	# used for testing
 	def __eq__(self, other):
@@ -969,6 +977,9 @@ class EtcDir(EtcBase, MutableMapping):
 		for d in list(self._data.values()):
 			d._ext_delete()
 		super()._ext_delete()
+
+	def __hash__(self):
+		return hash(self.path)
 
 	# used for testing
 	def __eq__(self, other):

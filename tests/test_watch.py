@@ -86,7 +86,7 @@ def test_basic_watch(client,loop):
 
     d=dict
     t = client
-    d1=d(one="eins",two=d(zwei=d(und="drei"),vier="5"),x="y")
+    d1=d(one="eins",two=d(zwei=d(und="drei",a=d(b=d(c='d'))),vier="5"),x="y")
     yield from t._f(d1)
     # basic access, each directory separately
     class xRoot(EtcRoot):
@@ -98,9 +98,19 @@ def test_basic_watch(client,loop):
     w = yield from t.tree("/two", immediate=False, static=True, types=types, env="foobar")
     assert isinstance(w,xRoot)
     assert w.env == "foobar"
+    w['zwei'].env = "baba"
+    with pytest.raises(RuntimeError):
+        w['zwei'].env = "nope"
+    with pytest.raises(RuntimeError):
+        w.env = "nope"
+    assert w['zwei']._get('und').env == "baba"
+    assert w['zwei']['a']['b'].env == "baba"
+    with pytest.raises(RuntimeError):
+        w['zwei']['a'].env = "nope"
+
     assert w['zwei']['und'] == "drei"
     assert type(w['zwei']._get('und')) is xUnd
-    assert w['zwei'].env == "foobar"
+    assert w['zwei'].env == "baba"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
         w['x']
@@ -131,7 +141,8 @@ def test_basic_watch(client,loop):
     res=set()
     for v in w3['two']['zwei'].values():
         assert not isinstance(v,EtcValue)
-        res.add(v)
+        if not isinstance(v,EtcDir):
+            res.add(v)
     assert res == {"drei"}
 
     res=set()
