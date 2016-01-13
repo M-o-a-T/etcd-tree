@@ -315,7 +315,6 @@ class EtcWatcher(object):
 				r.cancel()
 			except RuntimeError: # pragma: no cover ## event loop might be closed
 				pass
-			r = None
 
 	async def close(self):
 		if not self.stopped.done():
@@ -327,7 +326,6 @@ class EtcWatcher(object):
 				await r
 			except asyncio.CancelledError: # pragma: no cover
 				pass
-		self._kill()
 
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
@@ -335,9 +333,14 @@ class EtcWatcher(object):
 
 	async def sync(self, mod=None):
 		"""Wait for pending updates"""
-		if mod is None or mod < self.conn.last_mod:
-			mod = self.conn.last_mod
-		logger.debug("Syncing, wait for %d",mod)
+		root = self.root()
+		if root is not None:
+			root = root.root # may be a subdir
+		if root is None:
+			return
+		if mod is None or mod < root.last_mod:
+			mod = root.last_mod
+		logger.debug("Syncing, wait for %d: %s",mod, id(self))
 		w = None
 		async with self.uptodate:
 			while self._reader is not None and self.last_seen < mod:
@@ -345,7 +348,7 @@ class EtcWatcher(object):
 					raise WatchStopped() from self.stopped.exception()
 				await self.uptodate.wait()
 				                                # processing got done during .acquire()
-		logger.debug("Syncing, done, at %d",self.last_seen)
+		logger.debug("Syncing, done, at %d: %s",self.last_seen, id(self))
 		if self.stopped.done():
 			raise WatchStopped() from self.stopped.exception()
 
@@ -362,7 +365,7 @@ class EtcWatcher(object):
 		# is completed. Thus we need to restart watching at the subtree.
 		try:
 			async def cb(x):
-				logger.debug("IN: %s",repr(x.__dict__))
+				logger.debug("IN: %s %s",id(self),repr(x.__dict__))
 				try:
 					await self._watch_write(x)
 				except asyncio.CancelledError as e:
@@ -408,7 +411,6 @@ class EtcWatcher(object):
 		if r is None: # pragma: no cover
 			raise etcd.StopWatching
 
-		logger.debug("RUN: %s",repr(x.__dict__))
 		if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
 			return # sometimes we get the parent
 		key = x.key[len(self.extkey):]
@@ -451,7 +453,7 @@ class EtcWatcher(object):
 		async with self.uptodate:
 			self.last_seen = x.modifiedIndex
 			self.uptodate.notify_all()
-			logger.debug("DONE %d",x.modifiedIndex)
+			logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
 
 class EtcTypes(object):
 

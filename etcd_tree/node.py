@@ -360,7 +360,7 @@ class EtcBase(object):
 		kw = {}
 		if not self._is_dir:
 			kw['index'] = self._seq
-		self._task(self.root._conn.set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
+		self._task(self.root._set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
@@ -371,7 +371,7 @@ class EtcBase(object):
 		kw = {}
 		if not self._is_dir:
 			kw['index'] = self._seq
-		r = await root._conn.set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
+		r = await root._set(self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
@@ -657,9 +657,9 @@ class EtcValue(EtcBase):
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		self._task(self.root._conn.set,self.path,self._dump(value), index=self._seq)
+		self._task(self.root._set,self.path,self._dump(value), index=self._seq)
 	def _del_value(self):
-		self._task(self.root._conn.delete,self.path, index=self._seq)
+		self._task(self.root._delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for EtcDir.delete
 
@@ -667,7 +667,7 @@ class EtcValue(EtcBase):
 		root = self.root
 		if root is None:
 			return # pragma: no cover
-		r = await root._conn.set(self.path,self._dump(value), index=self._seq, ttl=ttl)
+		r = await root._set(self.path,self._dump(value), index=self._seq, ttl=ttl)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
@@ -677,7 +677,7 @@ class EtcValue(EtcBase):
 		root = self.root
 		if root is None:
 			return # pragma: no cover
-		r = await root._conn.delete(self.path, index=self._seq, **kw)
+		r = await root._delete(self.path, index=self._seq, **kw)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
@@ -778,11 +778,11 @@ class EtcDir(EtcBase, MutableMapping):
 			if type(self) is EtcAwaiter:
 				self = await self.load(None)
 			if last and create and n in self:
-				pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
+				pre = await root._set(self.path+(n,), prevExist=False, dir=True, value=None)
 				raise RuntimeError("This should exist")
 			elif create is not False and n not in self:
 				try:
-					pre = await root._conn.set(self.path+(n,), prevExist=False, dir=True, value=None)
+					pre = await root._set(self.path+(n,), prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
 					pre = await root._conn.get(self.path+(n,))
 				await root.wait(pre.modifiedIndex)
@@ -831,7 +831,7 @@ class EtcDir(EtcBase, MutableMapping):
 				path += (key,)
 
 				if isinstance(val,dict):
-					root._task_do(root._conn.set,self.path+path, None, prevExist=False, dir=True)
+					root._task_do(root._set,self.path+path, None, prevExist=False, dir=True)
 					for k,v in val.items():
 						t_set(path,k,v)
 				else:
@@ -890,23 +890,23 @@ class EtcDir(EtcBase, MutableMapping):
 							if r is not None:
 								mod = r
 					else: # empty dict
-						r = await root._conn.set(path, None, dir=True, **kw)
+						r = await root._set(path, None, dir=True, **kw)
 						mod = r.modifiedIndex
 				else:
 					t = self.subtype(*path[keypath:], dir=False)
-					r = await root._conn.set(path, t._dump(value), prevExist=False, **kw)
+					r = await root._set(path, t._dump(value), prevExist=False, **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
 				if isinstance(value,dict):
-					r = await root._conn.set(self.path, None, append=True, dir=True)
+					r = await root._set(self.path, None, append=True, dir=True)
 					res = r.key.rsplit('/',1)[1]
 					mod = await t_set(self.path,len(self.path),res, value)
 					if mod is None:
 						mod = r.modifiedIndex # pragma: no cover
 				else:
 					t = self.subtype(('0',), dir=False)
-					r = await root._conn.set(self.path, t._dump(value), append=True, **kw)
+					r = await root._set(self.path, t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
 				res = res,mod
@@ -937,7 +937,7 @@ class EtcDir(EtcBase, MutableMapping):
 			res = self._data[key]
 			res.__delitem__()
 			return
-		self._task(self.root._conn.delete,self.path,dir=True, index=self._seq)
+		self._task(self.root._delete,self.path,dir=True, index=self._seq)
 
 	async def update(self, d1={}, _sync=True, **d2):
 		mod = None
@@ -963,7 +963,7 @@ class EtcDir(EtcBase, MutableMapping):
 		if recursive:
 			for v in list(self._data.values()):
 				await v.delete(sync=sync,recursive=recursive)
-		r = await root._conn.delete(self.path, dir=True, recursive=(recursive is None))
+		r = await root._delete(self.path, dir=True, recursive=(recursive is None))
 		r = r.modifiedIndex
 		if sync and root is not None:
 			await root.wait(r)
@@ -1072,6 +1072,7 @@ class EtcRoot(EtcDir):
 	_tasks = None
 	_task_now = None
 	_task_done = None
+	last_mod = None
 
 	def __init__(self,conn,watcher=None,key=(),types=None, env=None, update_delay=None, **kw):
 		self._conn = conn
@@ -1169,6 +1170,8 @@ class EtcRoot(EtcDir):
 			finally:
 				self._task_done = None
 		if self._watcher is not None:
+			if mod is None:
+				mod = self.last_mod
 			await self._watcher.sync(mod)
 
 	def __repr__(self): # pragma: no cover
@@ -1201,6 +1204,16 @@ class EtcRoot(EtcDir):
 		w = self._watcher
 		if w is not None:
 			w.stop(exc,node.path)
+
+	async def _set(self, *a,**k):
+		r = await self._conn.set(*a,**k)
+		self.last_mod = r.modifiedIndex
+		return r
+
+	async def _delete(self, *a,**k):
+		r = await self._conn.delete(*a,**k)
+		self.last_mod = r.modifiedIndex
+		return r
 
 	async def run_with_wait(self, p,*a,**k):
 		res = await p(*a,**k)

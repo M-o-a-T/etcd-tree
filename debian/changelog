@@ -1,3 +1,9 @@
+etcd-tree (0.9.17-1) unstable; urgency=medium
+
+  * Store last_mod in the root node
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 13 Jan 2016 02:15:46 +0100
+
 etcd-tree (0.9.16-1) unstable; urgency=medium
 
   * Allow EtcBase.env to be overridden in subtrees
