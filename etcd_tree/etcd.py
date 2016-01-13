@@ -340,6 +340,8 @@ class EtcWatcher(object):
 			return
 		if mod is None or mod < root.last_mod:
 			mod = root.last_mod
+		if mod is None: # nothing has yet happened
+			return
 		logger.debug("Syncing, wait for %d: %s",mod, id(self))
 		w = None
 		async with self.uptodate:
