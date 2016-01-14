@@ -799,6 +799,21 @@ class EtcDir(EtcBase, MutableMapping):
 			self = await self.load(recursive)
 		return self
 
+	def lookup(self, *_name, name=()):
+		"""\
+			Utility function to find a sub-node.
+			"""
+		if isinstance(name,str):
+			name = name.split('/')
+		if len(_name) == 1:
+			_name = _name[0]
+			if isinstance(_name,str):
+				_name = _name.split('/')
+
+		for n in chain(_name,name):
+			self = self[n]
+		return self
+
 	def tagged(self,tag):
 		"""async Generator to find all sub-nodes with a tag"""
 		return _tagged_iter(self,tag)
