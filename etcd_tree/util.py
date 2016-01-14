@@ -34,8 +34,7 @@ import yaml
 import asyncio
 from etcd import EtcdNotFile,EtcdNotDir,EtcdKeyNotFound
 
-@asyncio.coroutine
-def to_etcd(conn, path, data, delete=False):
+async def to_etcd(conn, path, data, delete=False):
 	mod = None
 	def modu(m):
 		nonlocal mod
@@ -48,21 +47,21 @@ def to_etcd(conn, path, data, delete=False):
 	if isinstance(data,dict):
 		if delete:
 			try:
-				r = yield from conn.read(path)
+				r = await conn.read(path)
 			except EtcdKeyNotFound:
 				pass
 			else:
 				for c in r.child_nodes:
 					n = c.name
 					if c.name not in data:
-						modu((yield from conn.delete(c.key,dir=c.dir,recursive=True)).modifiedIndex)
+						modu((await conn.delete(c.key,dir=c.dir,recursive=True)).modifiedIndex)
 		for k,v in data.items():
-			modu((yield from to_etcd(conn, path+"/"+k, v, delete=delete)))
+			modu((await to_etcd(conn, path+"/"+k, v, delete=delete)))
 	else:
 		try:
-			cur = yield from conn.read(path)
+			cur = await conn.read(path)
 		except EtcdNotDir as e:
-			modu((yield from conn.delete(e.payload['cause'],dir=False,recursive=False)).modifiedIndex)
+			modu((await conn.delete(e.payload['cause'],dir=False,recursive=False)).modifiedIndex)
 		except EtcdKeyNotFound:
 			pass
 		else:
@@ -70,15 +69,14 @@ def to_etcd(conn, path, data, delete=False):
 				modu(cur.modifiedIndex)
 				return mod
 		try:
-			modu((yield from conn.set(path,str(data))).modifiedIndex)
+			modu((await conn.set(path,str(data))).modifiedIndex)
 		except EtcdNotFile:
-			yield from conn.delete(path,dir=True,recursive=True)
-			modu((yield from conn.set(path,str(data))).modifiedIndex)
+			await conn.delete(path,dir=True,recursive=True)
+			modu((await conn.set(path,str(data))).modifiedIndex)
 	return mod
 
-@asyncio.coroutine
-def from_etcd(conn, path, dump=False):
-	res = yield from conn.read(path, recursive=True)
+async def from_etcd(conn, path, dump=False):
+	res = await conn.read(path, recursive=True)
 
 	data = {}
 	if dump:

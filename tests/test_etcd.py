@@ -55,63 +55,61 @@ def clean_dump(d):
     return d
 
 @pytest.mark.run_loop
-@asyncio.coroutine
-def test_get_set(client):
+async def test_get_set(client):
     """Basic get/set stuff"""
     d=dict
-    assert (yield from client._d()) == d()
-    yield from client.set("/foo","dud")
-    yield from client.set("/what/so","ever")
-    assert (yield from client._d()) == d(foo="dud",what=d(so="ever"))
-    assert (yield from client._d("/what/so")) == "ever"
-    assert (clean_dump((yield from client._d("/what/so",dump=True)))) == \
+    assert (await client._d()) == d()
+    await client.set("/foo","dud")
+    await client.set("/what/so","ever")
+    assert (await client._d()) == d(foo="dud",what=d(so="ever"))
+    assert (await client._d("/what/so")) == "ever"
+    assert (clean_dump((await client._d("/what/so",dump=True)))) == \
         d(_=d(action='get', key='/test/etcd_tree/what/so', value='ever'))
-    du = clean_dump((yield from client._d(dump=True)))
+    du = clean_dump((await client._d(dump=True)))
     assert du == d(
         _=d(action='get', dir=True, key='/test/etcd_tree'),
         foo=d(key='/test/etcd_tree/foo', value='dud'),
         what= d(_=d(dir=True, key='/test/etcd_tree/what'),
           so=d(key='/test/etcd_tree/what/so', value='ever')))
 
-    v = yield from client.read("/foo")
+    v = await client.read("/foo")
     assert v.value == "dud"
 
     # don't replace things which somebody else changed behind your back
     with pytest.raises(etcd.EtcdCompareFailed):
-        yield from client.set("/foo","bar",prev="guzk")
+        await client.set("/foo","bar",prev="guzk")
     with pytest.raises(etcd.EtcdCompareFailed):
-        yield from client.set("/foo","bar",index=v.etcd_index+100)
-    x=yield from client.set("/foo","bari",prev="dud")
-    assert (yield from client._d()) == d(foo="bari",what=d(so="ever"))
-    yield from client.set("/foo","bar",index=x.modifiedIndex)
-    assert (yield from client._d()) == d(foo="bar",what=d(so="ever"))
-    assert (yield from client.get("/foo")).value == "bar"
-    v=yield from client.read("/foo")
+        await client.set("/foo","bar",index=v.etcd_index+100)
+    x=await client.set("/foo","bari",prev="dud")
+    assert (await client._d()) == d(foo="bari",what=d(so="ever"))
+    await client.set("/foo","bar",index=x.modifiedIndex)
+    assert (await client._d()) == d(foo="bar",what=d(so="ever"))
+    assert (await client.get("/foo")).value == "bar"
+    v=await client.read("/foo")
     assert v.value == "bar"
     # Verify that the key has in fact been replaced, not blindly overwritten
     assert v.createdIndex < v.etcd_index
     # random entry creation
-    r = yield from client.set("/",value="baz",append=True)
+    r = await client.set("/",value="baz",append=True)
     assert r.key.endswith('000'+str(r.modifiedIndex))
 test_get_set._is_oroutine = True
 
 @pytest.mark.run_loop
-@asyncio.coroutine
-def test_feeding(client):
+async def test_feeding(client):
     """Feed data into etcd and check that they arrive."""
     # basic stuff
     d=dict
     d1=d(one="eins",two=d(zwei="drei",vier="fünf"),x="y")
-    yield from client._f(d1)
-    assert (yield from client.get("/one")).value == "eins"
-    assert (yield from client.get("/two/vier")).value == "fünf"
+    await client._f(d1)
+    assert (await client.get("/one")).value == "eins"
+    assert (await client.get("/two/vier")).value == "fünf"
 
     # Now replace an entry with a tree and vice versa
     d2=d(two="drei",one=d(a="b"),x="y")
-    yield from client._f(d2,delete=True)
-    assert (yield from client._d()) == d(two="drei",one=d(a="b"),x="y")
+    await client._f(d2,delete=True)
+    assert (await client._d()) == d(two="drei",one=d(a="b"),x="y")
 
     # An entry that is in the way should get deleted
-    yield from client._f("nix",subtree="/two/zero")
-    assert (yield from client._d()) == d(two=d(zero="nix"),one=d(a="b"),x="y")
+    await client._f("nix",subtree="/two/zero")
+    assert (await client._d()) == d(two=d(zero="nix"),one=d(a="b"),x="y")
 

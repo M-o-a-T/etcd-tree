@@ -1,3 +1,10 @@
+etcd-tree (0.9.18-1) unstable; urgency=medium
+
+  * Add EtcDir.lookup(): sync version of .subdir()
+  * Remove all "yield from"
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 14 Jan 2016 04:11:49 +0100
+
 etcd-tree (0.9.17-2) unstable; urgency=medium
 
   * Store last_mod in the root node

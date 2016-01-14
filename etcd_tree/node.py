@@ -595,8 +595,6 @@ class EtcAwaiter(EtcBase):
 
 	def __await__(self):
 		return self.load(None).__await__()
-	def __iter__(self):
-		return self.load(None).__await__()
 
 	async def load(self,recursive=None, pre=None):
 		async with self._lock:
