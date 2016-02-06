@@ -1035,7 +1035,8 @@ class EtcDir(EtcBase, MutableMapping):
 
 			The default is to look up the path in the _types
 			class attribute (use .register() for adding a type);
-			if that doesn't work, ask the parent node.
+			if that doesn't work, ask the parent node if
+			_types_from_parent is set (this is the default).
 
 			This method is used for looking up value conversions.
 			Thus, value types should never depend on non-path data.
