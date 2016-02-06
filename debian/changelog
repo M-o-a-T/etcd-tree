@@ -1,3 +1,9 @@
+etcd-tree (0.9.19-1) unstable; urgency=medium
+
+  * Fixed an error
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 06 Feb 2016 22:45:43 +0100
+
 etcd-tree (0.9.18-1) unstable; urgency=medium
 
   * Add EtcDir.lookup(): sync version of .subdir()
