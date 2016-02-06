@@ -243,8 +243,6 @@ class EtcBase(object):
 			if pre.dir:
 				await self._fill_data(pre=pre,recursive=irec)
 		except ReloadRecursive:
-			if recursive:
-				raise RuntimeError("You got recursive data but raised ReloadRecursive (%s %s)" % (parent,key))
 			kw['pre'] = pre = await conn.read(key, recursive=True)
 			recursive = True
 			if self is None:
