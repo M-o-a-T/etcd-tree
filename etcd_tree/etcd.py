@@ -308,7 +308,10 @@ class EtcWatcher(object):
 		"""Tear down everything"""
 		#logger.warning("_KILL")
 		if not self.stopped.done():
-			self.stopped.set_result("_kill")
+			try:
+				self.stopped.set_result("_kill")
+			except RuntimeError: # pragma: no cover ## event loop might be closed
+				pass
 		r,self._reader = self._reader,None
 		if r is not None:
 			try:

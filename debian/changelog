@@ -1,3 +1,9 @@
+etcd-tree (0.9.20-1) unstable; urgency=medium
+
+  * Another runtime error when the event loop has gone away
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 07 Feb 2016 09:34:17 +0100
+
 etcd-tree (0.9.19-2) unstable; urgency=medium
 
   * Really fixed that error :-/

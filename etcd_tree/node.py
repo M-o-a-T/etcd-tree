@@ -392,14 +392,26 @@ class EtcBase(object):
 	def update_delay(self):
 		return self.root._update_delay
 
+	def force_updated(self):
+		"""\
+			Call all update handlers now.
+			"""
+		if type(p._later) is not int:
+			self._later.cancel()
+			self._run_update()
+		elif p._later > 0:
+			# a child is blocked, thus run its update handlers
+			for v in self.values():
+				v.force_updated(seq)
+
 	def updated(self, seq=None, _force=False):
 		"""\
-			Call to schedule a call to the update monitors.
+			Schedule a call to the update monitors.
 			@_force: False: schedule a call
 			         True: child scheduler is done (DO NOT USE)
 			"""
-		# Invariant: _later is the number of direct children which are blocked.
-		# If that is zero, it may be an asyncio call_later token instead.
+		# Invariant: _later is either the number of direct children which
+		# are blocked or, if there are none, an asyncio call_later token.
 		# (The token has a .cancel method, thus it cannot be an integer.)
 		# A node is blocked if its _later attribute is not zero.
 		#
@@ -798,6 +810,7 @@ class EtcDir(EtcBase, MutableMapping):
 	def lookup(self, *_name, name=()):
 		"""\
 			Utility function to find a sub-node.
+			Like .subdir, but synchronous and can't create anything.
 			"""
 		if isinstance(name,str):
 			name = name.split('/')

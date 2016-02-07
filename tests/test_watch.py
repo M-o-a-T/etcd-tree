@@ -442,7 +442,8 @@ async def test_update_ttl(client, loop):
     assert w['some'] == "data"
     assert w._get('nodes').ttl is not None
     del w._get('nodes').ttl
-    await asyncio.sleep(2.5, loop=loop)
+    await asyncio.sleep(0.5, loop=loop)
+    w.force_updated()
     with pytest.raises(KeyError):
         w['timeout']
     with pytest.raises(KeyError):
