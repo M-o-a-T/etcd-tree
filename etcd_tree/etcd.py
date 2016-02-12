@@ -63,12 +63,6 @@ class WatchError(RuntimeError):
 	"""Used when an external error stops an EtcWatcher."""
 	pass
 
-class CompareFailed(etcd.EtcdCompareFailed): # pragma: no cover ## hopefully
-	def __init__(self,*args):
-		self.args = args
-	def __repr__(self):
-		return "Write %s to %s prev=%s index=%s %s" % (value,key, prev,index, repr(kw))
-
 class EtcClient(object):
 	last_mod = None
 	def __init__(self, root="", loop=None, **args):
@@ -183,10 +177,7 @@ class EtcClient(object):
 			if prev is not None:
 				kw['prevValue'] = prev
 
-		try:
-			res = await self.client.write(key, value=value, **kw)
-		except etcd.EtcdCompareFailed as exc:
-			raise CompareFailed(value,key,prev,index,kw) from exc
+		res = await self.client.write(key, value=value, **kw)
 		self.last_mod = res.modifiedIndex
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
