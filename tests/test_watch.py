@@ -206,6 +206,7 @@ async def test_update_watch_direct(client):
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja1"
     assert w['zwei']['drei']['der'][':tag']['hello'] == "kitty"
+    w.force_updated()
     n=0
     for k in w.tagged(':tag'):
         n += 1
@@ -442,8 +443,7 @@ async def test_update_ttl(client, loop):
     assert w['some'] == "data"
     assert w._get('nodes').ttl is not None
     del w._get('nodes').ttl
-    await asyncio.sleep(0.5, loop=loop)
-    w.force_updated()
+    await asyncio.sleep(1.5, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
     with pytest.raises(KeyError):

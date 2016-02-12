@@ -1,3 +1,10 @@
+etcd-tree (0.9.21-1) unstable; urgency=medium
+
+  * Fix force_update
+  * drop "private" CompareFailed error
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 12 Feb 2016 03:31:10 +0100
+
 etcd-tree (0.9.20-1) unstable; urgency=medium
 
   * Another runtime error when the event loop has gone away

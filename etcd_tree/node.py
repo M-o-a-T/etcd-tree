@@ -396,13 +396,15 @@ class EtcBase(object):
 		"""\
 			Call all update handlers now.
 			"""
-		if type(p._later) is not int:
-			self._later.cancel()
-			self._run_update()
-		elif p._later > 0:
+		if type(self._later) is int and self._later > 0:
 			# a child is blocked, thus run its update handlers
-			for v in self.values():
-				v.force_updated(seq)
+			for v in self._data.values():
+				v.force_updated()
+		if type(self._later) is not int:
+			self._later.cancel()
+			# will be set to zero in _run_update()
+		self._run_update()
+		assert self._later == 0
 
 	def updated(self, seq=None, _force=False):
 		"""\
