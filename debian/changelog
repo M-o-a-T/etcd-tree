@@ -1,3 +1,9 @@
+etcd-tree (0.10.0-1) unstable; urgency=medium
+
+  * tree.env is now attributed
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 17 Feb 2016 02:45:28 +0100
+
 etcd-tree (0.9.21-1) unstable; urgency=medium
 
   * Fix force_update

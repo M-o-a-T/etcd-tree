@@ -65,6 +65,19 @@ class ReloadRecursive(ReferenceError):
 		"""
 	pass
 
+class Env(object):
+	def __getattr__(self,k):
+		return None
+	def __setattr__(self,k,v):
+		try:
+			object.__getattr__(self,k)
+		except AttributeError:
+			object.__setattr__(self,k,v)
+		else:
+			raise RuntimeError("Dup env assignment %s %s %s" % (self,k,v))
+	def __delattr__(self,k):
+		raise RuntimeError("You cannot do that. %s %s" % (self,k))
+
 # etcd does not have a method to only enumerate direct children,
 # so monkeypatch that in until it does
 
@@ -327,14 +340,7 @@ class EtcBase(object):
 
 	@property
 	def env(self):
-		if self._env is _NOTGIVEN:
-			self._env = self.parent.env
-		return self._env
-	@env.setter
-	def env(self, value):
-		if self._env is not _NOTGIVEN:
-			raise RuntimeError("Tried to update env from %s to %s"%(self._env,value))
-		self._env = value
+		return self.root.env
 
 	def _task(self,p,*a,**k):
 		self.root._task_do(p,*a,**k)
@@ -1089,7 +1095,6 @@ class EtcRoot(EtcDir):
 		@conn: the connection this is attached to
 		@watcher: the watcher that's talking to me
 		@types: type lookup
-		@env: optional pointer to the caller's global environment
 		"""
 	_parent = None
 	name = ''
@@ -1101,7 +1106,7 @@ class EtcRoot(EtcDir):
 	_task_done = None
 	last_mod = None
 
-	def __init__(self,conn,watcher=None,key=(),types=None, env=None, update_delay=None, **kw):
+	def __init__(self,conn,watcher=None,key=(),types=None, update_delay=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
 		self.path = key
@@ -1111,10 +1116,14 @@ class EtcRoot(EtcDir):
 			from .etcd import EtcTypes
 			types = EtcTypes()
 		self._types = types
-		self._env = env
+		self._env = Env()
 		if update_delay is not None:
 			self._update_delay = update_delay
 		super().__init__(**kw)
+
+	@property
+	def env(self):
+		return self._env
 
 	# Progress of task handling:
 	# * _task_done is None.

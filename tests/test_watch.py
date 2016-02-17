@@ -94,22 +94,16 @@ async def test_basic_watch(client,loop):
     @xRoot.register("zwei","und")
     class xUnd(EtcString):
         pass
-    w = await t.tree("/two", immediate=False, static=True, types=types, env="foobar")
+    w = await t.tree("/two", immediate=False, static=True, types=types)
+    w.env.foobar="Foo Bar"
     assert isinstance(w,xRoot)
-    assert w.env == "foobar"
-    w['zwei'].env = "baba"
-    with pytest.raises(RuntimeError):
-        w['zwei'].env = "nope"
-    with pytest.raises(RuntimeError):
-        w.env = "nope"
-    assert w['zwei']._get('und').env == "baba"
-    assert w['zwei']['a']['b'].env == "baba"
-    with pytest.raises(RuntimeError):
-        w['zwei']['a'].env = "nope"
+    assert w.env.foobar == "Foo Bar"
+    assert w.env.barbaz is None
+    assert w['zwei'].env is w.env
+    assert w['zwei']['a']['b'].env is w.env
 
     assert w['zwei']['und'] == "drei"
     assert type(w['zwei']._get('und')) is xUnd
-    assert w['zwei'].env == "baba"
     assert w['vier'] == "5"
     with pytest.raises(KeyError):
         w['x']
@@ -446,6 +440,7 @@ async def test_update_ttl(client, loop):
     await asyncio.sleep(1.5, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
+    await asyncio.sleep(1.0, loop=loop)
     with pytest.raises(KeyError):
         w['some']
     assert w['nodes'] == "too"

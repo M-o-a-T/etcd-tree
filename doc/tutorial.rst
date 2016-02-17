@@ -161,16 +161,32 @@ If you want to subclass a whole directory, derive your class from
 
     class 
 
-If you need access to private data, you can to pass an environment to ``.tree()``:
+If you need access to private data, the tree has an ``env`` attribute. You
+can set any attribute on that. Entries' ``env`` attributes mirror the root,
+so ``something.root.env == something.env``.
+
+You cannot replace attributes. Non-existing attributes will return None
+instead of raising an exception; you can use this feature to write generic
+classes which work in multiple environments, which is important when
+you want to use these environments in the same program -- or just re-use
+code.
 
 .. code:: python
 
     the_data = …whatever…
-    view = await client.tree("/num",types=types,env=the_data)
+    view = await client.tree("/num",types=types)
+    view.env.my_data = the_data
+    with assert_error(RuntimeError):
+        view.env.my_data = "foo"
 
     class myDir(EtcDir):
-        def some_method(self):
-            assert self.env is the_data
+        def some_test_method(self):
+            assert self.env.my_data is the_data
+        def has_update(self):
+            the_data = self.env.my_data
+            if the_data:
+                the_data.has_update(self) # or whatever
+
 
 Watching out for changes on your object is pretty straightforward: override
 the ``has_update()`` method. Alternately you can attach a monitor function
