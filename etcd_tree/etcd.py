@@ -182,7 +182,7 @@ class EtcClient(object):
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
-	async def tree(self, key, sub=_NOTGIVEN, _prefix=False, types=None, immediate=True, static=False, create=None, **kw):
+	async def tree(self, key, sub=_NOTGIVEN, _prefix=False, root_cls=None, types=None, immediate=True, static=False, create=None, **kw):
 		"""\
 			Generate an object tree, populate it, and update it.
 			if @create is True, create the directory node.
@@ -227,14 +227,13 @@ class EtcClient(object):
 					res = await self.client.read(xkey, recursive=rec)
 
 		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
-		cls = None
-		if types:
-			cls = types.type[True]
-		if cls is None:
-			cls = EtcRoot
+		if root_cls is None and types is not None::
+			root_cls = types.type[True]
+		if root_cls is None:
+			root_cls = EtcRoot
 		else:
-			assert issubclass(cls,EtcRoot)
-		root = await cls._new(conn=self, watcher=w, key=key, pre=res,
+			assert issubclass(root_cls,EtcRoot)
+		root = await root_cls._new(conn=self, watcher=w, key=key, pre=res,
 				recursive=rec, types=types, **kw)
 
 		if w is not None:

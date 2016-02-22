@@ -1,3 +1,9 @@
+etcd-tree (0.11.0-1) unstable; urgency=medium
+
+  * tree: Allow for explicitly passing in a root class.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 22 Feb 2016 04:38:51 +0100
+
 etcd-tree (0.10.0-1) unstable; urgency=medium
 
   * tree.env is now attributed
