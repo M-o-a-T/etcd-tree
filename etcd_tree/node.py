@@ -645,6 +645,10 @@ class EtcValue(EtcBase):
 	type = str
 	_is_dir = False
 
+	_direct_value = True
+	# If this is True, the result will be auto-dereferences when looked up
+	# this exists so that "interesting" subclasses are more usable
+
 	_seq = None
 	def __init__(self, pre=None,**kw):
 		super().__init__(pre=pre, **kw)
@@ -753,12 +757,12 @@ class EtcDir(EtcBase, MutableMapping):
 		return self._data.keys()
 	def values(self):
 		for v in self._data.values():
-			if isinstance(v,EtcValue):
+			if isinstance(v,EtcValue) and v._direct_value:
 				v = v.value
 			yield v
 	def items(self):
 		for k,v in self._data.items():
-			if isinstance(v,EtcValue):
+			if isinstance(v,EtcValue) and v._direct_value:
 				v = v.value
 			yield k,v
 	def _get(self,key,default=_NOTGIVEN):
@@ -769,7 +773,7 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def get(self,key,default=_NOTGIVEN):
 		v = self._get(key,default)
-		if isinstance(v,EtcValue):
+		if isinstance(v,EtcValue) and v._direct_value:
 			v = v.value
 		return v
 	__getitem__ = get

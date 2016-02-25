@@ -38,6 +38,9 @@ from etcd_tree.etcd import EtcTypes,WatchStopped
 from .util import cfg,client
 from unittest.mock import Mock
 
+class IntObj(EtcInteger):
+    _direct_value = False
+
 @pytest.mark.run_loop
 async def test_basic_watch(client,loop):
     """Watches which don't actually watch"""
@@ -351,18 +354,18 @@ async def test_update_watch(client, loop):
     assert not w['zwei']._later_mon
     assert not w['zwei']._get('und')._later_mon
 
-    types.register("**","new_a", cls=EtcInteger)
+    types.register("**","new_a", cls=IntObj)
     types.register(("**","new_b"), cls=EtcInteger)
     mod = await t._f(d2,delete=True)
     await w1.wait(mod)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
-    w1['vier']['new_a'] = 4242
+    w1['vier']['new_a'].value = 4242
     await w1.wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
-    assert w1['vier']['new_a'] == 4242
+    assert w1['vier']['new_a'].value == 4242
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = await t._f(d1)
