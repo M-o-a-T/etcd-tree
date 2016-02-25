@@ -227,7 +227,7 @@ class EtcClient(object):
 					res = await self.client.read(xkey, recursive=rec)
 
 		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
-		if root_cls is None and types is not None::
+		if root_cls is None and types is not None:
 			root_cls = types.type[True]
 		if root_cls is None:
 			root_cls = EtcRoot
