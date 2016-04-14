@@ -56,8 +56,8 @@ async def test_basic_watch(client,loop):
     @twotypes.register("die")
     class rPreDie(EtcValue):
         @classmethod
-        async def this_class(cls,**kw):
-            return rDie
+        async def this_obj(cls,recursive=None,**kw):
+            return rDie(**kw)
     # reg funcion shall return the right thing
     types.step('two',dest=twotypes)
     assert types[('two','die')] is rPreDie

@@ -235,8 +235,8 @@ class EtcBase(object):
 
 		async def get_cls():
 			cls = cls_getter()
-			cls = await cls.this_class(pre=pre,recursive=recursive)
-			return cls(**kw)
+			cls = await cls.this_obj(recursive=recursive, **kw)
+			return cls
 
 		self = None
 		try:
@@ -295,9 +295,9 @@ class EtcBase(object):
 		self._later_mon = weakref.WeakValueDictionary()
 
 	@classmethod
-	async def this_class(cls,pre,recursive):
+	async def this_obj(cls,recursive, **kw):
 		"""A method to intercept class creation."""
-		return cls
+		return cls(**kw)
 
 	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
