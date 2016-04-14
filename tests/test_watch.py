@@ -360,7 +360,7 @@ async def test_update_watch(client, loop):
     await w1.wait(mod)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
-    w1['vier']['new_a'].value = 4242
+    w1['vier']['new_a'] = 4242
     await w1.wait()
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
