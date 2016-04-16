@@ -712,6 +712,14 @@ class EtcValue(EtcBase):
 			return
 		self._value = self._load(pre.value)
 
+	def __repr__(self): ## pragma: no cover
+		try:
+			return "<{} @{} ={}>".format(self.__class__.__name__,'/'.join(self.path), repr(self._value))
+		except Exception as e:
+			logger.exception(e)
+			res = super().__repr__()
+			return res[:-1]+" ?? "+res[-1]
+
 EtcString = EtcValue
 class EtcInteger(EtcValue):
 	type = int
