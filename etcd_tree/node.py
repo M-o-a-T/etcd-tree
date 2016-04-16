@@ -775,9 +775,11 @@ class EtcDir(EtcBase, MutableMapping):
 			yield k,v
 
 	_keys = keys
-	@property _items(self):
+	@property
+	def _items(self):
 		return self._data.items()
-	@property _values(self):
+	@property
+	def _values(self):
 		return self._data.values()
 
 	def _get(self,key,default=_NOTGIVEN):
