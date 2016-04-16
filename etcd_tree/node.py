@@ -305,7 +305,7 @@ class EtcBase(object):
 		for c in pre.child_nodes:
 			n = c.name
 			if c.dir and recursive is None:
-				self._data[n] = a = EtcAwaiter(parent=self,pre=c)
+				self._data[n] = a = EtcAwaiter(parent=self,pre=c,name=n)
 			else:
 				# TODO: do this in parallel.
 				obj = await self._new(parent=self, key=c.name,
@@ -752,7 +752,7 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def _add_awaiter(self, c):
 		assert c not in self._data
-		self._data[c] = EtcAwaiter(self,c)
+		self._data[c] = EtcAwaiter(self,name=c)
 	def keys(self):
 		return self._data.keys()
 	def values(self):
