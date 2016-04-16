@@ -1,3 +1,13 @@
+etcd-tree (0.14.0-1) unstable; urgency=medium
+
+  * Add _values and _items methods
+    which don't resolve EtcValue
+  * Improve KeyError: report the whole path
+  * add __repr__
+  * Always name EtcAwaiter
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 16 Apr 2016 13:35:01 +0200
+
 etcd-tree (0.13.0-1) unstable; urgency=medium
 
   * Change this_class to this_obj
