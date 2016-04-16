@@ -765,6 +765,13 @@ class EtcDir(EtcBase, MutableMapping):
 			if isinstance(v,EtcValue) and v._direct_value:
 				v = v.value
 			yield k,v
+
+	_keys = keys
+	@property _items(self):
+		return self._data.items()
+	@property _values(self):
+		return self._data.values()
+
 	def _get(self,key,default=_NOTGIVEN):
 		if default is _NOTGIVEN:
 			return self._data[key]
