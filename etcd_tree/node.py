@@ -777,10 +777,10 @@ class EtcDir(EtcBase, MutableMapping):
 	_keys = keys
 	@property
 	def _items(self):
-		return self._data.items()
+		return self._data.items
 	@property
 	def _values(self):
-		return self._data.values()
+		return self._data.values
 
 	def _get(self,key,default=_NOTGIVEN):
 		if default is _NOTGIVEN:
