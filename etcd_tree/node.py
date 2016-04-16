@@ -782,7 +782,10 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def _get(self,key,default=_NOTGIVEN):
 		if default is _NOTGIVEN:
-			return self._data[key]
+			try:
+				return self._data[key]
+			except KeyError:
+				raise KeyError(self.path+(key,))
 		else:
 			return self._data.get(key,default)
 
