@@ -11,3 +11,4 @@ __pycache__
 /.pybuild
 /htmlcov
 /dist
+/.cache/v/cache/
