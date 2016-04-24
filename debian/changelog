@@ -1,3 +1,9 @@
+etcd-tree (0.15.0.3) unstable; urgency=medium
+
+  * Error when updating multiple items
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 25 Apr 2016 00:54:32 +0200
+
 etcd-tree (0.15.0.2) unstable; urgency=medium
 
   * Fix uninitialized variable

@@ -927,12 +927,12 @@ class EtcDir(EtcBase, MutableMapping):
 			first.
 			"""
 		root = self.root
-		mod = None
+		res = mod = None
 		try:
 			if key is None:
 				raise KeyError
 			else:
-				res = self._data[key]
+				sub = self._data[key]
 		except KeyError:
 			# new node. Send a "set" command for the data item.
 			# (or items if it's a dict)
@@ -971,13 +971,13 @@ class EtcDir(EtcBase, MutableMapping):
 			else:
 				res = mod = await t_set(self.path,len(self.path),key, value)
 		else:
-			if isinstance(res,EtcXValue):
+			if isinstance(sub,EtcXValue):
 				assert not isinstance(value,dict)
-				res = mod = await res.set(value, **kw)
+				res = mod = await sub.set(value, **kw)
 			else:
 				assert isinstance(value,dict)
 				for k,v in value.items():
-					res = mod = await res.set(k,v, **kw)
+					res = mod = await sub.set(k,v, **kw)
 
 		if sync and mod and root is not None:
 			await root.wait(mod)
