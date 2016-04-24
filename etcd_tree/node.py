@@ -42,7 +42,7 @@ from etcd import EtcdResult
 from functools import wraps
 from .util import hybridmethod
 
-__all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue',
+__all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
 	'EtcString','EtcFloat','EtcInteger',
 	'ReloadData','ReloadRecursive',
 	)
@@ -640,14 +640,10 @@ class EtcAwaiter(EtcBase):
 
 ##############################################################################
 
-class EtcValue(EtcBase):
+class EtcXValue(EtcBase):
 	"""A value node, i.e. the leaves of the etcd tree."""
 	type = str
 	_is_dir = False
-
-	_direct_value = True
-	# If this is True, the result will be auto-dereferences when looked up
-	# this exists so that "interesting" subclasses are more usable
 
 	_seq = None
 	def __init__(self, pre=None,**kw):
@@ -720,6 +716,11 @@ class EtcValue(EtcBase):
 			res = super().__repr__()
 			return res[:-1]+" ?? "+res[-1]
 
+class EtcValue(EtcXValue):
+	# the result of directory lookups will be auto-dereferenced
+	# this exists so that "interesting" subclasses are more usable
+	pass
+
 EtcString = EtcValue
 class EtcInteger(EtcValue):
 	type = int
@@ -765,12 +766,12 @@ class EtcDir(EtcBase, MutableMapping):
 		return self._data.keys()
 	def values(self):
 		for v in self._data.values():
-			if isinstance(v,EtcValue) and v._direct_value:
+			if isinstance(v,EtcValue):
 				v = v.value
 			yield v
 	def items(self):
 		for k,v in self._data.items():
-			if isinstance(v,EtcValue) and v._direct_value:
+			if isinstance(v,EtcValue):
 				v = v.value
 			yield k,v
 
@@ -793,7 +794,7 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def get(self,key,default=_NOTGIVEN):
 		v = self._get(key,default)
-		if isinstance(v,EtcValue) and v._direct_value:
+		if isinstance(v,EtcValue):
 			v = v.value
 		return v
 	__getitem__ = get
@@ -895,7 +896,7 @@ class EtcDir(EtcBase, MutableMapping):
 					root._task_do(self._task_set,path, t._dump(val))
 			t_set((),key, val)
 		else:
-			if isinstance(res,EtcValue):
+			if isinstance(res,EtcXValue):
 				assert not isinstance(val,dict)
 				res.value = val
 			else:
@@ -969,7 +970,7 @@ class EtcDir(EtcBase, MutableMapping):
 			else:
 				res = mod = await t_set(self.path,len(self.path),key, value)
 		else:
-			if isinstance(res,EtcValue):
+			if isinstance(res,EtcXValue):
 				assert not isinstance(value,dict)
 				res = mod = await res.set(value, **kw)
 			else:

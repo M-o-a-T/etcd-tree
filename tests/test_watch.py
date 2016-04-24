@@ -31,15 +31,16 @@ import pytest
 import etcd
 import time
 import asyncio
-from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,EtcString,EtcAwaiter, \
-    ReloadData,ReloadRecursive
+from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,\
+                           EtcXValue,EtcString,EtcAwaiter, \
+                           ReloadData,ReloadRecursive
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
 from .util import cfg,client
 from unittest.mock import Mock
 
-class IntObj(EtcInteger):
-    _direct_value = False
+class IntObj(EtcXValue):
+    type = int
 
 @pytest.mark.run_loop
 async def test_basic_watch(client,loop):

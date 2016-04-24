@@ -532,9 +532,9 @@ class EtcTypes(object):
 
 	def _register(self, cls):
 		"""Register a callback on this node"""
-		from .node import EtcDir,EtcValue
+		from .node import EtcDir,EtcXValue
 		done = False
-		if issubclass(cls,EtcValue):
+		if issubclass(cls,EtcXValue):
 			self.type[0] = cls
 			done = True
 		if issubclass(cls,EtcDir):
