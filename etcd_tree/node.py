@@ -927,6 +927,7 @@ class EtcDir(EtcBase, MutableMapping):
 			first.
 			"""
 		root = self.root
+		mod = None
 		try:
 			if key is None:
 				raise KeyError
