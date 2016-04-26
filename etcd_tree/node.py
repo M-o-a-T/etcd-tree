@@ -765,9 +765,6 @@ class EtcDir(EtcBase, MutableMapping):
 		assert value is None
 		return None
 
-	def _add_awaiter(self, c):
-		assert c not in self._data
-		self._data[c] = EtcAwaiter(self,name=c)
 	def keys(self):
 		return self._data.keys()
 	def values(self):
