@@ -118,10 +118,16 @@ async def test_basic_watch(client,loop):
     assert w == w2
 
     # basic access, read it on demand
-    w5 = await t.tree("/two", immediate=None, static=True, types=types)
+    w5 = await t.tree("/two", immediate=None, types=types)
+    def wx(x):
+        assert x.added == {'und','a'}
+        x.test_called = 1
+    mx = w5['zwei'].add_monitor(wx)
     assert isinstance(w5['zwei']['und'],EtcAwaiter)
     assert (await w5['zwei']['und']).value == "drei"
     assert w5['vier'] == "5"
+    w5['zwei'].force_updated()
+    assert w5['zwei'].test_called
 
     # use typed subtrees
     w4 = await t.tree((), types=types)

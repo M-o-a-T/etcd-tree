@@ -308,6 +308,7 @@ class EtcBase(object):
 			n = c.name
 			if c.dir and recursive is None:
 				self._data[n] = a = EtcAwaiter(parent=self,pre=c,name=n)
+				self._added.add(n)
 			else:
 				# TODO: do this in parallel.
 				obj = await self._new(parent=self, key=c.name,
@@ -801,6 +802,14 @@ class EtcDir(EtcBase, MutableMapping):
 			v = v.value
 		return v
 	__getitem__ = get
+
+	def add_monitor(self, callback):
+		res = super().add_monitor(callback)
+		self.added = set(self._data.keys()) - self._added
+		if self.added:
+			self.deleted = set()
+			callback(self)
+		return res
 
 	def _call_monitors(self):
 		self.added,self._added = self._added,set()
