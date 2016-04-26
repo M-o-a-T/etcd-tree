@@ -283,6 +283,8 @@ class EtcBase(object):
 				name = pre.name
 			self.name = name
 			self.path = parent.path+(name,)
+			if name not in parent._data and hasattr(parent,'_added'):
+				parent._added.add(name)
 			parent._data[name] = self
 		else:
 			# This is a root node
@@ -516,7 +518,7 @@ class EtcBase(object):
 			Exceptions get propagated. They will kill the watcher."""
 		self.has_update()
 		if self._later_mon:
-			for k,f in list(self._later_mon.items()):
+			for f in list(self._later_mon.values()):
 				f(self)
 
 	def add_monitor(self, callback):
@@ -530,7 +532,7 @@ class EtcBase(object):
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
 		self._later_mon[i] = mon = MonitorCallback(self,i,callback)
-		#logger.debug("run_update add_mon %s %s %s",self.path,i,callback)
+		logger.debug("run_update add_mon %s %s %s",self.path,i,callback)
 		return mon
 
 	def remove_monitor(self, token):
@@ -738,10 +740,14 @@ class EtcDir(EtcBase, MutableMapping):
 		"""
 	_value = None
 	_is_dir = True
+	added = ()
+	deleted = ()
 
 	def __init__(self, value=None, **kw):
 		assert value is None
 		self._data = {}
+		self._added = set()
+		self._deled = set()
 		super().__init__(**kw)
 
 	def __iter__(self):
@@ -798,6 +804,11 @@ class EtcDir(EtcBase, MutableMapping):
 			v = v.value
 		return v
 	__getitem__ = get
+
+	def _call_monitors(self):
+		self.added,self._added = self._added,set()
+		self.deleted,self._deled = self._deled,set()
+		super()._call_monitors()
 
 	async def subdir(self, *_name, name=(), create=None, recursive=None):
 		"""\
@@ -1056,6 +1067,7 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
+		self._deled.add(child.name)
 		node = self._data.pop(child.name)
 		node._deleted()
 

@@ -249,8 +249,21 @@ async def test_update_watch(client, loop):
     f = asyncio.Future(loop=loop)
     def wake(x):
         f.set_result(x)
+    def mx(x):
+        s = getattr(x,'test_step',0)
+        x.test_step = s+1
+        if s == 0:
+            assert x.added == {'und','oder'}
+            assert x.deleted == {'oder'}
+        elif s == 1:
+            assert x.added == {'zehn'}
+            assert not x.deleted
+        else:
+            assert 0,s
+        pass
     i0 = w.add_monitor(wake)
     i1 = w['zwei'].add_monitor(m1)
+    ix = w['zwei'].add_monitor(mx)
     i2 = w['zwei']._get('und').add_monitor(m2)
 
     assert w['sechs'] == "sieben"
@@ -350,6 +363,7 @@ async def test_update_watch(client, loop):
     # three ways to skin a cat
     del i0
     # w['zwei'].remove_monitor(i1) ## happened above
+    w['zwei'].remove_monitor(ix)
     i2.cancel()
     assert not w._later_mon
     assert not w['zwei']._later_mon
