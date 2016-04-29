@@ -418,8 +418,6 @@ class EtcWatcher(object):
 					# will not create an EtcAwaiter
 				except KeyError:
 					return
-				if type(r) is EtcAwaiter:
-					return
 			r._ext_delete()
 		else:
 #			if not x.createdIndex:

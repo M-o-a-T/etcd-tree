@@ -1,3 +1,9 @@
+etcd-tree (0.16.0.3) unstable; urgency=medium
+
+  * Fix delete notification
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 29 Apr 2016 13:36:04 +0200
+
 etcd-tree (0.16.0.2) unstable; urgency=medium
 
   * Make sure that awaited entries get called
