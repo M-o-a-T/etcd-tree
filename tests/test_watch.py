@@ -184,12 +184,14 @@ async def test_update_watch_direct(client):
     with pytest.raises(KeyError):
         await w.subdir('zwei','drei','der', name=":tag", create=False)
     tag = await w.subdir("zwei/drei",name="der/:tag", create=True)
+    tag2 = await w.subdir("zwei/drei/plus",name="auch/:tag", create=True)
     tug = await w.subdir("zwei/drei/vier",name="das/:tagg")
     tug = await w.subdir(('zwei','drei','vier'),name="das/:tagg")
     tugg = w.lookup(('zwei','drei','vier'),name="das/:tagg")
     assert tug is tugg
     tug2 = await w.subdir("zwei/drei/vier",name="das/:tagg")
     await tag.set("hello","kitty")
+    await tag2.set("hello","friend")
     await tug.set("hello","kittycat")
     assert tug2['hello'] == 'kittycat'
 
@@ -213,9 +215,31 @@ async def test_update_watch_direct(client):
     w.force_updated()
     n=0
     for k in w.tagged(':tag'):
+        if k['hello']=='kitty':
+            n |= 1
+        elif k['hello']=='friend':
+            n |= 2
+        else:
+            assert False,k['hello']
+    assert n==3
+    n=0
+    for k in w.tagged(':tag',depth=3):
         n += 1
-        assert k['hello']=='kitty'
+    assert n==0
+    for k in w.tagged(':tag',depth=4):
+        n += 1
+        assert k['hello']=='kitty',k['hello']
     assert n==1
+    n=0
+    for k in w.tagged(':tag',depth=5):
+        n += 1
+        assert k['hello']=='friend',k['hello']
+    assert n==1
+    n=0
+    for k in w.tagged(':tag',depth=6):
+        n += 1
+    assert n==0
+    await tag2.delete()
     n = 0
     async for k in wi.tagged(':tag'):
         n += 1

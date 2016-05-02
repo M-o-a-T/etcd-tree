@@ -130,10 +130,11 @@ class MonitorCallback(object):
 # Helper for possibly-asynchronously iterating through a tree
 
 class _tagged_iter:
-	def __init__(self,tree,tag):
+	def __init__(self,tree,tag, depth=0):
 		assert tag[0] == ':'
-		self.trees = [tree]
+		self.trees = [(tree,0)]
 		self.tag = tag
+		self.depth = depth
 		self.dirs = []
 	async def __aiter__(self):
 		return self
@@ -143,32 +144,41 @@ class _tagged_iter:
 		while not self.dirs:
 			if not self.trees:
 				raise StopAsyncIteration
-			t = await self.trees.pop()
+			t,d = self.trees.pop()
+			t = await t
+			d += 1
 			for k,v in t.items():
 				if k == self.tag:
-					self.dirs.append(v)
+					if not self.depth or self.depth == d:
+						self.dirs.append(v)
 				elif k[0] == ':':
-					pass
+					continue
+				elif self.depth and self.depth <= d:
+					continue
 				elif type(v) is EtcAwaiter:
-					self.trees.append(await v)
+					self.trees.append((v,d))
 				elif isinstance(v,EtcDir):
-					self.trees.append(v)
+					self.trees.append((v,d))
 		return (await self.dirs.pop())
 
 	def __next__(self):
 		while not self.dirs:
 			if not self.trees:
 				raise StopIteration
-			t = self.trees.pop()
+			t,d = self.trees.pop()
+			d += 1
 			for k,v in t.items():
 				if k == self.tag:
-					self.dirs.append(v)
+					if not self.depth or self.depth == d:
+						self.dirs.append(v)
 				elif k[0] == ':':
-					pass
+					continue
+				elif self.depth and self.depth <= d:
+					continue
 				elif isinstance(v,EtcAwaiter):
 					raise RuntimeError("'%s' is not preloaded. Use 'async for'." % ('/'.join(v.path),))
 				elif isinstance(v,EtcDir):
-					self.trees.append(v)
+					self.trees.append((v,d))
 		return self.dirs.pop()
 
 ##############################################################################
@@ -873,9 +883,9 @@ class EtcDir(EtcBase, MutableMapping):
 			self = self[n]
 		return self
 
-	def tagged(self,tag):
+	def tagged(self,tag, depth=0):
 		"""async Generator to find all sub-nodes with a tag"""
-		return _tagged_iter(self,tag)
+		return _tagged_iter(self,tag, depth=depth)
 
 	def __contains__(self,key):
 		return key in self._data
