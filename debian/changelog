@@ -1,3 +1,9 @@
+etcd-tree (0.17.0.2) unstable; urgency=medium
+
+  * Removed broken debug assertions
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 02 May 2016 03:21:52 +0200
+
 etcd-tree (0.17.0.1) unstable; urgency=medium
 
   * Add a (specific) depth to .tagged().

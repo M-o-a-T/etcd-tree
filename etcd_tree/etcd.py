@@ -160,10 +160,6 @@ class EtcClient(object):
 
 			"""
 		key = self._extkey(key, _prefix=_prefix)
-		assert not key.startswith('(')
-		assert key != "/test/moat/task/scan/task/scan"
-		assert "/task/task" not in key, key
-		assert not key.endswith('/o'), key
 		logger.debug("Write %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
 		if kw.get('append',False):
 			assert prev is None, prev
