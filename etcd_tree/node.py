@@ -635,7 +635,11 @@ class EtcAwaiter(EtcBase):
 			if root is None:
 				return None # pragma: no cover
 			p = self.parent
-			if type(p) is EtcAwaiter:
+			if p is None:
+				p = await self.root.lookup(*self.path[:-1])
+				# This can happen when an awaiter's parent does not exist
+				# but it is resolved twice.
+			elif type(p) is EtcAwaiter:
 				p = await p
 				r = p._data.get(self.name,self)
 				if type(r) is not EtcAwaiter:

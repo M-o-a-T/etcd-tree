@@ -1,3 +1,10 @@
+etcd-tree (0.17.2.1) unstable; urgency=medium
+
+  * Bugfix: EtcAwaiter may lose its parent object
+    when that doesn't exist
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 05 Jun 2016 02:13:56 +0200
+
 etcd-tree (0.17.1.1) unstable; urgency=medium
 
   * Removed broken debug assertions

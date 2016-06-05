@@ -117,7 +117,8 @@ class EtcClient(object):
 			return self.root+key
 
 	async def get(self, key, _prefix=False, **kw):
-		return (await self.client.get(self._extkey(key,_prefix=_prefix), **kw))
+		key = self._extkey(key, _prefix=_prefix)
+		return (await self.client.get(key, **kw))
 
 	async def read(self, key, _prefix=False, **kw):
 		return (await self.client.read(self._extkey(key,_prefix=_prefix), **kw))
