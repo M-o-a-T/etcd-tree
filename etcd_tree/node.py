@@ -198,6 +198,7 @@ class EtcBase(object):
 
 	_later = 0
 	_env = _NOTGIVEN
+	_update_delay = None
 
 	@classmethod
 	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, _fill=None, **kw):
@@ -409,7 +410,9 @@ class EtcBase(object):
 
 	@property
 	def update_delay(self):
-		return self.root._update_delay
+		if self._update_delay is None:
+			self._update_delay = self.parent.update_delay
+		return self._update_delay
 
 	def force_updated(self):
 		"""\
