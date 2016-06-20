@@ -1,3 +1,9 @@
+etcd-tree (0.17.4.1) unstable; urgency=medium
+
+  * Minor cleanup
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 20 Jun 2016 06:50:11 +0200
+
 etcd-tree (0.17.4.0) unstable; urgency=medium
 
   * New: is_new
