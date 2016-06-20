@@ -822,8 +822,8 @@ class EtcDir(EtcBase, MutableMapping):
 
 	def add_monitor(self, callback):
 		res = super().add_monitor(callback)
-		self.added = set(self._data.keys()) - self._added
-		if self.added:
+		if self.added and not self._later:
+			self.added = set(self._data.keys())
 			self.deleted = set()
 			callback(self)
 		return res
