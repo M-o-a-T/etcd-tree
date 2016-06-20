@@ -199,6 +199,7 @@ class EtcBase(object):
 	_later = 0
 	_env = _NOTGIVEN
 	_update_delay = None
+	is_new = True # for monitors: False after the first call to has_update()
 
 	@classmethod
 	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, _fill=None, **kw):
@@ -530,10 +531,13 @@ class EtcBase(object):
 			Actually run the monitoring code.
 
 			Exceptions get propagated. They will kill the watcher."""
-		self.has_update()
-		if self._later_mon:
-			for f in list(self._later_mon.values()):
-				f(self)
+		try:
+			self.has_update()
+			if self._later_mon:
+				for f in list(self._later_mon.values()):
+					f(self)
+		finally:
+			self.is_new = False
 
 	def add_monitor(self, callback):
 		"""\

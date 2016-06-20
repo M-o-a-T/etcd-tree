@@ -1,3 +1,9 @@
+etcd-tree (0.17.4.0) unstable; urgency=medium
+
+  * New: is_new
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 20 Jun 2016 06:37:58 +0200
+
 etcd-tree (0.17.3.0) unstable; urgency=medium
 
   * Fix .added/.deleted for callbacks
