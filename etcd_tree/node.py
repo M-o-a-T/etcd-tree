@@ -405,7 +405,8 @@ class EtcBase(object):
 			(or that of a child node).
 
 			The call is delayed to allow multiple changes to coalesce.
-			If .seq is None, the node is being deleted.
+			When first called, .is_new is True.
+			If .is_new is None, the node is being deleted.
 			"""
 		pass
 
@@ -537,7 +538,8 @@ class EtcBase(object):
 				for f in list(self._later_mon.values()):
 					f(self)
 		finally:
-			self.is_new = False
+			if self.is_new:
+				self.is_new = False
 
 	def add_monitor(self, callback):
 		"""\
@@ -563,7 +565,11 @@ class EtcBase(object):
 		#logger.debug("DELETE %s",self.path)
 		s = self._seq
 		self._seq = None
-		self._call_monitors()
+		if not self.is_new:
+			self.is_new = None
+			self._call_monitors()
+		else: # just for safety (and debugging)'s sake
+			self.is_new = None # pragma: no cover
 		if self._later:
 			if type(self._later) is not int:
 				self._later.cancel()
