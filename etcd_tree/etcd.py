@@ -137,7 +137,8 @@ class EtcClient(object):
 			kw['prevValue'] = prev
 		if index is not None:
 			kw['prevIndex'] = index
-		res = await self.client.delete(self._extkey(key, _prefix=_prefix), **kw)
+		key = self._extkey(key, _prefix=_prefix)
+		res = await self.client.delete(key, **kw)
 		self.last_mod = res.modifiedIndex
 		return res
 
