@@ -613,7 +613,24 @@ class EtcBase(object):
 
 ##############################################################################
 
-class EtcAwaiter(EtcBase):
+class _EtcDir(EtcBase):
+	def lookup(self, *_name, name=()):
+		"""\
+			Utility function to find a sub-node.
+			Like .subdir, but synchronous and can't create anything.
+			"""
+		if isinstance(name,str):
+			name = name.split('/')
+		if len(_name) == 1:
+			_name = _name[0]
+			if isinstance(_name,str):
+				_name = _name.split('/')
+
+		for n in chain(_name,name):
+			self = self[n]
+		return self
+
+class EtcAwaiter(_EtcDir):
 	"""\
 		A node that needs to be looked up via "await".
 
@@ -759,7 +776,7 @@ class EtcFloat(EtcValue):
 
 ##############################################################################
 
-class EtcDir(EtcBase, MutableMapping):
+class EtcDir(_EtcDir, MutableMapping):
 	"""\
 		A node with other nodes below it.
 
@@ -882,22 +899,6 @@ class EtcDir(EtcBase, MutableMapping):
 
 		if isinstance(self,EtcAwaiter):
 			self = await self.load(recursive)
-		return self
-
-	def lookup(self, *_name, name=()):
-		"""\
-			Utility function to find a sub-node.
-			Like .subdir, but synchronous and can't create anything.
-			"""
-		if isinstance(name,str):
-			name = name.split('/')
-		if len(_name) == 1:
-			_name = _name[0]
-			if isinstance(_name,str):
-				_name = _name.split('/')
-
-		for n in chain(_name,name):
-			self = self[n]
 		return self
 
 	def tagged(self,tag, depth=0):
