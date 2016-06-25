@@ -268,6 +268,7 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
+	root = None
 	def __init__(self, conn,key,seq=0, types=None):
 		self.conn = conn
 		self.extkey = key
@@ -278,6 +279,7 @@ class EtcWatcher(object):
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
 		self.stopped.add_done_callback(lambda _: self.uptodate.notify_unlocked())
+		self.stored = []
 
 	def stop(self, exc,cause):
 		if not self.stopped.done():
@@ -328,7 +330,10 @@ class EtcWatcher(object):
 
 	async def sync(self, mod=None):
 		"""Wait for pending updates"""
-		root = self.root()
+		root = self.root
+		if root is None:
+			return
+		root = root()
 		if root is not None:
 			root = root.root # may be a subdir
 		if root is None:
@@ -363,19 +368,24 @@ class EtcWatcher(object):
 		try:
 			async def cb(x):
 				logger.debug("IN: %s %s",id(self),repr(x.__dict__))
-				try:
-					await self._watch_write(x)
-				except asyncio.CancelledError as e:
-					logger.debug("Write watcher cancelled")
-					raise
-				except Exception as e:
-					logger.exception("Error in write watcher")
-					if not self.stopped.done():
-						self.stopped.set_exception(e)
-					raise etcd.StopWatching
-				self.last_read = x.modifiedIndex
-				if self.extkey != key:
-					raise etcd.StopWatching
+				self.stored.append(x)
+				if self.root is None:
+					return
+				while self.stored:
+					x = self.stored.pop(0)
+					try:
+						await self._watch_write(x)
+					except asyncio.CancelledError as e:
+						logger.debug("Write watcher cancelled")
+						raise
+					except Exception as e:
+						logger.exception("Error in write watcher")
+						if not self.stopped.done():
+							self.stopped.set_exception(e)
+						raise etcd.StopWatching
+					self.last_read = x.modifiedIndex
+					if self.extkey != key:
+						raise etcd.StopWatching
 
 			while not self.stopped.done():
 				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
