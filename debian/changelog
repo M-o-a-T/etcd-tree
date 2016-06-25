@@ -1,3 +1,10 @@
+etcd-tree (0.18.0.0) unstable; urgency=medium
+
+  * Add .lookup() to EtcAwaiter
+  * minor bug fixes
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 25 Jun 2016 12:00:46 +0200
+
 etcd-tree (0.17.4.1) unstable; urgency=medium
 
   * Minor cleanup
