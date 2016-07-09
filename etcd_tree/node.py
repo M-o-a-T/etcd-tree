@@ -416,36 +416,42 @@ class EtcBase(object):
 			self._update_delay = self.parent.update_delay
 		return self._update_delay
 
-	def force_updated(self):
+	def force_updated(self, _sub=False):
 		"""\
 			Call all update handlers now.
 			"""
-		if type(self._later) is int and self._later > 0:
-			# a child is blocked, thus run its update handlers
+		if not self._later:
+			return
+		if type(self._later) is int:
+			# at least one child is blocked, thus run its update handlers
+			self._later = False
 			for v in self._data.values():
-				v.force_updated()
-		if type(self._later) is not int:
+				v.force_updated(_sub=True)
+			assert self._later == 0, self._later
+		if not isinstance(self._later, int):
 			self._later.cancel()
 			# will be set to zero in _run_update()
-		self._run_update()
+			self._later = 'x'
+		self._run_update(_force=_sub)
 		assert self._later == 0
 
 	def updated(self, seq=None, _force=False):
 		"""\
 			Schedule a call to the update monitors.
 			@_force: False: schedule a call
-			         True: child scheduler is done (DO NOT USE)
+			         True: a child node's scheduler is done (INTERNAL)
 			"""
 		# Invariant: _later is either the number of direct children which
 		# are blocked or, if there are none, an asyncio call_later token.
 		# (The token has a .cancel method, thus it cannot be an integer.)
-		# A node is blocked if its _later attribute is not zero.
+		# A node is blocked iff its _later attribute is not zero.
 		#
-		# Thus, adding a timer implies walking up the parent chain until we
-		# find a node that's already blocked, where we increment the
-		# counter (or drop the timer and set the counter to 1) and stop.
+		# Thus, after adding a timer we walk up the parent chain.
+		# If the parent is blocked, increment the counter and stop.
+		# Otherwise, drop the timer if there is one, set the counter to 1, and continue.
+		#
 		# After a timer runs, it calls its parent's updated(_force=True),
-		# which decrements the counter and adds a timer if that reaches zero.
+		# which decrements the counter and adds the timer if that reaches zero.
 
 		#logger.debug("run_update register %s, later is %s. force %s",self.path,self._later,_force)
 		p = self._parent
@@ -467,7 +473,7 @@ class EtcBase(object):
 				self._later.cancel()
 				p = None
 		else:
-			assert not _force
+			assert not _force, self._later
 		self.notify_seq = seq
 
 		try:
@@ -477,7 +483,6 @@ class EtcBase(object):
 			return
 		else:
 			self._later = self._loop.call_later(self.update_delay,self._run_update)
-
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -501,9 +506,15 @@ class EtcBase(object):
 				return
 			p = p._parent
 
-	def _run_update(self):
-		"""Timer callback to run a node's callback."""
+	def _run_update(self, _force=False):
+		"""\
+			Timer callback to run a node's callback.
+
+			If @force is True, this is called from force_update
+			which will update the parent.
+		"""
 		#logger.debug("run_update %s",self.path)
+		p = None
 		ls = self.notify_seq
 		self._later = 0
 		# At this point our parent's invariant is temporarily violated,
@@ -518,6 +529,8 @@ class EtcBase(object):
 			if root is not None:
 				root.propagate_exc(exc,self)
 
+		if _force:
+			return
 		p = self._parent
 		if p is None:
 			return
@@ -580,6 +593,7 @@ class EtcBase(object):
 		if p is None:
 			return # pragma: no cover
 		#logger.debug("run_update: deleted:")
+
 		p.updated(seq=s, _force=bool(self._later))
 
 	def _ext_delete(self, seq=None):

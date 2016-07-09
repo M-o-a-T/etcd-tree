@@ -1,3 +1,10 @@
+etcd-tree (0.18.1.0) unstable; urgency=medium
+
+  * The top-level force_update() needs to trgger the parent.
+  * Don't force an update if there is nothing to do.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 09 Jul 2016 11:04:17 +0200
+
 etcd-tree (0.18.0.0) unstable; urgency=medium
 
   * Add .lookup() to EtcAwaiter
