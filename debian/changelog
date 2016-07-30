@@ -1,3 +1,11 @@
+etcd-tree (0.18.2.0) unstable; urgency=medium
+
+  * Bugfix: select the correct sub-node type
+
+  Needs a test case.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 30 Jul 2016 04:56:21 +0200
+
 etcd-tree (0.18.1.0) unstable; urgency=medium
 
   * The top-level force_update() needs to trgger the parent.

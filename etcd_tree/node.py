@@ -41,6 +41,7 @@ import aio_etcd as etcd
 from etcd import EtcdResult
 from functools import wraps
 from .util import hybridmethod
+from traceback import print_exc
 
 __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
 	'EtcString','EtcFloat','EtcInteger',
@@ -821,7 +822,12 @@ class EtcDir(_EtcDir, MutableMapping):
 		return None
 	@classmethod
 	def _dump(cls,value): # pragma: no cover
-		assert value is None
+		try:
+			assert value is None, value
+		except AssertionError:
+			print_exc()
+			import pdb;pdb.set_trace()
+			raise
 		return None
 
 	def keys(self):
@@ -997,7 +1003,6 @@ class EtcDir(_EtcDir, MutableMapping):
 			# (or items if it's a dict)
 			async def t_set(path,keypath,key,value):
 				path += (key,)
-				keypath += 1
 
 				mod = None
 				if isinstance(value,dict):

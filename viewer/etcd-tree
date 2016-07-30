@@ -7,9 +7,14 @@ gi.require_version('Gtk', '3.0')
 
 from gi.repository import Gtk
 from gi.repository import GObject, GLib
+from datetime import datetime
+from time import time
 import os
 
 import etcd
+
+tm1 = 1450000000 # 2015-12-13
+tm2 = time()+24*3600*366 # next year
 
 class DEL: pass
 
@@ -125,6 +130,13 @@ class AssocUI(object):
 			if onode: del onode[oname]
 
 		elif value is not None:
+			try:
+				vd = float(value)
+				if vd > tm1 and vd < tm2:
+					value = datetime.fromtimestamp(vd)
+					value = value.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+			except ValueError:
+				pass
 			node['_value'] = value
 			m.set_value(node['_node'],1,value)
 
@@ -142,6 +154,13 @@ class AssocUI(object):
 		def fill_dest(nr,it,d):
 			na = nr['key'][nr['key'].rindex('/')+1:]
 			v = nr.get('value','-dir-')
+			try:
+				vd = float(v)
+				if vd > tm1 and vd < tm2:
+					v = datetime.fromtimestamp(vd)
+					v = v.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+			except ValueError:
+				pass
 			p = m.append(it,row=[na,v])
 			#print("add",na,v,str(m.get_path(p)))
 			d[na] = nd = {'_node':p, '_value':v}
