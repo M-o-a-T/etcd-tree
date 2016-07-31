@@ -723,11 +723,12 @@ class EtcAwaiter(_EtcDir):
 				# but it is resolved twice.
 			if type(p) is EtcAwaiter:
 				p = await p
-				r = p._data.get(self.name,self)
-				if type(r) is not EtcAwaiter:
-					self._done = r
-					return r
+			r = p._data.get(self.name,self)
+			if type(r) is not EtcAwaiter:
+				self._done = r
+				return r
 			# _fill carries over any monitors and existing EtcAwaiter instances
+				
 			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
 			self._done = obj
 			assert p._data[self.name] is obj, (p._data[self.name],obj)
