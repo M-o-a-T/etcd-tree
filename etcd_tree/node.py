@@ -214,6 +214,7 @@ class EtcBase(object):
 			If @recursive is True, @pre needs to have been recursively
 			fetched from etcd.
 			"""
+		kw['_no_update_parent'] = True
 		logger.debug("_new %d %s %s",id(parent),parent,key)
 		irec = recursive
 		if pre is not None:
@@ -283,9 +284,10 @@ class EtcBase(object):
 					self._data[k] = v
 			self._later_mon.update(_fill._later_mon)
 		await self.init()
+		self._update_parent()
 		return self
 
-	def __init__(self, pre, name=None,parent=None):
+	def __init__(self, pre, name=None,parent=None, _no_update_parent=False):
 		if parent is not None:
 			self._parent = weakref.ref(parent)
 			self._loop = parent._loop
@@ -297,12 +299,8 @@ class EtcBase(object):
 				name = pre.name
 			self.name = name
 			self.path = parent.path+(name,)
-			if name in parent._data:
-				assert not isinstance(self,EtcAwaiter)
-				assert isinstance(parent._data[name],EtcAwaiter), (self,parent._data[name])
-			elif hasattr(parent,'_added'):
-				parent._added.add(name)
-			parent._data[name] = self
+			if not _no_update_parent:
+				self._update_parent()
 		else:
 			# This is a root node
 			self._root = weakref.ref(self)
@@ -313,6 +311,18 @@ class EtcBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 		logger.debug("init %d %s",id(self),self)
+
+	def _update_parent(self):
+		if self._parent is None:
+			return # root
+		parent = self._parent()
+		name = self.name
+		if name in parent._data:
+			assert not isinstance(self,EtcAwaiter)
+			assert isinstance(parent._data[name],EtcAwaiter), (id(self.parent),self,id(parent),id(parent._data[name].parent),parent._data[name])
+		elif hasattr(parent,'_added'):
+			parent._added.add(name)
+		parent._data[name] = self
 
 	def throw_away(self):
 		"""Delete this node, replacing it with an EtcAwaiter.
@@ -332,14 +342,18 @@ class EtcBase(object):
 		conn_get = self._root()._conn.get
 		for c in pre.child_nodes:
 			n = c.name
+			a = EtcAwaiter(parent=self,pre=c,name=n)
+			self._added.add(n)
+		
+		for c in pre.child_nodes:
+			n = c.name
 			if c.dir and recursive is None:
-				a = EtcAwaiter(parent=self,pre=c,name=n)
-				self._added.add(n)
+				pass
 			else:
 				# TODO: do this in parallel.
-				obj = await self._new(parent=self, key=c.name,
-					pre=(c if recursive or not c.dir else None),
-					recursive=recursive)
+				a = self._data[n]
+				if isinstance(a,EtcAwaiter):
+					await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
 		
 	async def init(self):
 		"""Last step after loading.
@@ -693,7 +707,7 @@ class EtcAwaiter(_EtcDir):
 	_get = __getitem__
 
 	def __await__(self):
-		return self.load(None).__await__()
+		return self.load().__await__()
 
 	async def load(self,recursive=None, pre=None):
 		async with self._lock:

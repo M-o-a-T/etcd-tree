@@ -1,3 +1,9 @@
+etcd-tree (0.18.4.0) unstable; urgency=medium
+
+  * Further concurrency bugfix work. Problem fixed.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 31 Jul 2016 18:00:09 +0200
+
 etcd-tree (0.18.3.0) unstable; urgency=medium
 
   * Bugfix: concurrency problems w/ EtcAwaiter
