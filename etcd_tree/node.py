@@ -862,12 +862,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		return None
 	@classmethod
 	def _dump(cls,value): # pragma: no cover
-		try:
-			assert value is None, value
-		except AssertionError:
-			print_exc()
-			import pdb;pdb.set_trace()
-			raise
+		assert value is None, value
 		return None
 
 	def keys(self):
