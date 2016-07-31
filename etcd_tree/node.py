@@ -203,7 +203,7 @@ class EtcBase(object):
 	is_new = True # for monitors: False after the first call to has_update()
 
 	@classmethod
-	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, _fill=None, **kw):
+	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, **kw):
 		"""\
 			This classmethod loads data (if necessary) and creates a class from a base.
 
@@ -278,16 +278,11 @@ class EtcBase(object):
 			if pre.dir:
 				await self._fill_data(pre=pre,recursive=True)
 
-		if _fill is not None:
-			for k,v in getattr(_fill,'_data',{}).items():
-				if k not in self._data and type(v) is EtcAwaiter:
-					self._data[k] = v
-			self._later_mon.update(_fill._later_mon)
 		await self.init()
 		self._update_parent()
 		return self
 
-	def __init__(self, pre, name=None,parent=None, _no_update_parent=False):
+	def __init__(self, pre, name=None,parent=None, _no_update_parent=False, _fill=None):
 		if parent is not None:
 			self._parent = weakref.ref(parent)
 			self._loop = parent._loop
@@ -310,6 +305,16 @@ class EtcBase(object):
 			self._ttl = pre.ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
+
+		if _fill is not None:
+			rs = weakref.ref(self)
+			for k,v in getattr(_fill,'_data',{}).items():
+				if k not in self._data and type(v) is EtcAwaiter:
+					self._data[k] = v
+					v._parent = rs
+			_fill._done = self
+			self._later_mon.update(_fill._later_mon)
+
 		logger.debug("init %d %s",id(self),self)
 
 	def _update_parent(self):
@@ -353,6 +358,8 @@ class EtcBase(object):
 				# TODO: do this in parallel.
 				a = self._data[n]
 				if isinstance(a,EtcAwaiter):
+					an = await self._new(parent=self,key=n,recursive=recursive, pre=(c if recursive or not c.dir else None), _fill=a)
+
 					await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
 		
 	async def init(self):
@@ -688,9 +695,10 @@ class EtcAwaiter(_EtcDir):
 		self = parent._data.get(name,_NOTGIVEN)
 		if self is _NOTGIVEN:
 			self = object.__new__(cls)
-			super().__init__(self, parent=parent,pre=pre,name=name)
+			super().__init__(self, parent=parent,pre=pre,name=name,_no_update_parent=True)
 			self._lock = asyncio.Lock(loop=self._loop)
 			self._data = {}
+			assert name not in parent._data
 			parent._data[name] = self
 		return self
 
@@ -710,19 +718,21 @@ class EtcAwaiter(_EtcDir):
 		return self.load().__await__()
 
 	async def load(self,recursive=None, pre=None):
+		if self._done is not None:
+			return self._done # pragma: no cover ## concurrency
+		root = self.root
+		if root is None:
+			return None # pragma: no cover
+		p = self.parent
+		if p is None:
+			p = await self.root.lookup(*self.path[:-1])
+			# This can happen when an awaiter's parent does not exist
+			# but it is resolved twice.
+		if type(p) is EtcAwaiter:
+			p = await p
 		async with self._lock:
 			if self._done is not None:
-				return self._done # pragma: no cover ## concurrency
-			root = self.root
-			if root is None:
-				return None # pragma: no cover
-			p = self.parent
-			if p is None:
-				p = await self.root.lookup(*self.path[:-1])
-				# This can happen when an awaiter's parent does not exist
-				# but it is resolved twice.
-			if type(p) is EtcAwaiter:
-				p = await p
+				return self._done
 			r = p._data.get(self.name,self)
 			if type(r) is not EtcAwaiter:
 				self._done = r
@@ -730,7 +740,7 @@ class EtcAwaiter(_EtcDir):
 			# _fill carries over any monitors and existing EtcAwaiter instances
 				
 			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
-			self._done = obj
+			assert self._done is obj
 			assert p._data[self.name] is obj, (p._data[self.name],obj)
 			return obj
 
