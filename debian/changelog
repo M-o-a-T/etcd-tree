@@ -1,3 +1,11 @@
+etcd-tree (0.18.3.0) unstable; urgency=medium
+
+  * Bugfix: concurrency problems w/ EtcAwaiter
+
+    Make sure that there is never more than one Awaiter for the same node.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 31 Jul 2016 11:35:42 +0200
+
 etcd-tree (0.18.2.0) unstable; urgency=medium
 
   * Bugfix: select the correct sub-node type

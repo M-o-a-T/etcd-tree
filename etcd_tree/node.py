@@ -214,6 +214,7 @@ class EtcBase(object):
 			If @recursive is True, @pre needs to have been recursively
 			fetched from etcd.
 			"""
+		logger.debug("_new %d %s %s",id(parent),parent,key)
 		irec = recursive
 		if pre is not None:
 			kw['pre'] = pre
@@ -296,7 +297,10 @@ class EtcBase(object):
 				name = pre.name
 			self.name = name
 			self.path = parent.path+(name,)
-			if name not in parent._data and hasattr(parent,'_added'):
+			if name in parent._data:
+				assert not isinstance(self,EtcAwaiter)
+				assert isinstance(parent._data[name],EtcAwaiter), (self,parent._data[name])
+			elif hasattr(parent,'_added'):
 				parent._added.add(name)
 			parent._data[name] = self
 		else:
@@ -308,7 +312,16 @@ class EtcBase(object):
 			self._ttl = pre.ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
+		logger.debug("init %d %s",id(self),self)
 
+	def throw_away(self):
+		"""Delete this node, replacing it with an EtcAwaiter.
+			You need to make sure not to retain *any* references to the
+			node."""
+		self._parent = None
+		del self.parent._data[self.name]
+		return EtcAwaiter(self.parent,name=self.name)
+		
 	@classmethod
 	async def this_obj(cls,recursive, **kw):
 		"""A method to intercept class creation."""
@@ -320,7 +333,7 @@ class EtcBase(object):
 		for c in pre.child_nodes:
 			n = c.name
 			if c.dir and recursive is None:
-				self._data[n] = a = EtcAwaiter(parent=self,pre=c,name=n)
+				a = EtcAwaiter(parent=self,pre=c,name=n)
 				self._added.add(n)
 			else:
 				# TODO: do this in parallel.
@@ -657,15 +670,25 @@ class EtcAwaiter(_EtcDir):
 		"""
 	_done = None
 
+	def __new__(cls,parent,pre=None,name=None):
+		self = parent._data.get(name,_NOTGIVEN)
+		if self is _NOTGIVEN:
+			self = object.__new__(cls)
+			super().__init__(self, parent=parent,pre=pre,name=name)
+			self._lock = asyncio.Lock(loop=self._loop)
+			self._data = {}
+			parent._data[name] = self
+		return self
+
 	def __init__(self,parent,pre=None,name=None):
-		super().__init__(parent=parent, pre=pre,name=name)
-		self._lock = asyncio.Lock(loop=self._loop)
-		self._data = {}
+		pass
 
 	def __getitem__(self,key):
 		v = self._data.get(key,_NOTGIVEN)
 		if v is _NOTGIVEN:
-			self._data[key] = v = EtcAwaiter(self, name=key)
+			v = EtcAwaiter(self, name=key)
+		else:
+			assert isinstance(v,EtcAwaiter)
 		return v
 	_get = __getitem__
 
@@ -684,7 +707,7 @@ class EtcAwaiter(_EtcDir):
 				p = await self.root.lookup(*self.path[:-1])
 				# This can happen when an awaiter's parent does not exist
 				# but it is resolved twice.
-			elif type(p) is EtcAwaiter:
+			if type(p) is EtcAwaiter:
 				p = await p
 				r = p._data.get(self.name,self)
 				if type(r) is not EtcAwaiter:
@@ -693,7 +716,7 @@ class EtcAwaiter(_EtcDir):
 			# _fill carries over any monitors and existing EtcAwaiter instances
 			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
 			self._done = obj
-			assert p._data[self.name] is obj
+			assert p._data[self.name] is obj, (p._data[self.name],obj)
 			return obj
 
 	def _ext_del_node(self, child):
@@ -773,6 +796,8 @@ class EtcXValue(EtcBase):
 	def __repr__(self): ## pragma: no cover
 		try:
 			return "<{} @{} ={}>".format(self.__class__.__name__,'/'.join(self.path), repr(self._value))
+		except AttributeError:
+			return "<{} @{} ?>".format(self.__class__.__name__,'/'.join(self.path))
 		except Exception as e:
 			logger.exception(e)
 			res = super().__repr__()
@@ -1092,8 +1117,15 @@ class EtcDir(_EtcDir, MutableMapping):
 		return r
 
 	def throw_away(self):
-		return EtcAwaiter(self.parent,name=self.name)
-		
+		"""Delete this node, replacing it with an EtcAwaiter.
+			You need to make sure not to retain *any* references to the
+			node."""
+		# make sure that any ref there still is, is unuseable
+		for v in self._data.values():
+			v.throw_away()
+		self._data = None
+		return super().throw_away()
+
 	def _ext_delete(self):
 		"""We vanished. Oh well."""
 		for d in list(self._data.values()):
