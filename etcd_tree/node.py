@@ -396,7 +396,9 @@ class EtcBase(object):
 		self.root._task_do(p,*a,**k)
 
 	async def wait(self,mod=None):
-		await self.root.wait(mod=mod)
+		r = self.root
+		if r is not None:
+			await r.wait(mod=mod)
 
 	def __repr__(self): ## pragma: no cover
 		try:

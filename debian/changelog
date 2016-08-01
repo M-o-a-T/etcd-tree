@@ -1,3 +1,9 @@
+etcd-tree (0.18.7.0) unstable; urgency=medium
+
+  * Tolerate tree.wait() getting called on a dead tree
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 01 Aug 2016 07:48:57 +0200
+
 etcd-tree (0.18.6.0) unstable; urgency=medium
 
   * Next try …
