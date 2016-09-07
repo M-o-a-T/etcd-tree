@@ -464,6 +464,7 @@ class EtcWatcher(object):
 			logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
 
 class EtcTypes(object):
+	doc = None
 
 	def __init__(self):
 		self.type = [None,None]
@@ -506,13 +507,16 @@ class EtcTypes(object):
 			assert dest is None or dest is res
 		return res
 
-	def items(self,key):
+	def items(self,key=None):
 		"""\
 			Enumerate sub-entries matching this key.
 			Yields (name,sub-entry) tuples.
 			Note that a name of "**" is supposed to match a whole subtree,
 			so the matching algorithm in .lookup() carries it over.
 			"""
+		if key is None:
+			return iter(self.nodes)
+
 		res = self.nodes.get(key,None)
 		if res is not None:
 			yield key,res
@@ -533,7 +537,7 @@ class EtcTypes(object):
 		self = self.step(path)
 		self._register(value)
 
-	def register(self, *path, cls=None):
+	def register(self, *path, cls=None, doc=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
@@ -541,12 +545,16 @@ class EtcTypes(object):
 		if cls is None:
 			return self._register
 		else:
-			return self._register(cls)
+			return self._register(cls,doc)
 
-	def _register(self, cls):
+	def _register(self, cls,doc=None):
 		"""Register a callback on this node"""
 		from .node import EtcDir,EtcXValue
 		done = False
+		if doc is None:
+			doc = cls.__doc__
+		if doc:
+			self.doc = doc
 		if issubclass(cls,EtcXValue):
 			self.type[0] = cls
 			done = True
