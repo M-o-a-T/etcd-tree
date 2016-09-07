@@ -34,7 +34,7 @@ This is the core of etcTree, the object tree.
 import os
 import asyncio
 
-__VERSION__ = (0,18,6)
+__VERSION__ = (0,18,8)
 
 import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)
@@ -46,7 +46,7 @@ async def client(cfg="/etc/etcd_tree.cfg", loop=None):
 
 	from .etcd import EtcClient
 	c = EtcClient(loop=loop, **cfg['config']['etcd'])
-	await c._init()
+	await c.start()
 	return c
 
 from .etcd import *

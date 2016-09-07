@@ -41,7 +41,7 @@ from itertools import chain
 
 from .node import EtcRoot
 
-__all__ = ("EtcTypes",)
+__all__ = ("EtcClient","EtcTypes")
 
 # Requiring a lock is bad for our health.
 
@@ -73,7 +73,7 @@ class EtcClient(object):
 		self.client = Client(loop=loop, **args)
 #		self.watched = weakref.WeakValueDictionary()
 
-	async def _init(self):
+	async def start(self):
 		if self.last_mod is not None: # pragma: no cover
 			return
 		try:
@@ -87,6 +87,9 @@ class EtcClient(object):
 	def _kill(self):
 		try: del self.client
 		except AttributeError: pass
+
+	async def stop(self):
+		self.close()
 
 	def close(self):
 		try: c = self.client
