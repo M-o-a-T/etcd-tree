@@ -513,9 +513,11 @@ class EtcTypes(object):
 			Yields (name,sub-entry) tuples.
 			Note that a name of "**" is supposed to match a whole subtree,
 			so the matching algorithm in .lookup() carries it over.
+
+			If no key is given, enumerate all of this node's entries.
 			"""
 		if key is None:
-			return iter(self.nodes)
+			yield from self.nodes.items()
 
 		res = self.nodes.get(key,None)
 		if res is not None:

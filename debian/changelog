@@ -1,3 +1,9 @@
+etcd-tree (0.19.1.0) unstable; urgency=medium
+
+  * Fix local node enumeration
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 09 Sep 2016 05:21:44 +0200
+
 etcd-tree (0.19.0.0) unstable; urgency=medium
 
   * Add .doc field to EtcTypes
