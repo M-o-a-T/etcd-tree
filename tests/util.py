@@ -47,7 +47,7 @@ def client(loop):
 
     from etcd_tree.etcd import EtcClient
     c = EtcClient(root=r, loop=loop, **kw)
-    loop.run_until_complete(c._init())
+    loop.run_until_complete(c.start())
     try:
         loop.run_until_complete(c.client.delete(c.root, recursive=True))
     except etcd.EtcdKeyNotFound:
@@ -64,6 +64,7 @@ def client(loop):
 
     yield c
 
+    loop.run_until_complete(c.stop())
     c.close()
     
 # load a config file
