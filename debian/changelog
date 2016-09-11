@@ -1,3 +1,11 @@
+etcd-tree (0.20.0.0) unstable; urgency=medium
+
+  * Support lazy loading of types
+
+    Removed support for registering dir and scalar types on the same node
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 11 Sep 2016 11:01:46 +0200
+
 etcd-tree (0.19.1.0) unstable; urgency=medium
 
   * Fix local node enumeration

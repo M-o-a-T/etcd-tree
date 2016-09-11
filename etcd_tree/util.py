@@ -134,3 +134,19 @@ class hybridmethod(object):
 		hybrid.__self__ = hybrid.im_self = context
 
 		return hybrid
+
+
+from importlib import import_module
+def import_string(name):
+	"""Import a module, or resolve an attribute of a module."""
+	name = str(name)
+	try:
+		return import_module(name)
+	except ImportError:
+		if '.' not in name:
+			raise
+		module, obj = name.rsplit('.', 1)
+		try:
+			return getattr(import_string(module),obj)
+		except AttributeError:
+			raise AttributeError(name) from None

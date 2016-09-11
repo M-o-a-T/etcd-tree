@@ -72,9 +72,7 @@ async def test_basic_watch(client,loop):
     i = types.register("*/vierixx")(EtcInteger)
     assert i is EtcInteger
     types['what/ever'] = EtcFloat
-    types['what/ever'] = rTwo
     assert types.lookup('what','ever', dir=False) is EtcFloat
-    assert types.lookup('what','ever', dir=True) is rTwo
     assert types['what/ever'] is EtcFloat
     with pytest.raises(AssertionError):
         types['/what/ever']

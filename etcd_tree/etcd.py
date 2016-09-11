@@ -40,6 +40,7 @@ from contextlib import suppress
 from itertools import chain
 
 from .node import EtcRoot
+from .util import import_string
 
 __all__ = ("EtcClient","EtcTypes")
 
@@ -233,10 +234,12 @@ class EtcClient(object):
 
 		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
 		if root_cls is None and types is not None:
-			root_cls = types.type[True]
+			root_cls = types.type
 		if root_cls is None:
 			root_cls = EtcRoot
 		else:
+			if isinstance(root_cls,str):
+				root_cls = import_string(root_cls)
 			assert issubclass(root_cls,EtcRoot)
 		root = await root_cls._new(conn=self, watcher=w, key=key, pre=res,
 				recursive=rec, types=types, **kw)
@@ -467,7 +470,7 @@ class EtcTypes(object):
 	doc = None
 
 	def __init__(self):
-		self.type = [None,None]
+		self.type = None
 		self.nodes = {}
 
 	def __repr__(self): # pragma: no cover
@@ -532,14 +535,14 @@ class EtcTypes(object):
 	def __getitem__(self,path):
 		"""Shortcut to directly lookup a non-directory node"""
 		self = self.step(path)
-		return self.type[0]
+		return self.type
 
 	def __setitem__(self,path,value):
 		"""Shortcut to register a non-directory node"""
 		self = self.step(path)
 		self._register(value)
 
-	def register(self, *path, cls=None, doc=None):
+	def register(self, *path, dir=None, cls=None, doc=None):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
 			"""
@@ -547,34 +550,27 @@ class EtcTypes(object):
 		if cls is None:
 			return self._register
 		else:
-			return self._register(cls,doc)
+			return self._register(cls,doc=doc)
 
 	def _register(self, cls,doc=None):
-		"""Register a callback on this node"""
-		from .node import EtcDir,EtcXValue
-		done = False
+		"""Register a class for this node"""
 		if doc is None:
 			doc = cls.__doc__
 		if doc:
 			self.doc = doc
-		if issubclass(cls,EtcXValue):
-			self.type[0] = cls
-			done = True
-		if issubclass(cls,EtcDir):
-			self.type[1] = cls
-			done = True
-		if not done:
-			raise RuntimeError("What exactly are you trying to register?")
+		self.type = cls
 		return cls
 
-	def lookup(self, *path, dir, raw=False):
+	def lookup(self, *path, dir=None, raw=False):
 		"""\
 			Find the node type that's to be associated with a path below me.
 
 			This is called on the root node.
-			@dir must be True (a directory) or False (an end node).
+			If @dir is True, the node must be a directory; if False, an end node.
 			If @raw is True, returns the EtcTypes entry instead of the class.
 			"""
+		from .node import EtcDir,EtcXValue
+
 		if len(path) == 1:
 			path = path[0]
 			if isinstance(path,str):
@@ -592,8 +588,14 @@ class EtcTypes(object):
 				return None
 			nodes = cn
 		for p,n in nodes:
-			t = n.type[dir]
+			t = n.type
 			if t is not None:
+				if isinstance(t,str):
+					n.type = t = import_string(t)
+				if dir is True:
+					assert issubclass(t,EtcDir)
+				elif dir is False:
+					assert issubclass(t,EtcXValue)
 				return n if raw else t
 		return None
 
