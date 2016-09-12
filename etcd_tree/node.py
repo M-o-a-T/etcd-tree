@@ -1184,12 +1184,16 @@ class EtcDir(_EtcDir, MutableMapping):
 	_types_from_parent = True
 
 	@hybridmethod
-	def register(self, *path,**kw):
+	def register(self, *path, cls=None, **kw):
 		"""Register a typed lookup."""
 		if self._types is None:
+			if cls is None:
+				return None
 			from .etcd import EtcTypes
 			self._types = EtcTypes()
-		return self._types.register(*path, **kw)
+		if cls is None:
+			return self._types.step(*path)
+		return self._types.register(*path, cls=cls, **kw)
 		
 	def subtype(self,*path,dir=None,pre=None,recursive=None):
 		"""\

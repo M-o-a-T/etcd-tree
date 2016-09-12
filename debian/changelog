@@ -1,3 +1,10 @@
+etcd-tree (0.20.1.0) unstable; urgency=medium
+
+  * Without a class, a node's .register method wil return the corresponding
+    EtcTypes entry.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 12 Sep 2016 09:29:32 +0200
+
 etcd-tree (0.20.0.0) unstable; urgency=medium
 
   * Support lazy loading of types
