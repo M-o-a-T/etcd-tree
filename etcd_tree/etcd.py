@@ -64,6 +64,18 @@ class WatchError(RuntimeError):
 	"""Used when an external error stops an EtcWatcher."""
 	pass
 
+async def retry_conn(p,*a,**k):
+	n=0
+	while True:
+		try:
+			res = await p(*a,**k)
+		except etcd.EtcdConnectionFailed:
+			if n >= 5:
+				raise
+			n += 1
+		else:
+			return res
+
 class EtcClient(object):
 	last_mod = None
 	def __init__(self, root="", loop=None, **args):
@@ -78,9 +90,9 @@ class EtcClient(object):
 		if self.last_mod is not None: # pragma: no cover
 			return
 		try:
-			self.last_mod = (await self.client.read(self.root)).etcd_index
+			self.last_mod = (await retry_conn(self.client.read,self.root)).etcd_index
 		except etcd.EtcdKeyNotFound:
-			self.last_mod = (await self.client.write(self.root, value=None, dir=True)).etcd_index
+			self.last_mod = (await retry_conn(self.client.write,self.root, value=None, dir=True)).etcd_index
 
 	def __del__(self):
 		self._kill()
@@ -122,10 +134,10 @@ class EtcClient(object):
 
 	async def get(self, key, _prefix=False, **kw):
 		key = self._extkey(key, _prefix=_prefix)
-		return (await self.client.get(key, **kw))
+		return (await retry_conn(self.client.get,key, **kw))
 
 	async def read(self, key, _prefix=False, **kw):
-		return (await self.client.read(self._extkey(key,_prefix=_prefix), **kw))
+		return (await retry_conn(self.client.read,self._extkey(key,_prefix=_prefix), **kw))
 
 	async def delete(self, key, prev=_NOTGIVEN, _prefix=False, index=None, **kw):
 		"""\
@@ -142,7 +154,7 @@ class EtcClient(object):
 		if index is not None:
 			kw['prevIndex'] = index
 		key = self._extkey(key, _prefix=_prefix)
-		res = await self.client.delete(key, **kw)
+		res = await retry_conn(self.client.delete,key,**kw)
 		self.last_mod = res.modifiedIndex
 		return res
 
@@ -183,7 +195,7 @@ class EtcClient(object):
 			if prev is not None:
 				kw['prevValue'] = prev
 
-		res = await self.client.write(key, value=value, **kw)
+		res = await retry_conn(self.client.write,key, value=value, **kw)
 		self.last_mod = res.modifiedIndex
 		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
@@ -217,20 +229,20 @@ class EtcClient(object):
 			rec = None
 
 		if create is False:
-			res = await self.client.read(xkey, recursive=rec)
+			res = await retry_conn(self.client.read,xkey, recursive=rec)
 		elif create is True:
-			res = await self.client.write(xkey, prevExist=False, dir=True, value=None)
+			res = await retry_conn(self.client.write,xkey, prevExist=False, dir=True, value=None)
 		else:
 			# etcd can't do "create-directory-if-it-does-not-exist", so
 			# if two jobs with create=None attempt this at the same time
 			# the whole thing gets interesting.
 			try:
-				res = await self.client.read(xkey, recursive=rec)
+				res = await retry_conn(self.client.read,xkey, recursive=rec)
 			except etcd.EtcdKeyNotFound:
 				try:
-					res = await self.client.write(xkey, prevExist=False, dir=True, value=None)
+					res = await retry_conn(self.client.write,xkey, prevExist=False, dir=True, value=None)
 				except etcd.EtcdAlreadyExist: # pragma: no cover
-					res = await self.client.read(xkey, recursive=rec)
+					res = await retry_conn(self.client.read,xkey, recursive=rec)
 
 		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
 		if root_cls is None and types is not None:
