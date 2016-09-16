@@ -1,3 +1,9 @@
+etcd-tree (0.20.2.0) unstable; urgency=medium
+
+  * Retry.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 16 Sep 2016 11:17:33 +0200
+
 etcd-tree (0.20.1.0) unstable; urgency=medium
 
   * Without a class, a node's .register method wil return the corresponding
