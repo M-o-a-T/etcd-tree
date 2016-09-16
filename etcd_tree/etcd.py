@@ -488,6 +488,14 @@ class EtcTypes(object):
 	def __repr__(self): # pragma: no cover
 		return "<%s:%s>" % (self.__class__.__name__,repr(self.type))
 
+	def __call__(self, cls):
+		"""\
+			For usage as a class decorator.
+			"""
+		assert self.type is None
+		self.type = cls
+		return cls
+
 	def step(self,*key, dest=None):
 		"""\
 			Lookup a path, with auto-generation of new nodes.
