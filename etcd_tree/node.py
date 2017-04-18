@@ -322,9 +322,12 @@ class EtcBase(object):
 			return # root
 		parent = self._parent()
 		name = self.name
-		if name in parent._data:
+		x = parent._data.get(name,None)
+		if x is not None:
 			assert not isinstance(self,EtcAwaiter)
-			assert isinstance(parent._data[name],EtcAwaiter), (id(self.parent),self,id(parent),id(parent._data[name].parent),parent._data[name])
+			if x is self:
+				return
+			assert isinstance(x,EtcAwaiter), (id(self.parent),self,id(parent),id(parent._data[name].parent),x)
 		elif hasattr(parent,'_added'):
 			parent._added.add(name)
 		parent._data[name] = self
@@ -739,7 +742,7 @@ class EtcAwaiter(_EtcDir):
 			if type(r) is not EtcAwaiter:
 				self._done = r
 				return r
-			# _fill carries over any monitors and existing EtcAwaiter instances
+			# _fill carries over any monitors and existing EtcAwaiter children
 				
 			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
 			assert self._done is obj
