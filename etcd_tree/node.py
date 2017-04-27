@@ -1012,10 +1012,12 @@ class EtcDir(_EtcDir, MutableMapping):
 			t_set((),key, val)
 		else:
 			if isinstance(res,EtcXValue):
-				assert not isinstance(val,dict)
+				if isinstance(val,dict):
+					raise ValueError("Cannot replace a terminal node with a mapping",self.path)
 				res.value = val
 			else:
-				assert isinstance(val,dict)
+				if not isinstance(val,dict):
+					raise ValueError("Cannot replace a mapping with a terminal node",self.path)
 				for k,v in val.items():
 					res[k] = v
 
@@ -1087,12 +1089,13 @@ class EtcDir(_EtcDir, MutableMapping):
 				res = mod = await t_set(self.path,len(self.path),key, value)
 		else:
 			if isinstance(sub,EtcXValue):
-				assert not isinstance(value,dict)
-				res = mod = await sub.set(value, **kw)
+				if isinstance(value,dict):
+					raise ValueError("Cannot replace a terminal node with a mapping",self.path)
 				if replace:
 					res = mod = await sub.set(value, **kw)
 			else:
-				assert isinstance(value,dict)
+				if not isinstance(value,dict):
+					raise ValueError("Cannot replace a mapping with a terminal node",self.path)
 				for k,v in value.items():
 					res = mod = await sub.set(k,v, replace=replace, **kw)
 
