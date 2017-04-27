@@ -1026,7 +1026,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		res = await self.set(path[-1], val, sync=False)
 		return res
 
-	async def set(self, key,value, sync=True, **kw):
+	async def set(self, key,value, sync=True, replace=True, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			Returns the operation's modification index.
@@ -1035,7 +1035,8 @@ class EtcDir(_EtcDir, MutableMapping):
 			and the return value will be a key,modIndex tuple.
 
 			If @value is a mapping, recursively add/update values.
-			No nodes are deleted!
+			No nodes are deleted! Set "replace" to False if you only want
+			to supply defaults.
 
 			Setting an atomic value to a dict, or vice versa, is not
 			supported; you need to explicitly delete the conflicting entry
@@ -1088,10 +1089,12 @@ class EtcDir(_EtcDir, MutableMapping):
 			if isinstance(sub,EtcXValue):
 				assert not isinstance(value,dict)
 				res = mod = await sub.set(value, **kw)
+				if replace:
+					res = mod = await sub.set(value, **kw)
 			else:
 				assert isinstance(value,dict)
 				for k,v in value.items():
-					res = mod = await sub.set(k,v, **kw)
+					res = mod = await sub.set(k,v, replace=replace, **kw)
 
 		if sync and mod and root is not None:
 			await root.wait(mod)
