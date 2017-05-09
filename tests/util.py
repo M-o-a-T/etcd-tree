@@ -68,7 +68,7 @@ def client(loop):
     c.close()
     
 # load a config file
-def load_cfg(cfg):
+def load_cfg(cfg, do_client=True):
     global cfgpath
     if os.path.exists(cfg):
         pass
@@ -86,17 +86,18 @@ def load_cfg(cfg):
     kw = cfg['config']['etcd'].copy()
     r = kw.pop('root')
 
-    from etcd.client import Client
-    c = Client(**kw)
-    try:
-        c.delete(r, recursive=True)
-    except etcd.EtcdKeyNotFound:
-        pass
+    if do_client:
+        from etcd.client import Client
+        c = Client(**kw)
+        try:
+            c.delete(r, recursive=True)
+        except etcd.EtcdKeyNotFound:
+            pass
     return cfg
 
 if __name__ == "__main__":
     # quick&dirty test
-    cfg = load_cfg("test.cfg.sample")
+    cfg = load_cfg("test.cfg.sample", do_client=False)
     d = dict
     d = d(config=d(etcd=d(host='localhost',port=2379,root='/test/etcd_tree')))
     assert cfg == d, (cfg,d)
