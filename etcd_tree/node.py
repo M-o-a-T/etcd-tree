@@ -1069,7 +1069,7 @@ class EtcDir(_EtcDir, MutableMapping):
 						mod = r.modifiedIndex
 				else:
 					t = self.subtype(*path[keypath:], dir=False)
-					r = await root._set(path, t._dump(value), prevExist=False, **kw)
+					r = await root._set(path, t._dump(value), **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
