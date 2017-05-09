@@ -1,3 +1,10 @@
+etcd-tree (0.20.3.0) unstable; urgency=medium
+
+  * Monitoring a subtree, the root type refers to that tree,
+    not to the original root.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 09 May 2017 09:09:28 +0200
+
 etcd-tree (0.20.2.0) unstable; urgency=medium
 
   * Retry.
