@@ -247,7 +247,7 @@ class EtcClient(object):
 		w = None if static else EtcWatcher(self,xkey,seq=res.etcd_index)
 		if root_cls is None and types is not None:
 			root_cls = types.type
-		if root_cls is None:
+		if root_cls is None or sub is not _NOTGIVEN:
 			root_cls = EtcRoot
 		else:
 			if isinstance(root_cls,str):
@@ -261,6 +261,8 @@ class EtcClient(object):
 
 		if sub is _NOTGIVEN:
 			return root
+		if root_cls is not None:
+			root.register(*sub, cls=root_cls)
 
 		r = await root.subdir(*sub,create=create)
 		# re-attach the watcher to the new root

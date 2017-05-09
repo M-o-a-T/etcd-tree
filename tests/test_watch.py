@@ -42,6 +42,9 @@ from unittest.mock import Mock
 class IntObj(EtcXValue):
     type = int
 
+class SpecialRoot(EtcDir):
+    pass
+
 @pytest.mark.run_loop
 async def test_basic_watch(client,loop):
     """Watches which don't actually watch"""
@@ -173,7 +176,8 @@ async def test_update_watch_direct(client):
     """Testing auto-update, both ways"""
     d=dict
     t = client
-    wr,w = await t.tree("/", sub='two', immediate=False, static=False,update_delay=0.25)
+    wr,w = await t.tree("/", sub='two', immediate=False, static=False,update_delay=0.25, root_cls=SpecialRoot)
+    assert isinstance(w,SpecialRoot)
     wi = await t.tree('/two', immediate=None)
     d2=d(two=d(zwei=d(und="mehr"),drei=d(cold="freezing"),vier=d(auch="xxx",oder="fünfe")))
     mod = await t._f(d2,delete=True)
