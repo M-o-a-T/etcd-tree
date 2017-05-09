@@ -144,7 +144,7 @@ Strings are boring. Fortunately, we can define our own (atomic) types.
     assert view['number']['wilma']['is'] == 42
 
 Special type nodes are '*' and '**', which do what you'd expect.
-'**' does not match an empty path; if you need that too, do a secoond
+'**' does not match an empty path; if you need that too, do a second
 registration without the '**' component. More specific matches are
 of course preferred. However, if you do something like registering both
 ``('**','three')`` and ``('*',two,'*')`` to different classes,
@@ -234,11 +234,31 @@ raise ``ReloadData`` if you need that. The ``recursive`` parameter tells
 you whether ``pre`` contains just the top-level directory or the whole
 sub-hierarchy; raise ``ReloadRecursive`` if you need the latter.
 
+`etcd-tree` lets you create a directory type which auto-loads all of its
+descendents. This is very useful for structured data which you'd like to
+use in synchronous code.
+
+.. code:: python
+
+    from etcd_tree import EtcDir, ReloadRecursive
+    class recEtcDir(EtcDir):
+        """an EtcDir which always loads its content up front"""
+        @classmethod
+        async def this_obj(cls, recursive, **kw):
+            if not recursive:
+                raise ReloadRecursive
+            return (await super().this_obj(recursive=recursive, **kw))
+
+        async def init(self):
+            self.force_updated()
+            await super().init()
+
+
 `etcd-tree` does not support dynamically rebuilding your typed tree if the
 data you based your typing decision on subsequently changes. The best way
 to fix that is to throw away the subtree and re-create it; to do this,
 calling ``.throw_away()`` on a directory will replace it with an
-EtcAwaiter object which you can resolve by ``await``-ing it.
+EtcAwaiter object which you can then resolve by ``await``-ing on it.
 
 `etcd-tree` hacks a couple of special methods into etcd's objects to make
 working with them easier:
