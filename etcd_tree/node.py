@@ -1247,6 +1247,29 @@ class EtcDir(_EtcDir, MutableMapping):
 			return EtcDir if dir else EtcValue
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
 	
+	@hybridmethod
+	def registrations(self):
+		"""\
+			Enumerate registered types on this. Yields a sequence of (pathtuple,EtcdTypes instance).
+
+			Entries attached to the current instance (if not passing a class) are prefixed with a
+			"." path element.
+
+			"""
+		def show(p,e):
+			if e is None:
+				return
+			if e.type is not None:
+				yield (p,e.type,e.doc)
+			for a,b in e.items():
+				yield from show(p+(a,),b)
+
+		if not isinstance(self,type):
+			yield from show(('.',),getattr(self,'_types',None))
+			self = type(self)
+		for k in self.__mro__:
+			yield from show((),getattr(k,'_types',None))
+
 ##############################################################################
 
 class EtcRoot(EtcDir):

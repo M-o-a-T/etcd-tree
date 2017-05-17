@@ -101,6 +101,16 @@ async def test_basic_watch(client,loop):
         pass
     w = await t.tree("/two", immediate=False, static=True, types=types)
     w.env.foobar="Foo Bar"
+    assert sorted(list(w.registrations())) == sorted([
+           (('.',),xRoot,None),
+           (('.', 'something', 'else'), EtcInteger,None),
+           (('.', '*', 'vierixx'), EtcInteger,None),
+           (('.', 'what', 'ever'), EtcFloat,None),
+           (('.', 'two'), rTwo,None),
+           (('.', 'two', 'die'), rPreDie,None),
+           (('.', 'two', 'vier'), EtcInteger,None),
+           (('zwei', 'und'), xUnd,None)
+    ]), list(w.registrations())
     assert isinstance(w,xRoot)
     assert w.env.foobar == "Foo Bar"
     assert w.env.barbaz is None
