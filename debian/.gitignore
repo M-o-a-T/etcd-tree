@@ -3,3 +3,4 @@
 /*.debhelper
 /*.substvars
 /python3-etcd-tree
+/debhelper-build-stamp

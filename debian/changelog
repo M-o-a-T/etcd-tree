@@ -1,3 +1,9 @@
+etcd-tree (0.20.4.0) unstable; urgency=medium
+
+  * Support enumerating registrations.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 17 May 2017 14:29:15 +0200
+
 etcd-tree (0.20.3.0) unstable; urgency=medium
 
   * Monitoring a subtree, the root type refers to that tree,
