@@ -248,13 +248,13 @@ class EtcClient(object):
 		if root_cls is None and types is not None:
 			root_cls = types.type
 		if root_cls is None or sub is not _NOTGIVEN:
-			rcls = EtcRoot
+			root_cls = EtcRoot
 		else:
 			if isinstance(root_cls,str):
 				root_cls = import_string(root_cls)
 			assert issubclass(root_cls,EtcRoot)
-			rcls = root_cls
-		root = await rcls._new(conn=self, watcher=w, key=key, pre=res,
+			root_cls = root_cls
+		root = await root_cls._new(conn=self, watcher=w, key=key, pre=res,
 				recursive=rec, types=types, **kw)
 
 		if w is not None:
@@ -262,8 +262,6 @@ class EtcClient(object):
 
 		if sub is _NOTGIVEN:
 			return root
-		if root_cls is not None:
-			root.register(*sub, cls=root_cls)
 
 		r = await root.subdir(*sub,create=create)
 		# re-attach the watcher to the new root
