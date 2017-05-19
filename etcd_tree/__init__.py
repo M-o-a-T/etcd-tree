@@ -39,7 +39,9 @@ __VERSION__ = (0,20,4)
 import warnings
 warnings.filterwarnings('ignore', category=ResourceWarning)
 
-async def client(cfg="/etc/etcd_tree.cfg", loop=None):
+async def client(cfg=None, loop=None):
+	if cfg is None:
+		cfg = os.environ.get("ETCD_CFG","/etc/etcd_tree.cfg")
 	if not isinstance(cfg,dict): # pragma: no branch
 		from .util import from_yaml
 		cfg = from_yaml(cfg)
