@@ -9,7 +9,7 @@ from gi.repository import Gtk
 from gi.repository import GObject, GLib
 from datetime import datetime
 from time import time
-import os
+import os,sys
 
 import etcd
 
@@ -18,7 +18,9 @@ tm2 = time()+24*3600*366 # next year
 
 class DEL: pass
 
-et = etcd.Client()
+host = sys.argv[1] if len(sys.argv) > 1 else "localhost"
+port = int(sys.argv[2]) if len(sys.argv) > 2 else 2379
+et = etcd.Client(host,port)
 
 APPNAME="etcd-tree"
 
@@ -174,7 +176,7 @@ class AssocUI(object):
 
 	def _get_tree(self,pipe,start):
 		"""Background process which polls etcd"""
-		et = etcd.Client()
+		et = etcd.Client(host,port)
 		for r in et.eternal_watch("/", index=start, recursive=True):
 			pipe.send(r)
 
