@@ -1250,7 +1250,7 @@ class EtcDir(_EtcDir, MutableMapping):
 	@hybridmethod
 	def registrations(self):
 		"""\
-			Enumerate registered types on this. Yields a sequence of (pathtuple,EtcdTypes instance).
+			Enumerate registered types on this. Yields a sequence of (path-as-tuple,type,docstring) tuples.
 
 			Entries attached to the current instance (if not passing a class) are prefixed with a
 			"." path element.
