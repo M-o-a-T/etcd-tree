@@ -282,7 +282,8 @@ class EtcBase(object):
 		self._update_parent()
 		return self
 
-	def __init__(self, pre, name=None,parent=None, _no_update_parent=False, _fill=None):
+	def __init__(self, pre, name=None,parent=None, _no_update_parent=False, _fill=None, **kw):
+		super().__init__(**kw)
 		if parent is not None:
 			self._parent = weakref.ref(parent)
 			self._loop = parent._loop
