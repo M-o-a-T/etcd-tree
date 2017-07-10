@@ -1047,6 +1047,9 @@ class EtcDir(_EtcDir, MutableMapping):
 			"""
 		root = self.root
 		res = mod = None
+		if isinstance(key,(tuple,list)):
+			self = await self.subdir(key[:-1])
+			key = key[-1]
 		try:
 			if key is None:
 				raise KeyError
