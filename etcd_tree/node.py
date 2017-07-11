@@ -566,6 +566,7 @@ class EtcBase(object):
 			self._call_monitors()
 		except Exception as exc:
 			# A monitor died. The tree may be inconsistent.
+			logger.exception("Updating %s",self)
 			root = self.root
 			if root is not None:
 				root.propagate_exc(exc,self)
