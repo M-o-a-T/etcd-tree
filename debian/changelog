@@ -1,3 +1,9 @@
+etcd-tree (0.20.7.1) unstable; urgency=medium
+
+  * Log updater aborts
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 11 Jul 2017 06:44:34 +0200
+
 etcd-tree (0.20.6.0) unstable; urgency=medium
 
   * Minor enhancements
