@@ -48,6 +48,9 @@ __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
 	'ReloadData','ReloadRecursive',
 	)
 
+# debug the update-runner code?
+DEBUG_NOTIFY = False
+
 class _NOTGIVEN:
 	pass
 _later_idx = 1
@@ -216,7 +219,7 @@ class EtcBase(object):
 			fetched from etcd.
 			"""
 		kw['_no_update_parent'] = True
-		logger.debug("_new %d %s %s",id(parent),parent,key)
+		#logger.debug("_new %d %s %s",id(parent),parent,key)
 		irec = recursive
 		if pre is not None:
 			kw['pre'] = pre
@@ -319,7 +322,7 @@ class EtcBase(object):
 			_fill._done = self
 			self._later_mon.update(_fill._later_mon)
 
-		logger.debug("init %d %s",id(self),self)
+		#logger.debug("init %d %s",id(self),self)
 
 	def _update_parent(self):
 		if self._parent is None:
@@ -412,6 +415,16 @@ class EtcBase(object):
 		if r is not None:
 			await r.wait(mod=mod)
 
+	@property
+	def _later_p(self):
+		if type(self._later) in (int,str):
+			return str(self._later)
+		return "TM"
+
+	@property
+	def _path(self):
+		return "/"+"/".join(x[0] for x in self.path)
+
 	def __repr__(self): ## pragma: no cover
 		try:
 			return "<{} @{}>".format(self.__class__.__name__,'/'.join(self.path))
@@ -490,6 +503,8 @@ class EtcBase(object):
 			@_force: False: schedule a call
 			         True: a child node's scheduler is done (INTERNAL)
 			"""
+		if DEBUG_NOTIFY:
+			logger.debug("run_update %s updated seq %s force %s later %s prop %s",self._path,seq,_force,self._later_p,self._propagate_updates)
 		# Invariant: _later is either the number of direct children which
 		# are blocked or, if there are none, an asyncio call_later token.
 		# (The token has a .cancel method, thus it cannot be an integer.)
@@ -502,8 +517,6 @@ class EtcBase(object):
 		# After a timer runs, it calls its parent's updated(_force=True),
 		# which decrements the counter and adds the timer if that reaches zero.
 
-		#logger.debug("run_update register %s, later is %s. force %s",self.path,self._later,_force)
-
 		# ignore the parent when not propagating updates
 		p = self._parent if self._propagate_updates else None
 
@@ -515,11 +528,13 @@ class EtcBase(object):
 					assert self._later > 0
 					self._later += -1
 					if self._later:
-						#logger.debug("run_update still_blocked %s, later is %s",self.path,self._later)
+						if DEBUG_NOTIFY:
+							logger.debug("run_update still_blocked %s, later %s",self._path,self._later_p)
 						return
 					p = None
 				elif self._later > 0:
-					#logger.debug("run_update already_blocked %s, later is %s",self.path,self._later)
+					if DEBUG_NOTIFY:
+						logger.debug("run_update %s already_blocked, later %s",self._path,self._later_p)
 					return
 			else:
 				self._later.cancel()
@@ -535,6 +550,8 @@ class EtcBase(object):
 			return
 		else:
 			self._later = self._loop.call_later(self.update_delay,self._run_update)
+			if DEBUG_NOTIFY:
+				logger.debug("run_update %s schedule %s",self._path,time.time())
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -542,7 +559,8 @@ class EtcBase(object):
 			p = p()
 			if p is None:
 				return # pragma: no cover
-			#logger.debug("run_update block %s, later was %s",p.path,p._later)
+			if DEBUG_NOTIFY:
+				logger.debug("run_update %s block later %s",p._path,p._later_p)
 			if type(p._later) is int:
 				p._later += 1
 				if p._later > 1:
@@ -555,6 +573,8 @@ class EtcBase(object):
 				p._later.cancel()
 				# The call will be re-scheduled later, when the node unblocks
 				p._later = 1
+				if DEBUG_NOTIFY:
+					logger.debug("run_update %s block %s",p._path,p._later_p)
 				return
 			p = p._parent
 
@@ -565,7 +585,8 @@ class EtcBase(object):
 			If @force is True, this is called from force_update
 			which will update the parent.
 		"""
-		#logger.debug("run_update %s",self.path)
+		if DEBUG_NOTIFY:
+			logger.debug("run_update %s RUN, force %s later %s t %s",self._path,_force,self._later_p,time.time())
 		p = None
 		ls = self.notify_seq
 		self._later = 0
@@ -618,11 +639,13 @@ class EtcBase(object):
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
 		self._later_mon[i] = mon = MonitorCallback(self,i,callback)
-		logger.debug("run_update add_mon %s %s %s",self.path,i,callback)
+		if DEBUG_NOTIFY:
+			logger.debug("run_update add_mon %s %s %s",self._path,i,callback)
 		return mon
 
 	def remove_monitor(self, token):
-		#logger.debug("run_update del_mon %s %s",self.path,token)
+		if DEBUG_NOTIFY:
+			logger.debug("run_update del_mon %s %s",self._path,token)
 		if isinstance(token,MonitorCallback):
 			token = token.i
 		self._later_mon.pop(token,None)
@@ -645,7 +668,8 @@ class EtcBase(object):
 		p = p()
 		if p is None:
 			return # pragma: no cover
-		#logger.debug("run_update: deleted:")
+		if DEBUG_NOTIFY:
+			logger.debug("run_update: deleted: %s",self._path)
 
 		p.updated(seq=s, _force=bool(self._later) if self._propagate_updates else False)
 
