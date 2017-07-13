@@ -576,6 +576,9 @@ class EtcBase(object):
 				if DEBUG_NOTIFY:
 					logger.debug("run_update %s block %s",p._path,p._later_p)
 				return
+
+			if not p._propagate_updates:
+				return
 			p = p._parent
 
 	def _run_update(self, _force=False):
@@ -603,7 +606,7 @@ class EtcBase(object):
 			if root is not None:
 				root.propagate_exc(exc,self)
 
-		if _force:
+		if _force or not self._propagate_updates:
 			return
 		p = self._parent
 		if p is None:
