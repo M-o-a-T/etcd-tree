@@ -212,6 +212,9 @@ node.
 
 .. code:: python
 
+    class HelloData(EtcString):
+        pass
+
     class myTypedDir(EtcDir):
         def __init__(self,*a,pre=None,**kw):
             super().__init__(*a,**kw) ##*
@@ -221,8 +224,9 @@ node.
         def subtype(self,*path,dir=None,pre=None): ##*
             if path == ('special','subdir') and pre['data'] == 'hello':
                 return HelloData
-                # This will use HelloData for <self>/special/subdir/data
-            return super()(*path,dir=dir,pre=pre) ##*
+                # This will use HelloData for <self>/special/subdir
+                # if its 'data' entry contains 'hello'
+            return super().subtype(*path,dir=dir,pre=pre) ##*
 
 ``.subtype()`` is called for each entry below your node for which a type
 needs to be looked up. ``pre`` is the content of the etcd tree *relative to
@@ -233,6 +237,29 @@ up entries relative to your class.
 raise ``ReloadData`` if you need that. The ``recursive`` parameter tells
 you whether ``pre`` contains just the top-level directory or the whole
 sub-hierarchy; raise ``ReloadRecursive`` if you need the latter.
+
+``.subtype()`` recurses to the parent directory when the first
+character of the entry's name is not a colon. You can
+override this with the ``_types_from_parent`` attribute if necessary.
+
+There is an alternate way to do this: you can teach a class to
+instantiate another class instead.
+
+.. code:: python
+
+    class Cls_foo(EtcDir):
+        pass
+
+    class Some_cls(EtcDir):
+        @classmethod
+        async def this_obj(cls, **kw):
+            name = pre.key.rsplit('/',1)[1].lower()
+            m = globals().get('Cls_'+name,cls)
+            return m(**kw)
+
+If you register ``Some_cls`` at some path (via wildcard, otherwise this
+exercise is useless …) and name the member ``foo``, You'll get a
+``Cls_foo`` instance instead.
 
 `etcd-tree` lets you create a directory type which auto-loads all of its
 descendents. This is very useful for structured data which you'd like to
