@@ -1212,7 +1212,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			return self._types.step(*path)
 		return self._types.register(*path, cls=cls, **kw)
 		
-	def subtype(self,*path,dir=None,pre=None,recursive=None):
+	def subtype(self,*path,dir=None,pre=None,recursive=None, default=True):
 		"""\
 			Decide which type to use for a new entry.
 			@path is the path to the sub-entry.
@@ -1249,7 +1249,7 @@ class EtcDir(_EtcDir, MutableMapping):
 				return cls
 		p = self.parent if self._types_from_parent else None
 		if p is None:
-			return EtcDir if dir else EtcValue
+			return None if not default else (EtcDir if dir else EtcValue)
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
 	
 	@hybridmethod
