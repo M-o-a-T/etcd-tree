@@ -661,7 +661,7 @@ class EtcBase(object):
 						d._ext_delete()
 		if pre.modifiedIndex:
 			if self._seq and self._seq > pre.modifiedIndex:
-				raise RuntimeError("Updates out of order: saw %d, has %d" % (self._seq,seq)) # pragma: no cover # hopefully
+				raise RuntimeError("Updates out of order: saw %d, has %d" % (self._seq,pre.modifiedIndex)) # pragma: no cover # hopefully
 			self._seq = pre.modifiedIndex
 		self._ttl = pre.ttl
 		self.updated(seq=pre.modifiedIndex)
