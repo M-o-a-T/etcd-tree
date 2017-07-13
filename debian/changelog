@@ -1,3 +1,9 @@
+etcd-tree (0.20.8.0) unstable; urgency=medium
+
+  * subdir: default "recurse to parent" to "has a non-colon name"
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 13 Jul 2017 03:14:32 +0200
+
 etcd-tree (0.20.7.1) unstable; urgency=medium
 
   * Log updater aborts
