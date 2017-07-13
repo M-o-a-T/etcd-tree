@@ -521,7 +521,7 @@ class EtcBase(object):
 		p = self._parent if self._propagate_updates else None
 
 		if self._later:
-			# In this block, clear the parent (p) if it was already blocked.
+			# Ignore the parent (p) if it was already blocked.
 			# Otherwise we'd block it again later, which would be Bad.
 			if type(self._later) is int:
 				if _force:
