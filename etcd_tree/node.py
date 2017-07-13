@@ -540,7 +540,7 @@ class EtcBase(object):
 				self._later.cancel()
 				p = None
 		else:
-			assert not _force, self._later
+			assert not _force, (self,self._later)
 		self.notify_seq = seq
 
 		try:
