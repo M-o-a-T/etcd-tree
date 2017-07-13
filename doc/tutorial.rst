@@ -70,12 +70,13 @@ Setting up
 
 There are three ways to read the initial object tree:
 
-* One call per etcd directory. This is the default.
+* One call per etcd directory. This is the default. It's safe but will take
+  some time if your tree is large(ish).
 
 * All at once. Use ``.tree(…, immediate=True)``. Do this if your subtree
   isn't too large.
 
-* Later. Data which haven't been accessed yet are replaced with an
+* On demand. Data which haven't been accessed yet are replaced with an
   ``EtcAwaiter`` placeholder.
 
   .. code:: python
@@ -112,14 +113,15 @@ There are three ways to read the initial object tree:
       data = root['some']['where']
       data = await data
 
-  … will raise an error in the ``await`` call if the directory
+  … will raise an error in the ``await`` call if the etcd directory
   ``/where/ever/some/where`` does not actually exist.
 
 Subsequent changes on data which you have not yet accessed are
 **not** processed and your code will **not** be notified when they happen.
 
-An ``EtcAwaiter`` is an incomplete placeholder. Specifically, you cannot set
-any values on it. This is intentional.
+An ``EtcAwaiter`` is a placeholder. You can't so anything with it except
+await it and look up subdirectories (which will also be ``EtcAwaiter``
+instances until awaited-for).
 
 `etcd-tree` guarantees that no data you've loaded will ever be replaced
 with an ``EtcAwaiter``. Also, an update which directly adds new data to
@@ -152,7 +154,7 @@ matching ``('one','two','three')`` to that will result in one or
 the other, but which one is undefined and may change without notice.
 Use a typed subdirectory to resolve the conflict (below).
 
-If you want to subclass a whole directory, derive your class from
+If you want to subclass a directory, derive your class from
 ``EtcDir``. 
 
     class myDir(EtcDir):
@@ -163,13 +165,10 @@ If you want to subclass a whole directory, derive your class from
 
 If you need access to private data, the tree has an ``env`` attribute. You
 can set any attribute on that. Entries' ``env`` attributes mirror the root,
-so ``something.root.env == something.env``.
+i.e. ``something.root.env is something.env``.
 
-You cannot replace attributes. Non-existing attributes will return None
-instead of raising an exception; you can use this feature to write generic
-classes which work in multiple environments, which is important when
-you want to use these environments in the same program -- or just re-use
-code.
+The ``env`` attribute is written so that you cannot replace its attributes.
+Non-existing attributes will return None instead of raising an exception.
 
 .. code:: python
 
@@ -187,6 +186,8 @@ code.
             if the_data:
                 the_data.has_update(self) # or whatever
 
+Monitoring for changes
+----------------------
 
 Watching out for changes on your object is pretty straightforward: override
 the ``has_update()`` method. Alternately you can attach a monitor function
@@ -205,6 +206,9 @@ rate of change. This problem will be addressed in a future update.
 You can call ``.tree(…, update_delay=x)`` with x somewhat lower than
 1 second (the default). This should be at least twice the time your etcd
 requires to update a value.
+
+Dynamic types
+-------------
 
 Sometimes you need to dynamically decide which subclass to use, based on
 the actual data. To do that, register a subclass of ``EtcDir`` to a
@@ -280,6 +284,40 @@ use in synchronous code.
             self.force_updated()
             await super().init()
 
+Type borders
+------------
+
+A fairly typical use of etcd is to have a hierarchy of
+things-with-attributes. This begs the question of how to determine where
+the hierarchy ends and the actual things start.
+
+The common way to do this in ``etcd_tree`` is to tag this border with a
+special name that starts with a colon (a "tagged" node). Obviously you'd
+also register the thing's type for that tag.
+
+``etcd_tree`` supports this convention:
+
+* Type lookups don't propagate beyond tagged nodes.
+  You can override this by setting the node's ``_types_from_parent``
+  attribute.
+
+* Update notifications within a tagged node don't propagate (and thus
+  delay) beyond that node.
+  You can override this by setting the node's ``_propagate_updates``
+  attribute.
+  
+  Parents are still notified when a tagged node is created or deleted.
+  Note that the "created" notification may run too early. In that case,
+  call the parent's update handler yourself, from the tagged node's
+  ``has_update()`` method.
+
+* the ``EtcDir.tagged()`` method iterates all tagged nodes in a hierarchy,
+  skipping subtrees with different tags. You can use a sync or async loop;
+  however, the former will raise an error if you have non-awaited
+  ``EtcAwaiter`` nodes in the hierarchy.
+
+Misc
+----
 
 `etcd-tree` does not support dynamically rebuilding your typed tree if the
 data you based your typing decision on subsequently changes. The best way

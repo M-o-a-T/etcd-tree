@@ -132,7 +132,7 @@ class MonitorCallback(object):
 
 class _tagged_iter:
 	def __init__(self,tree,tag, depth=0):
-		assert tag[0] == ':'
+		assert tag is None or tag[0] == ':'
 		self.trees = [(tree,0)]
 		self.tag = tag
 		self.depth = depth
@@ -149,7 +149,7 @@ class _tagged_iter:
 			t = await t
 			d += 1
 			for k,v in t.items():
-				if k == self.tag:
+				if (k[0] == ':') if self.tag is None else (k == self.tag):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
 				elif k[0] == ':':
@@ -169,7 +169,7 @@ class _tagged_iter:
 			t,d = self.trees.pop()
 			d += 1
 			for k,v in t.items():
-				if k == self.tag:
+				if (k[0] == ':') if self.tag is None else (k == self.tag):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
 				elif k[0] == ':':
@@ -200,6 +200,7 @@ class EtcBase(object):
 	_later = 0
 	_env = _NOTGIVEN
 	_update_delay = None
+	_propagate_updates = None
 	is_new = True # for monitors: False after the first call to has_update()
 
 	@classmethod
@@ -294,6 +295,8 @@ class EtcBase(object):
 			else:
 				name = pre.name
 			self.name = name
+			if self._propagate_updates is None:
+				self._propagate_updates = (self.name[0] != ':')
 			self.path = parent.path+(name,)
 			if not _no_update_parent:
 				self._update_parent()
@@ -332,6 +335,11 @@ class EtcBase(object):
 		elif hasattr(parent,'_added'):
 			parent._added.add(name)
 		parent._data[name] = self
+
+		if not self._propagate_updates:
+			assert self._propagate_updates is False # "None" would be an error
+			parent.updated(seq=self._seq)
+		# else: the update happens after my update handler is done
 
 	def throw_away(self):
 		"""Delete this node, replacing it with an EtcAwaiter.
@@ -495,7 +503,10 @@ class EtcBase(object):
 		# which decrements the counter and adds the timer if that reaches zero.
 
 		#logger.debug("run_update register %s, later is %s. force %s",self.path,self._later,_force)
-		p = self._parent
+
+		# ignore the parent when not propagating updates
+		p = self._parent if self._propagate_updates else None
+
 		if self._later:
 			# In this block, clear the parent (p) if it was already blocked.
 			# Otherwise we'd block it again later, which would be Bad.
@@ -636,7 +647,7 @@ class EtcBase(object):
 			return # pragma: no cover
 		#logger.debug("run_update: deleted:")
 
-		p.updated(seq=s, _force=bool(self._later))
+		p.updated(seq=s, _force=bool(self._later) if self._propagate_updates else False)
 
 	def _ext_delete(self, seq=None):
 		#logger.debug("DELETE_ %s",self.path)
@@ -866,6 +877,8 @@ class EtcDir(_EtcDir, MutableMapping):
 		self._added = set()
 		self._deled = set()
 		super().__init__(**kw)
+		if self._types_from_parent is None:
+			self._types_from_parent = (self.name and self.name[0] != ':')
 
 	def __iter__(self):
 		return iter(self._data.keys())
@@ -973,8 +986,11 @@ class EtcDir(_EtcDir, MutableMapping):
 			self = await self.load(recursive)
 		return self
 
-	def tagged(self,tag, depth=0):
-		"""async Generator to find all sub-nodes with a tag"""
+	def tagged(self,tag=None, depth=0):
+		"""\
+			async generator to recursively find all sub-nodes with a specific tag
+			(or any tag)
+			"""
 		return _tagged_iter(self,tag, depth=depth)
 
 	def __contains__(self,key):
@@ -1247,10 +1263,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			cls = types.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
-		tfp = self._types_from_parent
-		if tfp is None:
-			tfp = self.name[0] != ':'
-		p = self.parent if tfp else None
+		p = self.parent if self._types_from_parent else None
 		if p is None:
 			return None if not default else (EtcDir if dir else EtcValue)
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)

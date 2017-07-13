@@ -1,3 +1,10 @@
+etcd-tree (0.21.0.0) unstable; urgency=medium
+
+  * Add explicit _types_from_parent and _propagate_updates fields
+    to node classes, to control type lookup and update propagation.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 13 Jul 2017 04:25:11 +0200
+
 etcd-tree (0.20.8.0) unstable; urgency=medium
 
   * subdir: default "recurse to parent" to "has a non-colon name"
