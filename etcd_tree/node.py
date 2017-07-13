@@ -1327,7 +1327,6 @@ class EtcRoot(EtcDir):
 		"""
 	_parent = None
 	name = ''
-	_path = ''
 	_types = None
 	_update_delay = 1
 	_tasks = None
