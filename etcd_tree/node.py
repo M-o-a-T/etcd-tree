@@ -544,12 +544,12 @@ class EtcBase(object):
 		self.notify_seq = seq
 
 		try:
-			ud = self.update_delay
+			delay = self.update_delay
 		except AttributeError:
 			# this happens when the root has gone away. Exit.
 			return
 		else:
-			self._later = self._loop.call_later(self.update_delay,self._run_update)
+			self._later = self._loop.call_later(delay, self._run_update)
 			if DEBUG_NOTIFY:
 				logger.debug("run_update %s schedule %s",self._path,time.time())
 
