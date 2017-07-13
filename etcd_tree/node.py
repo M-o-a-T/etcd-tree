@@ -1195,7 +1195,7 @@ class EtcDir(_EtcDir, MutableMapping):
 	# The following code implements type lookup.
 
 	_types = None
-	_types_from_parent = True
+	_types_from_parent = None
 
 	@hybridmethod
 	def register(self, *path, cls=None, **kw):
@@ -1247,7 +1247,10 @@ class EtcDir(_EtcDir, MutableMapping):
 			cls = types.lookup(*path,dir=dir)
 			if cls is not None:
 				return cls
-		p = self.parent if self._types_from_parent else None
+		tfp = self._types_from_parent
+		if tfp is None:
+			tfp = self.name[0] != ':'
+		p = self.parent if tfp else None
 		if p is None:
 			return None if not default else (EtcDir if dir else EtcValue)
 		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
