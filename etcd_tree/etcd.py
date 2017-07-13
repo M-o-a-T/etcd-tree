@@ -616,7 +616,7 @@ class EtcTypes(object):
 				if dir is True:
 					assert issubclass(t,EtcDir)
 				elif dir is False:
-					assert issubclass(t,EtcXValue)
+					assert issubclass(t,EtcXValue),t
 				return n if raw else t
 		return None
 
