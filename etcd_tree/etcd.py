@@ -546,12 +546,19 @@ class EtcTypes(object):
 		res = self.nodes.get(key,None)
 		if res is not None:
 			yield key,res
-		res = self.nodes.get('*',None)
+		if key[0] == ':':
+			w1 = ':*'
+			w2 = None
+		else:
+			w1 = '*'
+			w2 = '**'
+		res = self.nodes.get(w1,None)
 		if res is not None:
-			yield '*',res
-		res = self.nodes.get('**',None)
-		if res is not None:
-			yield '**',res
+			yield w1,res
+		if w2 is not None:
+			res = self.nodes.get(w2,None)
+			if res is not None:
+				yield w2,res
 
 	def __getitem__(self,path):
 		"""Shortcut to directly lookup a non-directory node"""

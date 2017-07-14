@@ -1,3 +1,9 @@
+etcd-tree (0.22.0.0) unstable; urgency=medium
+
+  * Special-case colons in wildcard lookup.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 14 Jul 2017 03:00:35 +0200
+
 etcd-tree (0.21.1.0) unstable; urgency=medium
 
   * Fix handling the _propagate_updates flag

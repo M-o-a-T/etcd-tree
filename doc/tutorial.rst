@@ -147,12 +147,15 @@ Strings are boring. Fortunately, we can define our own (atomic) types.
 
 Special type nodes are '*' and '**', which do what you'd expect.
 '**' does not match an empty path; if you need that too, do a second
-registration without the '**' component. More specific matches are
-of course preferred. However, if you do something like registering both
-``('**','three')`` and ``('*',two,'*')`` to different classes,
-matching ``('one','two','three')`` to that will result in one or
+registration without the '**' component.
+
+More specific matches are preferred. However, if you do something like
+registering both ``('**','three')`` and ``('*',two,'*')`` to different
+classes, matching ``('one','two','three')`` to that will result in one or
 the other, but which one is undefined and may change without notice.
 Use a typed subdirectory to resolve the conflict (below).
+
+Wildcards do not apply to names starting with a colon.
 
 If you want to subclass a directory, derive your class from
 ``EtcDir``. 
@@ -315,6 +318,9 @@ also register the thing's type for that tag.
   skipping subtrees with different tags. You can use a sync or async loop;
   however, the former will raise an error if you have non-awaited
   ``EtcAwaiter`` nodes in the hierarchy.
+
+* Wildcard type lookups don't apply to tags. If you want to apply a class
+  to any tag, use ':\*'. There is no tagged equivalent to '**'.
 
 Misc
 ----
