@@ -68,11 +68,13 @@ class AssocUI(object):
 		s = v.get_selection()
 		s.set_mode(Gtk.SelectionMode.SINGLE)
 
-		m = Gtk.TreeStore(GObject.TYPE_STRING, GObject.TYPE_STRING)
+		m = Gtk.TreeStore(GObject.TYPE_STRING, GObject.TYPE_STRING, GObject.TYPE_INT)
 		# name, value
 		v.set_model(m)
 		v.set_headers_visible(True)
 
+		c = v.get_column(2)
+		if c: v.remove_column(c)
 		c = v.get_column(1)
 		if c: v.remove_column(c)
 		c = v.get_column(0)
@@ -91,6 +93,14 @@ class AssocUI(object):
 		column.set_sizing (Gtk.TreeViewColumnSizing.FIXED)
 		column.set_clickable(True)
 		column.connect("clicked",self.tree_sort,1)
+		v.append_column(column)
+		cell = Gtk.CellRendererText()
+		column.pack_start(cell, True)
+
+		column = Gtk.TreeViewColumn('cID',r,text=2)
+		column.set_sizing (Gtk.TreeViewColumnSizing.FIXED)
+		column.set_clickable(True)
+		column.connect("clicked",self.tree_sort,2)
 		v.append_column(column)
 		cell = Gtk.CellRendererText()
 		column.pack_start(cell, True)
@@ -117,7 +127,7 @@ class AssocUI(object):
 			e = node.get(n,None)
 			if e is None:
 				if value is DEL: return
-				p = m.append(node.get('_node',None),row=[n,'-dir-'])
+				p = m.append(node.get('_node',None),row=[n,'-dir-',0])
 				node[n] = e = {'_node':p}
 				if expanded and node and '_node' in node:
 					v.expand_row(m.get_path(node['_node']),False)
@@ -154,8 +164,10 @@ class AssocUI(object):
 		res = et.read('/',recursive=True)
 
 		def fill_dest(nr,it,d):
-			na = nr['key'][nr['key'].rindex('/')+1:]
+			na = nr['key']
+			na = na[na.rindex('/')+1:]
 			v = nr.get('value','-dir-')
+			cid = nr.get('createdIndex',0)
 			try:
 				vd = float(v)
 				if vd > tm1 and vd < tm2:
@@ -163,7 +175,7 @@ class AssocUI(object):
 					v = v.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
 			except ValueError:
 				pass
-			p = m.append(it,row=[na,v])
+			p = m.append(it,row=[na,v,cid])
 			#print("add",na,v,str(m.get_path(p)))
 			d[na] = nd = {'_node':p, '_value':v}
 			if nr.get('dir',False):
@@ -183,7 +195,7 @@ class AssocUI(object):
 	def _io_tree(self, fd,cond, pipe):
 		"""Reader for the background connection to etcd"""
 		res = pipe.recv()
-		print(res)
+		#print(res)
 		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value)
 		return True
 

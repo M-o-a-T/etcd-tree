@@ -478,6 +478,10 @@ class EtcBase(object):
 			self._update_delay = self.parent.update_delay
 		return self._update_delay
 
+	@update_delay.setter
+	def update_delay(self,dly):
+		self._update_delay = dly
+
 	def force_updated(self, _sub=False):
 		"""\
 			Call all update handlers now.
@@ -758,6 +762,11 @@ class EtcAwaiter(_EtcDir):
 			assert isinstance(v,EtcAwaiter)
 		return v
 	_get = __getitem__
+
+	def __len__(self):
+		raise RuntimeError("You need to await on %s first" % (str(self),))
+	def __contains__(self,key):
+		raise RuntimeError("You need to await on %s first" % (str(self),))
 
 	def __await__(self):
 		return self.load().__await__()
