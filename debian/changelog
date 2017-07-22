@@ -1,3 +1,9 @@
+etcd-tree (0.24.1.0) unstable; urgency=medium
+
+  * Ignore name in .lookup() and .subdir() if it's a bool.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 22 Jul 2017 21:30:38 +0200
+
 etcd-tree (0.24.0.0) unstable; urgency=medium
 
   * Improve ".tagged()" method.

@@ -714,6 +714,9 @@ class _EtcDir(EtcBase):
 		"""\
 			Utility function to find a sub-node.
 			Like .subdir, but synchronous and can't create anything.
+
+			@_name and @name are chained. A boolean @name is ignored,
+			for compatibility with some tagging schemes.
 			"""
 		if isinstance(name,str):
 			name = name.split('/')
@@ -722,7 +725,7 @@ class _EtcDir(EtcBase):
 			if isinstance(_name,str):
 				_name = _name.split('/')
 
-		for n in chain(_name,name):
+		for n in _name if type(name) is bool else chain(_name,name):
 			self = self[n]
 		return self
 
@@ -984,6 +987,9 @@ class EtcDir(_EtcDir, MutableMapping):
 			Utility function to find/create a sub-node.
 			@recursive decides what to do if the node thus encountered
 			hasn't been loaded before.
+
+			@_name and @name are chained. A boolean @name is ignored,
+			for compatibility with some tagging schemes.
 			"""
 		root=self.root
 
@@ -1009,7 +1015,7 @@ class EtcDir(_EtcDir, MutableMapping):
 				await root.wait(pre.modifiedIndex)
 			self = self[n]
 		n = None
-		for nn in chain(_name,name):
+		for nn in _name if type(name) is bool else chain(_name,name):
 			if n is not None:
 				await step(n)
 			n = nn
@@ -1020,7 +1026,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			self = await self.load(recursive)
 		return self
 
-	def tagged(self,tag=True, depth=0):
+	def tagged(self, tag=True, depth=0):
 		"""\
 			async generator to recursively find all sub-nodes with a specific tag
 			(or any tag)
