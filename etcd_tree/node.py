@@ -135,7 +135,7 @@ class MonitorCallback(object):
 
 class _tagged_iter:
 	def __init__(self,tree,tag, depth=0):
-		assert tag is None or tag[0] == ':'
+		assert type(tag) is bool or tag[0] == ':'
 		self.trees = [(tree,0)]
 		self.tag = tag
 		self.depth = depth
@@ -152,16 +152,14 @@ class _tagged_iter:
 			t = await t
 			d += 1
 			for k,v in t.items():
-				if (k[0] == ':') if self.tag is None else (k == self.tag):
+				if self.tag == (k[0] == ':') if type(self.tag) is bool else (k == self.tag):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
 				elif k[0] == ':':
 					continue
 				elif self.depth and self.depth <= d:
 					continue
-				elif type(v) is EtcAwaiter:
-					self.trees.append((v,d))
-				elif isinstance(v,EtcDir):
+				elif isinstance(v,_EtcDir): # dir or awaiter
 					self.trees.append((v,d))
 		return (await self.dirs.pop())
 
@@ -172,14 +170,14 @@ class _tagged_iter:
 			t,d = self.trees.pop()
 			d += 1
 			for k,v in t.items():
-				if (k[0] == ':') if self.tag is None else (k == self.tag):
+				if self.tag == (k[0] == ':') if type(self.tag) is bool else (k == self.tag):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
 				elif k[0] == ':':
 					continue
 				elif self.depth and self.depth <= d:
 					continue
-				elif isinstance(v,EtcAwaiter):
+				elif type(v) is EtcAwaiter:
 					raise RuntimeError("'%s' is not preloaded. Use 'async for'." % ('/'.join(v.path),))
 				elif isinstance(v,EtcDir):
 					self.trees.append((v,d))
@@ -1022,7 +1020,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			self = await self.load(recursive)
 		return self
 
-	def tagged(self,tag=None, depth=0):
+	def tagged(self,tag=True, depth=0):
 		"""\
 			async generator to recursively find all sub-nodes with a specific tag
 			(or any tag)

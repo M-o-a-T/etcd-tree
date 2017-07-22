@@ -314,10 +314,12 @@ also register the thing's type for that tag.
   call the parent's update handler yourself, from the tagged node's
   ``has_update()`` method.
 
-* the ``EtcDir.tagged()`` method iterates all tagged nodes in a hierarchy,
+* the ``EtcDir.tagged(TAG)`` method iterates all tagged nodes in a hierarchy,
   skipping subtrees with different tags. You can use a sync or async loop;
   however, the former will raise an error if you have non-awaited
-  ``EtcAwaiter`` nodes in the hierarchy.
+  ``EtcAwaiter`` nodes in the hierarchy. You can also use this method to
+  find all nodes with any tag (tag=True) or any non-tag name (tag=False),
+  optionially limited to a specific tree depth (depth=N).
 
 * Wildcard type lookups don't apply to tags. If you want to apply a class
   to any tag, use ':\*'. There is no tagged equivalent to '**'.

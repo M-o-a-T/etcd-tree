@@ -1,3 +1,9 @@
+etcd-tree (0.24.0.0) unstable; urgency=medium
+
+  * Improve ".tagged()" method.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 22 Jul 2017 21:21:05 +0200
+
 etcd-tree (0.22.1.0) unstable; urgency=medium
 
   * Items of an EtcAwaiter can't be looked up,
