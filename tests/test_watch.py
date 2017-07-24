@@ -32,7 +32,7 @@ import etcd
 import time
 import asyncio
 from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,\
-                           EtcXValue,EtcString,EtcAwaiter, \
+                           EtcXValue,EtcString,EtcBoolean,EtcAwaiter, \
                            ReloadData,ReloadRecursive
 from etcd_tree.etcd import EtcTypes,WatchStopped
 
@@ -67,8 +67,8 @@ async def test_basic_watch(client,loop):
     assert types.lookup('two/die',dir=False) is rPreDie
     assert types.lookup('two',dir=True,raw=True).lookup('die',dir=False) is rPreDie
     assert types.lookup('two/die',dir=False,raw=True).lookup(dir=False) is rPreDie
-    i = types.register("two","vier", cls=EtcInteger)
-    assert i is EtcInteger
+    i = types.register("two","vier", cls=EtcBoolean)
+    assert i is EtcBoolean
     i = types.register("*/vierixx")(EtcInteger)
     assert i is EtcInteger
     types['what/ever'] = EtcFloat
@@ -81,13 +81,13 @@ async def test_basic_watch(client,loop):
     with pytest.raises(AssertionError):
         types['what//ever']
     types['something/else'] = EtcInteger
-    assert types['two/vier'] is EtcInteger
+    assert types['two/vier'] is EtcBoolean
     assert types['something/else'] is EtcInteger
     assert types['not/not'] is None
 
     d=dict
     t = client
-    d1=d(one="eins",two=d(zwei=d(und="drei",a=d(b=d(c='d'))),vier="5"),x="y")
+    d1=d(one="eins",two=d(zwei=d(und="drei",a=d(b=d(c='d'))),vier="true"),x="y")
     await t._f(d1)
     # basic access, each directory separately
     class xRoot(EtcRoot):
@@ -105,7 +105,7 @@ async def test_basic_watch(client,loop):
            (('.', 'what', 'ever'), (EtcFloat,None)),
            (('.', 'two'), (rTwo,None)),
            (('.', 'two', 'die'), (rPreDie,None)),
-           (('.', 'two', 'vier'), (EtcInteger,None)),
+           (('.', 'two', 'vier'), (EtcBoolean,None)),
            (('zwei', 'und'), (xUnd,None)),
     ]), list(w.registrations())
     assert isinstance(w,xRoot)
@@ -116,13 +116,13 @@ async def test_basic_watch(client,loop):
 
     assert w['zwei']['und'] == "drei"
     assert type(w['zwei']._get('und')) is xUnd
-    assert w['vier'] == "5"
+    assert w['vier'] == "true"
     with pytest.raises(KeyError):
         w['x']
     # basic access, read it all at once
     w2 = await t.tree("/two", immediate=True, static=True, types=types)
     assert w2['zwei']['und'] == "drei"
-    assert w['vier'] == "5"
+    assert w['vier'] == "true"
     assert w == w2
 
     # basic access, read it on demand
@@ -133,7 +133,7 @@ async def test_basic_watch(client,loop):
     mx = w5['zwei'].add_monitor(wx)
     assert isinstance(w5['zwei']['und'],EtcAwaiter)
     assert (await w5['zwei']['und']).value == "drei"
-    assert w5['vier'] == "5"
+    assert w5['vier'] == "true"
     w5['zwei'].force_updated()
     assert w5['zwei'].test_called
 
@@ -141,7 +141,7 @@ async def test_basic_watch(client,loop):
     w4 = await t.tree((), types=types)
     await w4.set('two',d(sechs="sieben"))
     w3 = await t.tree("/", static=True, types=types)
-    assert w3['two']['vier'] == 5
+    assert w3['two']['vier'] is True
     assert w3['two']['sechs'] == "sieben"
     assert not w3['two'] == w2
     # which are different, but not because of the tree types

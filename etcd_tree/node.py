@@ -884,8 +884,8 @@ class EtcXValue(EtcBase):
 			return res[:-1]+" ?? "+res[-1]
 
 class EtcValue(EtcXValue):
-	# the result of directory lookups will be auto-dereferenced
-	# this exists so that "interesting" subclasses are more usable
+	# the result of lookups will be auto-dereferenced
+	# this class exists so that "interesting" subclasses are more usable
 	pass
 
 EtcString = EtcValue
@@ -896,7 +896,9 @@ class EtcFloat(EtcValue):
 	type = float
 
 class EtcBoolean(EtcValue):
+	"""A Boolean which writes itself to etcd as number (0 or 1)"""
 	type = bool
+	values = ('false','true')
 
 	@classmethod
 	def _load(cls,value):
@@ -904,15 +906,21 @@ class EtcBoolean(EtcValue):
 			return cls.type(int(value))
 		except ValueError:
 			value = value.lower()
-			if value in ('true','on'):
+			if value in ('true','on',cls.values[1]):
 				return True
-			if value in ('false','off'):
+			if value in ('false','off',cls.values[0]):
 				return False
 			raise
 
 	@classmethod
 	def _dump(cls,value):
 		return str(int(value))
+
+class EtcBooleanS(EtcBoolean):
+	"""A Boolean which writes itself to etcd as string (self.values)"""
+	@classmethod
+	def _dump(cls,value):
+		return cls.values[value]
 
 ##############################################################################
 
