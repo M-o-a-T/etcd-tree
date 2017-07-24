@@ -98,15 +98,15 @@ async def test_basic_watch(client,loop):
         pass
     w = await t.tree("/two", immediate=False, static=True, types=types)
     w.env.foobar="Foo Bar"
-    assert sorted(dict((a,(b,c)) for a,b,c in w.registrations()).items()) == sorted([
-           (('.',),(xRoot,None)),
-           (('.', 'something', 'else'), (EtcInteger,None)),
-           (('.', '*', 'vierixx'), (EtcInteger,None)),
-           (('.', 'what', 'ever'), (EtcFloat,None)),
-           (('.', 'two'), (rTwo,None)),
-           (('.', 'two', 'die'), (rPreDie,None)),
-           (('.', 'two', 'vier'), (EtcBoolean,None)),
-           (('zwei', 'und'), (xUnd,None)),
+    assert sorted(dict((a,b) for a,b,c in w.registrations()).items()) == sorted([
+           (('.',),xRoot),
+           (('.', 'something', 'else'), EtcInteger),
+           (('.', '*', 'vierixx'), EtcInteger),
+           (('.', 'what', 'ever'), EtcFloat),
+           (('.', 'two'), rTwo),
+           (('.', 'two', 'die'), rPreDie),
+           (('.', 'two', 'vier'), EtcBoolean),
+           (('zwei', 'und'), xUnd),
     ]), list(w.registrations())
     assert isinstance(w,xRoot)
     assert w.env.foobar == "Foo Bar"
