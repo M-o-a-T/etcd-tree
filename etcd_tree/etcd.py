@@ -542,6 +542,7 @@ class EtcTypes(object):
 			"""
 		if key is None:
 			yield from self.nodes.items()
+			return
 
 		res = self.nodes.get(key,None)
 		if res is not None:
