@@ -978,7 +978,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			try:
 				return self._data[key]
 			except KeyError:
-				raise KeyError(self.path+(key,))
+				raise KeyError(self.path+(key,)) from None
 		else:
 			return self._data.get(key,default)
 
