@@ -44,7 +44,7 @@ from .util import hybridmethod
 from traceback import print_exc
 
 __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
-	'EtcString','EtcFloat','EtcInteger',
+	'EtcString','EtcFloat','EtcInteger','EtcBoolean',
 	'ReloadData','ReloadRecursive',
 	)
 
@@ -891,8 +891,28 @@ class EtcValue(EtcXValue):
 EtcString = EtcValue
 class EtcInteger(EtcValue):
 	type = int
+
 class EtcFloat(EtcValue):
 	type = float
+
+class EtcBoolean(EtcValue):
+	type = bool
+
+	@classmethod
+	def _load(cls,value):
+		try:
+			return cls.type(int(value))
+		except ValueError:
+			value = value.lower()
+			if value in ('true','on'):
+				return True
+			if value in ('false','off'):
+				return False
+			raise
+
+	@classmethod
+	def _dump(cls,value):
+		return str(int(value))
 
 ##############################################################################
 

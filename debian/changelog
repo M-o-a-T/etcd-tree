@@ -1,3 +1,9 @@
+etcd-tree (0.25.0.0) unstable; urgency=medium
+
+  * Add EtcBoolean
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 24 Jul 2017 02:24:49 +0200
+
 etcd-tree (0.24.1.0) unstable; urgency=medium
 
   * Ignore name in .lookup() and .subdir() if it's a bool.
