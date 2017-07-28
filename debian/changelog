@@ -1,3 +1,9 @@
+etcd-tree (0.25.1.0) unstable; urgency=medium
+
+  * Bugfix: drop EtcAwaiter nodes after recursive load
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 28 Jul 2017 12:31:17 +0200
+
 etcd-tree (0.25.0.0) unstable; urgency=medium
 
   * Add EtcBoolean

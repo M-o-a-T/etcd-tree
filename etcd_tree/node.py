@@ -374,6 +374,11 @@ class EtcBase(object):
 					an = await self._new(parent=self,key=n,recursive=recursive, pre=(c if recursive or not c.dir else None), _fill=a)
 
 					await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
+
+		if recursive:
+			for k,v in list(self._data.items()):
+				if isinstance(v,EtcAwaiter):
+					del self._data[k]
 		
 	async def init(self):
 		"""Last step after loading.
