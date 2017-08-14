@@ -426,7 +426,7 @@ class EtcBase(object):
 
 	@property
 	def _path(self):
-		return "/"+"/".join(x[0] for x in self.path)
+		return self.__class__.__name__+":"+"/".join(x for x in self.path)
 
 	def __repr__(self): ## pragma: no cover
 		try:
