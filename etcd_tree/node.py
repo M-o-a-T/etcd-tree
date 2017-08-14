@@ -199,6 +199,7 @@ class EtcBase(object):
 	notify_seq = None
 
 	_later = 0
+	_later_wanted = None
 	_env = _NOTGIVEN
 	_update_delay = None
 	_propagate_updates = None
@@ -515,6 +516,9 @@ class EtcBase(object):
 			"""
 		if DEBUG_NOTIFY:
 			logger.debug("run_update %s updated seq %s force %s later %s prop %s",self._path,seq,_force,self._later_p,self._propagate_updates)
+
+		if self._later_wanted is None:
+			self._later_wanted = time.monotonic()
 		# Invariant: _later is either the number of direct children which
 		# are blocked or, if there are none, an asyncio call_later token.
 		# (The token has a .cancel method, thus it cannot be an integer.)
@@ -540,11 +544,13 @@ class EtcBase(object):
 					if self._later:
 						if DEBUG_NOTIFY:
 							logger.debug("run_update still_blocked %s, later %s",self._path,self._later_p)
+						self._check_later()
 						return
 					p = None
 				elif self._later > 0:
 					if DEBUG_NOTIFY:
 						logger.debug("run_update %s already_blocked, later %s",self._path,self._later_p)
+					self._check_later()
 					return
 			else:
 				self._later.cancel()
@@ -574,6 +580,7 @@ class EtcBase(object):
 			if type(p._later) is int:
 				p._later += 1
 				if p._later > 1:
+					p._check_later()
 					return
 			else:
 				# this node has a running timer. By the invariant it cannot
@@ -585,6 +592,7 @@ class EtcBase(object):
 				p._later = 1
 				if DEBUG_NOTIFY:
 					logger.debug("run_update %s block %s",p._path,p._later_p)
+				p._check_later()
 				return
 
 			if not p._propagate_updates:
@@ -627,11 +635,24 @@ class EtcBase(object):
 		# Now unblock the parent, restoring the invariant.
 		p.updated(seq=ls,_force=True)
 
+	def _check_later(self):
+		if self._later_wanted is False:
+			return
+		t = time.monotonic()
+		if self._later_wanted is None:
+			self._later_wanted = t
+			return
+		if t-self._later_wanted < 10*self._update_delay:
+			return
+		logger.warn("Notifier delayed for %s",self._path)
+		self._later_wanted = False
+
 	def _call_monitors(self):
 		"""\
 			Actually run the monitoring code.
 
 			Exceptions get propagated. They will kill the watcher."""
+		self._later_wanted = None
 		try:
 			self.has_update()
 			if self._later_mon:

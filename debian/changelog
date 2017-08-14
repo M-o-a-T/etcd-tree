@@ -1,3 +1,9 @@
+etcd-tree (0.25.2.0) unstable; urgency=medium
+
+  * Warn when an update notification takes way too long.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 14 Aug 2017 12:48:22 +0200
+
 etcd-tree (0.25.1.0) unstable; urgency=medium
 
   * Bugfix: drop EtcAwaiter nodes after recursive load
