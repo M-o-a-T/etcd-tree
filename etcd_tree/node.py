@@ -328,6 +328,9 @@ class EtcBase(object):
 		parent = self._parent()
 		name = self.name
 		x = parent._data.get(name,None)
+		if DEBUG_NOTIFY:
+			logger.debug("run_update %s add %s %s",parent._path, name, "KNOWN" if x is not None else "NEW")
+
 		if x is not None:
 			assert not isinstance(self,EtcAwaiter)
 			if x is self:
@@ -558,7 +561,7 @@ class EtcBase(object):
 		else:
 			self._later = self._loop.call_later(delay, self._run_update)
 			if DEBUG_NOTIFY:
-				logger.debug("run_update %s schedule %s",self._path,time.time())
+				logger.debug("run_update %s schedule %s at %s",self._path,delay,time.time())
 
 		while p:
 			# Now block our parents, until we find one that's blocked
@@ -1013,6 +1016,9 @@ class EtcDir(_EtcDir, MutableMapping):
 	def _call_monitors(self):
 		self.added,self._added = self._added,set()
 		self.deleted,self._deled = self._deled,set()
+		if DEBUG_NOTIFY:
+			logger.debug("run_update CALL_MON %s add:%s del:%s",self,self.added,self.deleted)
+
 		super()._call_monitors()
 
 	async def subdir(self, *_name, name=(), create=None, recursive=None):
