@@ -417,7 +417,8 @@ class EtcWatcher(object):
 			logger.debug("READER cancelled")
 			raise
 		except BaseException as e:
-			logger.exception("READER died")
+			if type(e) is not RuntimeError or not str(e).contains("Event loop is closed"):
+				logger.exception("READER died")
 			if not self.stopped.done():
 				self.stopped.set_exception(e)
 			raise
