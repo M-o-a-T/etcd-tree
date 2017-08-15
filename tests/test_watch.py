@@ -247,14 +247,14 @@ async def test_update_watch_direct(client):
     for k in w.tagged(':tag',depth=6):
         n += 1
     assert n==0
-    await tag2.delete()
+    await tag2.delete(recursive=True)
     n = 0
     async for k in wi.tagged(':tag'):
         n += 1
         assert k['hello']=='kitty'
     assert n==1
 
-    m = await w.delete('vier')
+    m = await w.delete('vier',recursive=True)
     await wr.wait(m)
     with pytest.raises(KeyError):
         w['vier']
