@@ -1,3 +1,9 @@
+etcd-tree (0.26.3.0) unstable; urgency=medium
+
+  * Don't try to delete possibly-non-existing entries.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 15 Aug 2017 18:17:10 +0200
+
 etcd-tree (0.26.2.0) unstable; urgency=medium
 
   * subdir: add KeyNotFoundError

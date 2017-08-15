@@ -809,12 +809,17 @@ class _EtcDir(EtcBase):
 		root = self.root
 		if key is not _NOTGIVEN:
 			res = self._data[key]
-			await res.delete(sync=sync,recursive=recursive, **kw)
-			return
-		if recursive:
+			r = await res.delete(sync=sync,recursive=recursive, **kw)
+			return r
+		if isinstance(self,EtcAwaiter):
+			p = self.parent
+			if isinstance(p._data.get(self.name,None), EtcAwaiter):
+				del p._data[self.name]
+		elif recursive:
 			for v in list(self._data.values()):
-				await v.delete(sync=sync,recursive=recursive)
-		r = await root._delete(self.path, dir=True, recursive=recursive)
+				if not isinstance(v,EtcAwaiter):
+					await v.delete(sync=sync,recursive=recursive)
+		r = await root._delete(self.path, dir=True, recursive=(recursive is not False))
 		r = r.modifiedIndex
 		if sync and root is not None:
 			await root.wait(r)
