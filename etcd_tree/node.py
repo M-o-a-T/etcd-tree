@@ -851,6 +851,9 @@ class EtcAwaiter(_EtcDir):
 	def __init__(self,parent,pre=None,name=None):
 		pass
 
+	def _deleted(self):
+		pass
+
 	def __getitem__(self,key):
 		v = self._data.get(key,_NOTGIVEN)
 		if v is _NOTGIVEN:
