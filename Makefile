@@ -30,6 +30,7 @@ test: all test.cfg
 	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=etcd_tree tests/
 
 t: all test.cfg
+	@rm -f test.log
 	py.test-3 -sxv tests/
 
 test.cfg:
