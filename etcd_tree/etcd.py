@@ -407,23 +407,25 @@ class EtcWatcher(object):
 						raise etcd.StopWatching
 
 			while not self.stopped.done():
+				logger.debug("INW: %s after %s",id(self),self.last_read)
 				await conn.eternal_watch(key, index=self.last_read+1, recursive=True, callback=cb)
 				# restart at the subtree
 				key = self.extkey
 
 		except GeneratorExit:
+			logger.debug("READER GenEx: %s",id(self))
 			raise
 		except asyncio.CancelledError:
-			logger.debug("READER cancelled")
+			logger.debug("READER cancelled: %s", id(self))
 			raise
 		except BaseException as e:
 			if type(e) is not RuntimeError or not str(e).contains("Event loop is closed"):
-				logger.exception("READER died")
+				logger.exception("READER died: %s", id(self))
 			if not self.stopped.done():
 				self.stopped.set_exception(e)
 			raise
 		else:
-			logger.debug("READER ended")
+			logger.debug("READER ended: %s", id(self))
 			if not self.stopped.done():
 				self.stopped.set_result("end")
 
