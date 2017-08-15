@@ -350,9 +350,11 @@ class EtcBase(object):
 		"""Delete this node, replacing it with an EtcAwaiter.
 			You need to make sure not to retain *any* references to the
 			node."""
+		p = self.parent
+		if p is not None:
+			del p._data[self.name]
 		self._parent = None
-		del self.parent._data[self.name]
-		return EtcAwaiter(self.parent,name=self.name)
+		return EtcAwaiter(p, name=self.name)
 		
 	@classmethod
 	async def this_obj(cls,recursive, **kw):
