@@ -739,6 +739,15 @@ class EtcBase(object):
 
 ##############################################################################
 
+def _make_name(_name,name):
+	if isinstance(name,str):
+		name = name.split('/')
+	if len(_name) == 1:
+		_name = _name[0]
+		if isinstance(_name,str):
+			_name = _name.split('/')
+	return _name if type(name) is bool else tuple(chain(_name,name))
+
 class _EtcDir(EtcBase):
 	def lookup(self, *_name, name=()):
 		"""\
@@ -748,16 +757,63 @@ class _EtcDir(EtcBase):
 			@_name and @name are chained. A boolean @name is ignored,
 			for compatibility with some tagging schemes.
 			"""
-		if isinstance(name,str):
-			name = name.split('/')
-		if len(_name) == 1:
-			_name = _name[0]
-			if isinstance(_name,str):
-				_name = _name.split('/')
+		name = _make_name(_name,name)
 
-		for n in _name if type(name) is bool else chain(_name,name):
+		for n in name:
 			self = self[n]
 		return self
+
+	async def subdir(self, *_name, name=(), create=None, recursive=None):
+		"""\
+			Utility function to find/create a sub-node.
+			@recursive decides what to do if the node thus encountered
+			hasn't been loaded before.
+
+			@_name and @name are chained. A boolean @name is ignored,
+			for compatibility with some tagging schemes.
+			"""
+		root=self.root
+		try:
+			d = self.lookup(*_name, name=name)
+		except KeyError as e:
+			n = self.path + _make_name(_name,name)
+		else:
+			if not isinstance(d,EtcAwaiter):
+				if create is True:
+					raise etcd.EtcdAlreadyExist(d.path)
+				return d
+			n = d.path
+
+		if create is False:
+			raise KeyError(n)
+		logger.info("NEW %s",n)
+		try:
+			pre = await root._set(n, prevExist=False, dir=True, value=None)
+		except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
+			pre = await root._conn.get(n)
+		await root.wait(pre.modifiedIndex)
+		return await self.lookup(*_name, name=name)
+
+	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
+		"""\
+			Delete a node.
+			Recursive=True: drop it sequentially
+			Recursive=False: don't do anything if I have sub-nodes
+			Recursive=None(default): let etcd handle it
+			"""
+		root = self.root
+		if key is not _NOTGIVEN:
+			res = self._data[key]
+			await res.delete(sync=sync,recursive=recursive, **kw)
+			return
+		if recursive:
+			for v in list(self._data.values()):
+				await v.delete(sync=sync,recursive=recursive)
+		r = await root._delete(self.path, dir=True, recursive=recursive)
+		r = r.modifiedIndex
+		if sync and root is not None:
+			await root.wait(r)
+		return r
 
 class EtcAwaiter(_EtcDir):
 	"""\
@@ -1043,50 +1099,6 @@ class EtcDir(_EtcDir, MutableMapping):
 
 		super()._call_monitors()
 
-	async def subdir(self, *_name, name=(), create=None, recursive=None):
-		"""\
-			Utility function to find/create a sub-node.
-			@recursive decides what to do if the node thus encountered
-			hasn't been loaded before.
-
-			@_name and @name are chained. A boolean @name is ignored,
-			for compatibility with some tagging schemes.
-			"""
-		root=self.root
-
-		if isinstance(name,str):
-			name = name.split('/')
-		if len(_name) == 1:
-			_name = _name[0]
-			if isinstance(_name,str):
-				_name = _name.split('/')
-
-		async def step(n,last=False):
-			nonlocal self
-			if type(self) is EtcAwaiter:
-				self = await self.load(None)
-			if last and create and n in self:
-				pre = await root._set(self.path+(n,), prevExist=False, dir=True, value=None)
-				raise RuntimeError("This should exist")
-			elif create is not False and n not in self:
-				try:
-					pre = await root._set(self.path+(n,), prevExist=False, dir=True, value=None)
-				except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
-					pre = await root._conn.get(self.path+(n,))
-				await root.wait(pre.modifiedIndex)
-			self = self[n]
-		n = None
-		for nn in _name if type(name) is bool else chain(_name,name):
-			if n is not None:
-				await step(n)
-			n = nn
-		if n is not None:
-			await step(n,True)
-
-		if isinstance(self,EtcAwaiter):
-			self = await self.load(recursive)
-		return self
-
 	def tagged(self, tag=True, depth=0):
 		"""\
 			async generator to recursively find all sub-nodes with a specific tag
@@ -1247,27 +1259,6 @@ class EtcDir(_EtcDir, MutableMapping):
 			root = self.root
 			if root:
 				await root.wait(mod)
-
-	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
-		"""\
-			Delete a node.
-			Recursive=True: drop it sequentially
-			Recursive=False: don't do anything if I have sub-nodes
-			Recursive=None(default): let etcd handle it
-			"""
-		root = self.root
-		if key is not _NOTGIVEN:
-			res = self._data[key]
-			await res.delete(sync=sync,recursive=recursive, **kw)
-			return
-		if recursive:
-			for v in list(self._data.values()):
-				await v.delete(sync=sync,recursive=recursive)
-		r = await root._delete(self.path, dir=True, recursive=(recursive is None))
-		r = r.modifiedIndex
-		if sync and root is not None:
-			await root.wait(r)
-		return r
 
 	def throw_away(self):
 		"""Delete this node, replacing it with an EtcAwaiter.
