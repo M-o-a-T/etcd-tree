@@ -336,7 +336,7 @@ class EtcBase(object):
 			assert not isinstance(self,EtcAwaiter)
 			if x is self:
 				return
-			assert isinstance(x,EtcAwaiter), (id(self.parent),self,id(parent),id(parent._data[name].parent),x)
+			assert isinstance(x,EtcAwaiter), (id(self),self,"vs.",id(x),x)
 		elif hasattr(parent,'_added'):
 			parent._added.add(name)
 		parent._data[name] = self
@@ -1401,6 +1401,7 @@ class EtcRoot(EtcDir):
 		@conn: the connection this is attached to
 		@watcher: the watcher that's talking to me
 		@types: type lookup
+		@path: the subpath from the etcd root to this, if any
 		"""
 	_parent = None
 	name = ''
@@ -1517,7 +1518,7 @@ class EtcRoot(EtcDir):
 
 	def __repr__(self): # pragma: no cover
 		try:
-			return "<{}:{} @{}>".format(self.__class__.__name__,self._conn.root, self.path)
+			return "<{}:{}>".format(self.__class__.__name__,self._conn.root)
 		except Exception as e:
 			logger.exception(e)
 			res = super().__repr__()
