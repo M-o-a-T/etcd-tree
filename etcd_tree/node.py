@@ -875,22 +875,26 @@ class EtcAwaiter(_EtcDir):
 		if root is None:
 			return None # pragma: no cover
 		async with self._lock:
-			p = self.parent
-			if p is None:
-				p = await self.root.lookup(*self.path[:-1])
-				# This can happen when an awaiter's parent does not exist
-				# but it is resolved twice.
-			if type(p) is EtcAwaiter:
-				p = await p
-			if self._done is not None:
-				return self._done
-			r = p._data.get(self.name,self)
-			if type(r) is not EtcAwaiter:
-				self._done = r
-				return r
-			# _fill carries over any monitors and existing EtcAwaiter children
+			try:
+				p = self.parent
+				if p is None:
+					p = await self.root.lookup(*self.path[:-1])
+					# This can happen when an awaiter's parent does not exist
+					# but it is resolved twice.
+				if type(p) is EtcAwaiter:
+					p = await p
+				if self._done is not None:
+					return self._done
+				r = p._data.get(self.name,self)
+				if type(r) is not EtcAwaiter:
+					self._done = r
+					return r
+				# _fill carries over any monitors and existing EtcAwaiter children
 				
-			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
+				obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
+			except (KeyError,etcd.EtcdKeyNotFound):
+				del p._data[self.name]
+				raise
 			assert self._done is obj
 			assert p._data[self.name] is obj, (p._data[self.name],obj)
 			return obj

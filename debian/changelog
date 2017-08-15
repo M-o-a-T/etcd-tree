@@ -1,3 +1,9 @@
+etcd-tree (0.26.4.0) unstable; urgency=medium
+
+  * Delete non-existent EtcAwaiter entries
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 15 Aug 2017 18:44:11 +0200
+
 etcd-tree (0.26.3.0) unstable; urgency=medium
 
   * Don't try to delete possibly-non-existing entries.
