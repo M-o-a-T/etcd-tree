@@ -1,3 +1,9 @@
+etcd-tree (0.26.2.0) unstable; urgency=medium
+
+  * subdir: add KeyNotFoundError
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 15 Aug 2017 14:03:34 +0200
+
 etcd-tree (0.26.1.0) unstable; urgency=medium
 
   * subdir: look up EtcAwaiter before working with it

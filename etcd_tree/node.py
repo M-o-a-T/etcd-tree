@@ -781,7 +781,7 @@ class _EtcDir(EtcBase):
 			if isinstance(d,EtcAwaiter):
 				try:
 					d = await d
-				except KeyError:
+				except (KeyError,etcd.EtcdKeyNotFound):
 					pass
 			if not isinstance(d,EtcAwaiter):
 				if create is True:
