@@ -808,14 +808,14 @@ class EtcAwaiter(_EtcDir):
 		root = self.root
 		if root is None:
 			return None # pragma: no cover
-		p = self.parent
-		if p is None:
-			p = await self.root.lookup(*self.path[:-1])
-			# This can happen when an awaiter's parent does not exist
-			# but it is resolved twice.
-		if type(p) is EtcAwaiter:
-			p = await p
 		async with self._lock:
+			p = self.parent
+			if p is None:
+				p = await self.root.lookup(*self.path[:-1])
+				# This can happen when an awaiter's parent does not exist
+				# but it is resolved twice.
+			if type(p) is EtcAwaiter:
+				p = await p
 			if self._done is not None:
 				return self._done
 			r = p._data.get(self.name,self)
