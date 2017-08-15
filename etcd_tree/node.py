@@ -361,7 +361,6 @@ class EtcBase(object):
 
 	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
-		conn_get = self._root()._conn.get
 		for c in pre.child_nodes:
 			n = c.name
 			a = EtcAwaiter(parent=self,pre=c,name=n)
