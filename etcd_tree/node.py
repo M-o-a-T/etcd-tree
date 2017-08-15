@@ -778,6 +778,11 @@ class _EtcDir(EtcBase):
 		except KeyError as e:
 			n = self.path + _make_name(_name,name)
 		else:
+			if isinstance(d,EtcAwaiter):
+				try:
+					d = await d
+				except KeyError:
+					pass
 			if not isinstance(d,EtcAwaiter):
 				if create is True:
 					raise etcd.EtcdAlreadyExist(d.path)

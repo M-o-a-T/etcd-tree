@@ -357,7 +357,7 @@ class EtcWatcher(object):
 			root = root.root # may be a subdir
 		if root is None:
 			return
-		if mod is None or mod < root.last_mod:
+		if mod is None or (root.last_mod is not None and mod < root.last_mod):
 			mod = root.last_mod
 		if mod is None: # nothing has yet happened
 			return

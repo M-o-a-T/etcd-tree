@@ -1,3 +1,9 @@
+etcd-tree (0.26.1.0) unstable; urgency=medium
+
+  * subdir: look up EtcAwaiter before working with it
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 15 Aug 2017 13:01:23 +0200
+
 etcd-tree (0.26.0.0) unstable; urgency=medium
 
   * Refactor subdir and delete to also work on EtcAwaiter nodes
