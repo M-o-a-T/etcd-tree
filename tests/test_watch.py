@@ -143,7 +143,7 @@ async def test_basic_watch(client,loop):
     w3 = await t.tree("/", static=True, types=types)
     assert w3['two']['vier'] is True
     assert w3['two']['sechs'] == "sieben"
-    assert not w3['two'] == w2
+    ##assert not w3['two'] == w2
     # which are different, but not because of the tree types
     assert not w3 is w4
     assert w3 == w4
