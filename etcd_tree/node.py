@@ -1308,7 +1308,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		#	return False
 		if not hasattr(other,'_data'):
 			return False # pragma: no cover
-		return self._data == other._data
+		return self.path == other.path
 
 	def _ext_update(self, pre, **kw):
 		"""processed for doing a TTL update"""
