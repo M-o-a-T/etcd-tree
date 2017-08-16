@@ -278,6 +278,9 @@ async def build_typed(node,name,cls,t,rec):
 
 ##############################################################################
 
+class SkipAhead(BaseException):
+	pass
+
 class EtcWatcher(object):
 	"""\
 		Runs a watcher on a (sub)tree.
@@ -287,6 +290,7 @@ class EtcWatcher(object):
 		@seq: etcd_index to start monitoring from.
 		"""
 	_reader = None
+	_writer = None
 	root = None
 	def __init__(self, conn,key,seq=0, types=None):
 		self.conn = conn
@@ -294,11 +298,12 @@ class EtcWatcher(object):
 		self.last_read = seq
 		self.last_seen = seq
 
+		self.q = asyncio.Queue(loop=conn._loop)
 		self.uptodate = asyncio.Condition(loop=conn._loop)
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
+		self._writer = asyncio.ensure_future(self._watch_write(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
 		self.stopped.add_done_callback(lambda _: self.uptodate.notify_unlocked())
-		self.stored = []
 
 	def stop(self, exc,cause):
 		if not self.stopped.done():
@@ -307,6 +312,10 @@ class EtcWatcher(object):
 			self.stopped.set_exception(err)
 		try:
 			self._reader.cancel()
+		except Exception:
+			pass
+		try:
+			self._writer.cancel()
 		except Exception:
 			pass
 
@@ -325,23 +334,27 @@ class EtcWatcher(object):
 				self.stopped.set_result("_kill")
 			except RuntimeError: # pragma: no cover ## event loop might be closed
 				pass
-		r,self._reader = self._reader,None
-		if r is not None:
-			try:
-				r.cancel()
-			except RuntimeError: # pragma: no cover ## event loop might be closed
-				pass
+		for k in ("_reader","_writer"):
+			r = getattr(self,k)
+			if r is not None:
+				setattr(self,k, None)
+				try:
+					r.cancel()
+				except RuntimeError: # pragma: no cover ## event loop might be closed
+					pass
 
 	async def close(self):
 		if not self.stopped.done():
 			self.stopped.set_result("close")
-		r,self._reader = self._reader,None
-		if r is not None:
-			r.cancel()
-			try:
-				await r
-			except asyncio.CancelledError: # pragma: no cover
-				pass
+		for k in ("_reader","_writer"):
+			r = getattr(self,k)
+			if r is not None:
+				setattr(self,k, None)
+				r.cancel()
+				try:
+					await r
+				except asyncio.CancelledError: # pragma: no cover
+					pass
 
 	def _set_root(self, root):
 		self.root = weakref.ref(root)
@@ -385,26 +398,16 @@ class EtcWatcher(object):
 		# the main tree until looking up / creating the intermediate nodes
 		# is completed. Thus we need to restart watching at the subtree.
 		try:
-			async def cb(x):
+			def cb(x):
 				logger.debug("IN: %s %s",id(self),repr(x.__dict__))
-				self.stored.append(x)
 				if self.root is None:
 					return
-				while self.stored:
-					x = self.stored.pop(0)
-					try:
-						await self._watch_write(x)
-					except asyncio.CancelledError as e:
-						logger.debug("Write watcher cancelled")
-						raise
-					except Exception as e:
-						logger.exception("Error in write watcher")
-						if not self.stopped.done():
-							self.stopped.set_exception(e)
-						raise etcd.StopWatching
-					self.last_read = x.modifiedIndex
-					if self.extkey != key:
-						raise etcd.StopWatching
+				if x.modifiedIndex <= self.last_read:
+					if not self.stopped.done():
+						self.stopped.set_result("modErr")
+					raise RuntimeError("not in sequence: %s %s",self.last_read,x.modifiedIndex)
+				self.last_read = x.modifiedIndex
+				self.q.put_nowait(x)
 
 			while not self.stopped.done():
 				logger.debug("INW: %s after %s",id(self),self.last_read)
@@ -429,58 +432,73 @@ class EtcWatcher(object):
 			if not self.stopped.done():
 				self.stopped.set_result("end")
 
-	async def _watch_write(self, x):
+	async def _watch_write(self):
 		"""\
 			Callback which processes incoming events
 			"""
 		from .node import EtcAwaiter
 
 		# Drop references so that termination works
-		r = self.root()
-		if r is None: # pragma: no cover
-			raise etcd.StopWatching
 
-		if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
-			return # sometimes we get the parent
-		key = x.key[len(self.extkey):]
-		key = tuple(k for k in key.split('/') if k != '')
+		while True:
+			try:
+				x = await self.q.get()
+				if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
+					raise SkipAhead # sometimes we get the parent
+				r = self.root()
+				if r is None: # pragma: no cover
+					raise etcd.StopWatching
 
-		if x.action in {'compareAndDelete','delete','expire'}:
-			for k in key:
-				try:
-					r = r._get(k)
-					# will not create an EtcAwaiter
-				except KeyError:
-					return
-			r._ext_delete()
-		else:
-#			if not x.createdIndex:
-#				pn = getattr(x,'_prev_node',None)
-#				if pn is not None:
-#					x.createdIndex = pn.createdIndex
-			if key:
-				for k in key[:-1]:
-					try:
-						r = r[k]
-					except KeyError:
-						r = await r._new(parent=r,key=k,recursive=None)
-				try:
-					# don't resolve EtcValue or EtcAwaiter
-					r = r._get(key[-1])
-				except KeyError:
-					r = await r._new(parent=r,key=key,pre=x,recursive=False)
+				key = x.key[len(self.extkey):]
+				key = tuple(k for k in key.split('/') if k != '')
+
+				if x.action in {'compareAndDelete','delete','expire'}:
+					for k in key:
+						try:
+							r = r._get(k)
+							# will not create an EtcAwaiter
+						except KeyError:
+							raise SkipAhead
+					r._ext_delete()
 				else:
-					if type(r) is EtcAwaiter:
-						r = await r.load(pre=x,recursive=False)
+#					if not x.createdIndex:
+#						pn = getattr(x,'_prev_node',None)
+#						if pn is not None:
+#							x.createdIndex = pn.createdIndex
+					if key:
+						for k in key[:-1]:
+							try:
+								r = r[k]
+							except KeyError:
+								r = await r._new(parent=r,key=k,recursive=None)
+						try:
+							# don't resolve EtcValue or EtcAwaiter
+							r = r._get(key[-1])
+						except KeyError:
+							r = await r._new(parent=r,key=key,pre=x,recursive=False)
+						else:
+							if type(r) is EtcAwaiter:
+								r = await r.load(pre=x,recursive=False)
+							else:
+								r._ext_update(x)
 					else:
 						r._ext_update(x)
-			else:
-				r._ext_update(x)
 
-		async with self.uptodate:
-			self.last_seen = x.modifiedIndex
-			self.uptodate.notify_all()
-			logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
+			except SkipAhead:
+				pass
+			except asyncio.CancelledError as e:
+				logger.debug("Write watcher cancelled")
+				raise
+			except Exception as e:
+				logger.exception("Error in write watcher")
+				if not self.stopped.done():
+					self.stopped.set_exception(e)
+				return
+
+			async with self.uptodate:
+				self.last_seen = x.modifiedIndex
+				self.uptodate.notify_all()
+				logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
 
 class EtcTypes(object):
 	doc = None
