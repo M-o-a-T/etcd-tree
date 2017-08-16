@@ -111,7 +111,7 @@ class AssocUI(object):
 
 ### The basic entry tree
 
-	def tree_node(self, name, value=None, node=None):
+	def tree_node(self, name, value=None, node=None, cid=None):
 		"""Set a single node, creating subdirectories where necessary and keeping expansion state"""
 		v = self['dest_view']
 		m = v.get_model()
@@ -127,7 +127,7 @@ class AssocUI(object):
 			e = node.get(n,None)
 			if e is None:
 				if value is DEL: return
-				p = m.append(node.get('_node',None),row=[n,'-dir-',0])
+				p = m.append(node.get('_node',None),row=[n,'-dir-',cid])
 				node[n] = e = {'_node':p}
 				if expanded and node and '_node' in node:
 					v.expand_row(m.get_path(node['_node']),False)
@@ -196,7 +196,7 @@ class AssocUI(object):
 		"""Reader for the background connection to etcd"""
 		res = pipe.recv()
 		#print(res)
-		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value)
+		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value, cid=res.modifiedIndex)
 		return True
 
 	def listen_tree(self,start=None):
