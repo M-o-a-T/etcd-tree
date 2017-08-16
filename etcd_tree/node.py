@@ -852,7 +852,12 @@ class EtcAwaiter(_EtcDir):
 		pass
 
 	def _deleted(self):
+		"""no-op, can't hook an EtcAwaiter"""
 		pass
+
+	def throw_away(self):
+		"""no-op"""
+		return self
 
 	def __getitem__(self,key):
 		v = self._data.get(key,_NOTGIVEN)
