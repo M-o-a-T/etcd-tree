@@ -287,6 +287,7 @@ class EtcBase(object):
 
 	def __init__(self, pre, name=None,parent=None, _no_update_parent=False, _fill=None, **kw):
 		super().__init__(**kw)
+
 		if parent is not None:
 			self._parent = weakref.ref(parent)
 			self._loop = parent._loop
@@ -302,9 +303,11 @@ class EtcBase(object):
 			self.path = parent.path+(name,)
 			if not _no_update_parent:
 				self._update_parent()
+			self._lock = asyncio.Lock(loop=self._loop)
 		else:
 			# This is a root node
 			self._root = weakref.ref(self)
+
 		if pre is not None:
 			self._seq = pre.modifiedIndex
 			self._cseq = pre.createdIndex
@@ -842,7 +845,6 @@ class EtcAwaiter(_EtcDir):
 		if self is _NOTGIVEN:
 			self = object.__new__(cls)
 			super().__init__(self, parent=parent,pre=pre,name=name,_no_update_parent=True)
-			self._lock = asyncio.Lock(loop=self._loop)
 			self._data = {}
 			assert name not in parent._data
 			parent._data[name] = self
@@ -882,15 +884,15 @@ class EtcAwaiter(_EtcDir):
 		root = self.root
 		if root is None:
 			return None # pragma: no cover
-		async with self._lock:
-			try:
-				p = self.parent
-				if p is None:
-					p = await self.root.lookup(*self.path[:-1])
-					# This can happen when an awaiter's parent does not exist
-					# but it is resolved twice.
-				if type(p) is EtcAwaiter:
-					p = await p
+		try:
+			p = self.parent
+			if p is None:
+				p = await self.root.lookup(*self.path[:-1])
+				# This can happen when an awaiter's parent does not exist
+				# but it is resolved twice.
+			if type(p) is EtcAwaiter:
+				p = await p
+			async with p._lock:
 				if self._done is not None:
 					return self._done
 				r = p._data.get(self.name,self)
@@ -900,12 +902,12 @@ class EtcAwaiter(_EtcDir):
 				# _fill carries over any monitors and existing EtcAwaiter children
 				
 				obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
-			except (KeyError,etcd.EtcdKeyNotFound):
-				del p._data[self.name]
-				raise
-			assert self._done is obj
-			assert p._data[self.name] is obj, (p._data[self.name],obj)
-			return obj
+		except (KeyError,etcd.EtcdKeyNotFound):
+			del p._data[self.name]
+			raise
+		assert self._done is obj
+		assert p._data[self.name] is obj, (p._data[self.name],obj)
+		return obj
 
 	def _ext_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
@@ -1431,6 +1433,7 @@ class EtcRoot(EtcDir):
 		self.path = key
 		self._tasks = []
 		self._loop = conn._loop
+		self._lock = asyncio.Lock(loop=self._loop)
 		if types is None:
 			from .etcd import EtcTypes
 			types = EtcTypes()

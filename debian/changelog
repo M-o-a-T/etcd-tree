@@ -1,3 +1,9 @@
+etcd-tree (0.26.5.0) unstable; urgency=medium
+
+  * Concurrency fix. Again.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 16 Aug 2017 16:48:54 +0200
+
 etcd-tree (0.26.4.0) unstable; urgency=medium
 
   * Delete non-existent EtcAwaiter entries

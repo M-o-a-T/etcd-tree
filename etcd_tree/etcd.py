@@ -467,20 +467,21 @@ class EtcWatcher(object):
 #							x.createdIndex = pn.createdIndex
 					if key:
 						for k in key[:-1]:
+							async with r._lock:
+								try:
+									r = r[k]
+								except KeyError:
+									r = await r._new(parent=r,key=k,recursive=None)
+						async with r._lock:
 							try:
-								r = r[k]
+								# don't resolve EtcValue or EtcAwaiter
+								r = r._get(key[-1])
 							except KeyError:
-								r = await r._new(parent=r,key=k,recursive=None)
-						try:
-							# don't resolve EtcValue or EtcAwaiter
-							r = r._get(key[-1])
-						except KeyError:
-							r = await r._new(parent=r,key=key,pre=x,recursive=False)
+								r = await r._new(parent=r,key=key,pre=x,recursive=False)
+						if type(r) is EtcAwaiter:
+							r = await r.load(pre=x,recursive=False)
 						else:
-							if type(r) is EtcAwaiter:
-								r = await r.load(pre=x,recursive=False)
-							else:
-								r._ext_update(x)
+							r._ext_update(x)
 					else:
 						r._ext_update(x)
 
