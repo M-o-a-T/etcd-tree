@@ -204,6 +204,7 @@ class EtcBase(object):
 	_update_delay = None
 	_propagate_updates = None
 	is_new = True # for monitors: False after the first call to has_update()
+	busy = None
 
 	@classmethod
 	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, **kw):
@@ -314,6 +315,7 @@ class EtcBase(object):
 			self._ttl = pre.ttl
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
+		self.ready = asyncio.Event(loop=self._loop)
 
 		if _fill is not None:
 			rs = weakref.ref(self)
@@ -511,6 +513,7 @@ class EtcBase(object):
 			self._later = 'x'
 		self._run_update(_force=_sub)
 		assert self._later == 0
+		self.ready.set()
 
 	def updated(self, seq=None, _force=False):
 		"""\
@@ -527,6 +530,7 @@ class EtcBase(object):
 		# are blocked or, if there are none, an asyncio call_later token.
 		# (The token has a .cancel method, thus it cannot be an integer.)
 		# A node is blocked iff its _later attribute is not zero.
+		# .ready mirrors "_later is zero".
 		#
 		# Thus, after adding a timer we walk up the parent chain.
 		# If the parent is blocked, increment the counter and stop.
@@ -550,6 +554,8 @@ class EtcBase(object):
 							logger.debug("run_update still_blocked %s, later %s",self._path,self._later_p)
 						self._check_later()
 						return
+					else:
+						self.ready.set()
 					p = None
 				elif self._later > 0:
 					if DEBUG_NOTIFY:
@@ -569,6 +575,7 @@ class EtcBase(object):
 			# this happens when the root has gone away. Exit.
 			return
 		else:
+			self.ready.clear()
 			self._later = self._loop.call_later(delay, self._run_update)
 			if DEBUG_NOTIFY:
 				logger.debug("run_update %s schedule %s at %s",self._path,delay,time.time())
@@ -581,6 +588,7 @@ class EtcBase(object):
 				return # pragma: no cover
 			if DEBUG_NOTIFY:
 				logger.debug("run_update %s block later %s",p._path,p._later_p)
+			p.ready.clear()
 			if type(p._later) is int:
 				p._later += 1
 				if p._later > 1:
@@ -628,6 +636,7 @@ class EtcBase(object):
 			if root is not None:
 				root.propagate_exc(exc,self)
 
+		self.ready.set()
 		if _force or not self._propagate_updates:
 			return
 		p = self._parent
@@ -700,6 +709,7 @@ class EtcBase(object):
 		if self._later:
 			if type(self._later) is not int:
 				self._later.cancel()
+			self.ready.set() # sort of
 		p = self._parent
 		if p is None:
 			return # pragma: no cover

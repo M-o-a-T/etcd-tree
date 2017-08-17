@@ -31,6 +31,7 @@ import pytest
 import etcd
 import time
 import asyncio
+from functools import partial
 from etcd_tree.node import EtcRoot,EtcDir,EtcValue,EtcInteger,EtcFloat,\
                            EtcXValue,EtcString,EtcBoolean,EtcAwaiter, \
                            ReloadData,ReloadRecursive
@@ -504,6 +505,35 @@ async def test_update_ttl(client, loop):
     assert w._get('t2').ttl is None
 
     await w.close()
+
+@pytest.mark.run_loop
+async def test_ready(client, loop):
+    d=dict
+    t = client
+
+    mod = await t._f(d(rdy=d(t2="fuu",nodes="too")))
+    w = await t.tree("/rdy")
+    mod = await w.set('some','data')
+    mod = await w.set('other','data2')
+    x = w._get('some')
+    y = w._get('other')
+    assert not x.ready.is_set()
+    assert not y.ready.is_set()
+    assert not w.ready.is_set()
+    await y.delete(sync=False)
+    a = 0
+    async def w2(f,xx):
+        await xx.ready.wait()
+        nonlocal a
+        a |= f
+    f1 = w2(1,x)
+    f2 = w2(2,y)
+    f3 = w2(4,w)
+    t1 = time.monotonic()
+    await asyncio.gather(f1,f2,f3, loop=loop)
+    t2 = time.monotonic()
+    assert a == 7, a
+    assert 1 <= t2-t1 <= 2
 
 @pytest.mark.run_loop
 async def test_create(client):

@@ -1,3 +1,10 @@
+etcd-tree (0.27.0.0) unstable; urgency=medium
+
+  * Add a "ready" field which contains an awaitable that fires
+    when no updates etc. are pending
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 17 Aug 2017 09:32:09 +0200
+
 etcd-tree (0.26.5.0) unstable; urgency=medium
 
   * Concurrency fix. Again.
