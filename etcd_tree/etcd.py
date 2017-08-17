@@ -400,11 +400,9 @@ class EtcWatcher(object):
 		try:
 			def cb(x):
 				logger.debug("IN: %s %s",id(self),repr(x.__dict__))
-				if self.root is None:
-					return
+				if self.root is None or self.stopped.done():
+					raise etcd.StopWatching
 				if x.modifiedIndex <= self.last_read:
-					if not self.stopped.done():
-						self.stopped.set_result("modErr")
 					raise RuntimeError("not in sequence: %s %s",self.last_read,x.modifiedIndex)
 				self.last_read = x.modifiedIndex
 				self.q.put_nowait(x)
@@ -447,7 +445,7 @@ class EtcWatcher(object):
 					raise SkipAhead # sometimes we get the parent
 				r = self.root()
 				if r is None: # pragma: no cover
-					raise etcd.StopWatching
+					return
 
 				key = x.key[len(self.extkey):]
 				key = tuple(k for k in key.split('/') if k != '')
