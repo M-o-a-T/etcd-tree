@@ -374,15 +374,16 @@ class EtcWatcher(object):
 			mod = root.last_mod
 		if mod is None: # nothing has yet happened
 			return
-		logger.debug("Syncing, wait for %d: %s",mod, id(self))
-		w = None
-		async with self.uptodate:
-			while self._reader is not None and self.last_seen < mod:
-				if self.stopped.done():
-					raise WatchStopped() from self.stopped.exception()
-				await self.uptodate.wait()
-				                                # processing got done during .acquire()
-		logger.debug("Syncing, done, at %d: %s",self.last_seen, id(self))
+		if self._reader is not None and self.last_seen < mod:
+			logger.debug("Syncing, wait for %d: %s",mod, id(self))
+			w = None
+			async with self.uptodate:
+				while self._reader is not None and self.last_seen < mod:
+					if self.stopped.done():
+						raise WatchStopped() from self.stopped.exception()
+					await self.uptodate.wait()
+													# processing got done during .acquire()
+			logger.debug("Syncing, done, at %d: %s",self.last_seen, id(self))
 		if self.stopped.done():
 			raise WatchStopped() from self.stopped.exception()
 
