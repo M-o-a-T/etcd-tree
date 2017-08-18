@@ -175,9 +175,11 @@ async def test_basic_watch(client,loop):
     with pytest.raises(WatchStopped):
         await w4['two'].set('hello','two')
     
+    await w.close()
     await w2.close()
     await w3.close()
     await w4.close()
+    await w5.close()
 
 @pytest.mark.run_loop
 async def test_update_watch_direct(client):
@@ -534,6 +536,7 @@ async def test_ready(client, loop):
     t2 = time.monotonic()
     assert a == 7, a
     assert 0.95 <= t2-t1 <= 2
+    await w.close()
 
 @pytest.mark.run_loop
 async def test_create(client):
@@ -646,3 +649,4 @@ async def do_typed(client,loop, subtyped,recursed):
     assert v['a']['b']['c']['d']['e'] == '20'
     assert isinstance(v, Sub if subtyped else EtcDir)
 
+    await w.close()
