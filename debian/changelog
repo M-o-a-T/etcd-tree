@@ -1,3 +1,9 @@
+etcd-tree (0.27.3.0) unstable; urgency=medium
+
+  * Fix race condition
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 18 Aug 2017 17:25:38 +0200
+
 etcd-tree (0.27.2.0) unstable; urgency=medium
 
   * StopWaching exception needs to be raised by the reader thread

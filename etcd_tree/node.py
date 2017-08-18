@@ -747,14 +747,22 @@ class EtcBase(object):
 			if self._cseq is None:
 				self._cseq = pre.createdIndex
 			elif self._cseq != pre.createdIndex:
+				if self._cseq > pre.createdIndex: # pragma: no cover # can't be forced
+					logger.info("Create late: know %d, get %d", self._cseq,pre.createdIndex)
+					return
 				# this happens if a parent gets deleted and re-created
 				logger.info("Re-created %s: %s %s",self.path, self._cseq,pre.createdIndex)
 				if hasattr(self,'_data'):
 					for d in list(self._data.values()):
 						d._ext_delete()
 		if pre.modifiedIndex:
-			if self._seq and self._seq > pre.modifiedIndex:
-				raise RuntimeError("Updates out of order: saw %d, has %d" % (self._seq,pre.modifiedIndex)) # pragma: no cover # hopefully
+			# This can happen when we read a node (e.g. via EtcAwaiter)
+			# before the create or update arrives via our watcher.
+			if self._seq and self._seq > pre.modifiedIndex: # pragma: no cover # can't be forced
+				logger.info("Update late: know %d, get %d", self._seq,pre.modifiedIndex)
+			if self._seq and self._seq >= pre.modifiedIndex: # pragma: no cover # ditto
+				# already up-to-date: ignore
+				return
 			self._seq = pre.modifiedIndex
 		self._ttl = pre.ttl
 		self.updated(seq=pre.modifiedIndex)
