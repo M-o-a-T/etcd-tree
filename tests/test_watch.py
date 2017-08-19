@@ -276,6 +276,26 @@ async def test_update_watch_direct(client):
     await wi.close()
 
 @pytest.mark.run_loop
+async def test_subdir(client, loop):
+    """Testing auto-update, both ways"""
+    logger.debug("START subdir")
+    d=dict
+    types = EtcTypes()
+    t = client
+    w = await t.tree(("two",), immediate=False, static=False)
+    d1=d(bla=d(und="drei",oder={}),vier="fünf",sechs="sieben",acht=d(neun="zehn"))
+    await w.update(d1)
+    await w.close()
+
+    w = await t.tree(("two",), immediate=None, static=False)
+    assert isinstance(w['bla'],EtcAwaiter)
+    wd = w['bla']['und']
+    assert isinstance(wd,EtcAwaiter), wd
+    wd = await wd
+    assert isinstance(wd,EtcValue), wd
+
+
+@pytest.mark.run_loop
 async def test_update_watch(client, loop):
     """Testing auto-update, both ways"""
     logger.debug("START update_watch")

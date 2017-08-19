@@ -297,6 +297,8 @@ class EtcBase(object):
 				if pre is not None:
 					assert pre.name == name
 			else:
+				if pre is None:
+					raise ReloadData
 				name = pre.name
 			self.name = name
 			if self._propagate_updates is None:

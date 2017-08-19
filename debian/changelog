@@ -1,3 +1,15 @@
+etcd-tree (0.27.4.0) unstable; urgency=medium
+
+  * Require preload data
+
+    A race condition may cause EtcAwaiter.load() to end up calling
+    EtcBase.__init__() without preload data.
+
+    Setup by name is only reasonable for EtcAwaiter. Thus, raise ReloadData
+    to fix that.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 19 Aug 2017 12:53:33 +0200
+
 etcd-tree (0.27.3.0) unstable; urgency=medium
 
   * Fix race condition
