@@ -1,3 +1,9 @@
+etcd-tree (0.27.5.0) unstable; urgency=medium
+
+  * Dict size changed during iteration. *Sigh*.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 20 Aug 2017 05:04:24 +0200
+
 etcd-tree (0.27.4.0) unstable; urgency=medium
 
   * Require preload data

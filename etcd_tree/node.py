@@ -1103,12 +1103,14 @@ class EtcDir(_EtcDir, MutableMapping):
 	def keys(self):
 		return self._data.keys()
 	def values(self):
-		for v in self._data.values():
+		for v in list(self._data.values()):
 			if isinstance(v,EtcValue):
 				v = v.value
 			yield v
 	def items(self):
-		for k,v in self._data.items():
+		for k,v in list(self._data.items()):
+			if k not in self:
+				continue # pragma: no cover ## possible race condition
 			if isinstance(v,EtcValue):
 				v = v.value
 			yield k,v
