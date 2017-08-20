@@ -693,7 +693,10 @@ class EtcBase(object):
 			(and its children).
 
 			Called with the node as single parameter.
-			If .seq is zero, the node is being deleted.
+			If .is_new is True, the node is new.
+			If .is_new is None, the node is being deleted.
+			Otherwise it has been updated.
+			(Or at least one of its children, if it's a directory.)
 			"""
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
