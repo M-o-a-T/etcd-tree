@@ -170,7 +170,7 @@ async def test_basic_watch(client,loop):
 
     # check what happens if an updater dies on us
     await w4['two'].set('hello','one')
-    await w4['two'].set('die',42)
+    await w4['two'].set('die','42')
     await asyncio.sleep(1.5, loop=loop)
     with pytest.raises(WatchStopped):
         await w4['two'].set('hello','two')
@@ -215,7 +215,7 @@ async def test_update_watch_direct(client):
         w['zwei']['zehn']
     # Now test that adding a node does the right thing
     await w['vier'].set('auch',"ja1")
-    await w['zwei'].set('zehn',d(zwanzig=30,vierzig=d(fuenfzig=60)))
+    await w['zwei'].set('zehn',d(zwanzig='30',vierzig=d(fuenfzig='60')))
     await w['zwei'].set('und', "weniger")
 
     assert w['zwei']['und'] == "weniger"
@@ -442,6 +442,11 @@ async def test_update_watch(client, loop):
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
     assert w1['vier']['new_a'].value == 4242
+
+    with pytest.raises(ValueError):
+        await w1['vier'].set('new_a',"x123", ext=True)
+    await w1['vier'].set('new_a',"123", ext=True)
+    assert w1['vier']['new_a'].value == 123
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = await t._f(d1)

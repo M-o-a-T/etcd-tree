@@ -987,11 +987,15 @@ class EtcXValue(EtcBase):
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for EtcDir.delete
 
-	async def set(self, value, sync=True, ttl=None):
+	async def set(self, value, sync=True, ttl=None, ext=False):
 		root = self.root
 		if root is None:
 			return # pragma: no cover
-		r = await root._set(self.path,self._dump(value), index=self._seq, ttl=ttl)
+		if ext:
+			self._load(value)
+		else:
+			assert isinstance(value,self.type), (value,self.type)
+		r = await root._set(self.path, value if ext else self._dump(value), index=self._seq, ttl=ttl)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
@@ -1215,7 +1219,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		for p in path[:-1]:
 			self = self[p]
 		self = await self # in case it's an EtcAwaiter
-		res = await self.set(path[-1], val, sync=False)
+		res = await self.set(path[-1], val, sync=False, ext=True)
 		return res
 
 	async def set(self, key,value, sync=True, replace=True, ext=False, **kw):
@@ -1267,6 +1271,8 @@ class EtcDir(_EtcDir, MutableMapping):
 					t = self.subtype(*path[keypath:], dir=False)
 					if ext:
 						t._load(value) # raises an error if wrong
+					else:
+						assert isinstance(value,t.type), (value,t.type)
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
 				return mod
@@ -1281,6 +1287,8 @@ class EtcDir(_EtcDir, MutableMapping):
 					t = self.subtype(('0',), dir=False)
 					if ext:
 						t._load(value) # raises an error if wrong
+					else:
+						assert isinstance(value,t.type), (value,t.type)
 					r = await root._set(self.path, value if ext else t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
@@ -1292,12 +1300,12 @@ class EtcDir(_EtcDir, MutableMapping):
 				if isinstance(value,dict):
 					raise ValueError("Cannot replace a terminal node with a mapping",self.path)
 				if replace:
-					res = mod = await sub.set(value, **kw)
+					res = mod = await sub.set(value, ext=ext, **kw)
 			else:
 				if not isinstance(value,dict):
 					raise ValueError("Cannot replace a mapping with a terminal node",self.path)
 				for k,v in value.items():
-					res = mod = await sub.set(k,v, replace=replace, **kw)
+					res = mod = await sub.set(k,v, replace=replace, ext=ext, **kw)
 
 		if sync and mod and root is not None:
 			await root.wait(mod)
