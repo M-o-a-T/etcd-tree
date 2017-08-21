@@ -1218,7 +1218,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		res = await self.set(path[-1], val, sync=False)
 		return res
 
-	async def set(self, key,value, sync=True, replace=True, **kw):
+	async def set(self, key,value, sync=True, replace=True, ext=False, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			Returns the operation's modification index.
@@ -1229,6 +1229,9 @@ class EtcDir(_EtcDir, MutableMapping):
 			If @value is a mapping, recursively add/update values.
 			No nodes are deleted! Set "replace" to False if you only want
 			to supply defaults.
+
+			If @ext is set, the value passed is a string as seen by etcd.
+			This is used from the command line.
 
 			Setting an atomic value to a dict, or vice versa, is not
 			supported; you need to explicitly delete the conflicting entry
@@ -1262,7 +1265,9 @@ class EtcDir(_EtcDir, MutableMapping):
 						mod = r.modifiedIndex
 				else:
 					t = self.subtype(*path[keypath:], dir=False)
-					r = await root._set(path, t._dump(value), **kw)
+					if ext:
+						t._load(value) # raises an error if wrong
+					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
 				return mod
 			if key is None:
@@ -1274,7 +1279,9 @@ class EtcDir(_EtcDir, MutableMapping):
 						mod = r.modifiedIndex # pragma: no cover
 				else:
 					t = self.subtype(('0',), dir=False)
-					r = await root._set(self.path, t._dump(value), append=True, **kw)
+					if ext:
+						t._load(value) # raises an error if wrong
+					r = await root._set(self.path, value if ext else t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
 				res = res,mod
