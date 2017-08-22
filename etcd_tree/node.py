@@ -994,7 +994,7 @@ class EtcXValue(EtcBase):
 		if ext:
 			self._load(value)
 		else:
-			assert isinstance(value,self.type), (value,self.type)
+			assert isinstance(value,self.type), (value,self.type, '/'.join(self.path))
 		r = await root._set(self.path, value if ext else self._dump(value), index=self._seq, ttl=ttl)
 		r = r.modifiedIndex
 		if sync:
@@ -1272,7 +1272,7 @@ class EtcDir(_EtcDir, MutableMapping):
 					if ext:
 						t._load(value) # raises an error if wrong
 					else:
-						assert isinstance(value,t.type), (value,t.type)
+						assert isinstance(value,t.type), (value,t.type, '/'.join(path))
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
 				return mod
@@ -1288,7 +1288,7 @@ class EtcDir(_EtcDir, MutableMapping):
 					if ext:
 						t._load(value) # raises an error if wrong
 					else:
-						assert isinstance(value,t.type), (value,t.type)
+						assert isinstance(value,t.type), (value,t.type, '/'.join(self.path))
 					r = await root._set(self.path, value if ext else t._dump(value), append=True, **kw)
 					res = r.key.rsplit('/',1)[1]
 					mod = r.modifiedIndex
