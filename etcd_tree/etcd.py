@@ -632,6 +632,9 @@ class EtcTypes(object):
 			for k,n in nodes:
 				for nk,nn in n.items(p):
 					cn.append((nk,nn))
+					nn = getattr(nn.type,'_types',None)
+					if nn is not None:
+						cn.append((nk,nn))
 				if k == '**':
 					cn.append((k,n))
 			if not cn:
