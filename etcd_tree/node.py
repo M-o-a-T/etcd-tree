@@ -1272,7 +1272,10 @@ class EtcDir(_EtcDir, MutableMapping):
 					if ext:
 						t._load(value) # raises an error if wrong
 					else:
-						assert isinstance(value,t.type), (value,t.type, '/'.join(path))
+						if type(value) is int and t.type is float:
+							pass
+						else:
+							assert isinstance(value,t.type), (value,t.type, '/'.join(path))
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
 				return mod
