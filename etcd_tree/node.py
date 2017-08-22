@@ -1390,9 +1390,10 @@ class EtcDir(_EtcDir, MutableMapping):
 			If @cls is None, return the (possibly newly-allocated)
 			EtcTypes object.
 			"""
-		if self._types is None:
+		if '_types' not in vars(self):
 			from .etcd import EtcTypes
 			self._types = EtcTypes()
+			self._types.doc = repr(self)
 		if cls is None:
 			return self._types.step(*path)
 		return self._types.register(*path, cls=cls, **kw)
