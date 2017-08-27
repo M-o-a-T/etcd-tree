@@ -296,6 +296,38 @@ async def test_subdir(client, loop):
 
 
 @pytest.mark.run_loop
+async def test_pri(client, loop):
+    """Testing prioritized reading"""
+    logger.debug("START subdir")
+    d=dict
+    types = EtcTypes()
+    t = client
+    w = await t.tree(("two",), immediate=False, static=False)
+    d1=d(pri=d(a="1",b="2",c="3",d="4",e="5"))
+    await w.update(d1)
+    await w.close()
+
+    class CheckFirst(EtcString):
+        async def init(self):
+            assert len([x for x in self.parent.values() if not isinstance(x,EtcAwaiter)]) == 0, self.parent._data
+    class CheckLast(EtcString):
+        async def init(self):
+            assert len([x for x in self.parent.values() if not isinstance(x,EtcAwaiter)]) >= 3, self.parent._data
+        
+    types.register("pri","c",cls=CheckFirst,pri=1)
+    types.register("pri","d",cls=CheckLast,pri=-1)
+    types.register("pri","b",cls=CheckLast,pri=-1)
+    w = await t.tree(("two",), immediate=None, static=False, types=types)
+    wd = w['pri']
+    assert isinstance(wd,EtcAwaiter)
+    wd = await wd
+    assert isinstance(wd,EtcDir), wd
+    assert wd['a'] == "1"
+    assert wd['b'] == "2"
+    assert wd['c'] == "3"
+
+
+@pytest.mark.run_loop
 async def test_update_watch(client, loop):
     """Testing auto-update, both ways"""
     logger.debug("START update_watch")

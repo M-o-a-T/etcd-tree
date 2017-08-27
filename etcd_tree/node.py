@@ -207,12 +207,12 @@ class EtcBase(object):
 	busy = None
 
 	@classmethod
-	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, **kw):
+	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, typ=None, **kw):
 		"""\
 			This classmethod loads data (if necessary) and creates a class from a base.
 
 			If @parent is not given, load a root class from @conn and @key.
-			Otherwise @key is the name of the child node; the class is
+			Otherwise @key is the path to the child node; the class is
 			looked up via the parent's .subtype() method.
 
 			If @recursive is True, @pre needs to have been recursively
@@ -223,27 +223,24 @@ class EtcBase(object):
 		irec = recursive
 		if pre is not None:
 			kw['pre'] = pre
-			if key is None:
-				key = pre.name
 		else:
 			assert key is not None
-		if isinstance(key,tuple):
+		if key is None:
+			key = (parent.path if parent else ())+(pre.name,)
+		elif isinstance(key,tuple):
 			if key:
 				name = key[-1]
 			else:
 				name = ""
 		else:
-			try:
-				name = key[key.rindex('/')+1:]
-			except ValueError:
-				name = key
+			name = key.rsplit('/',1)[-1]
+
 		if conn is None:
-			assert key
-			assert '/' not in key
+			assert name
 			assert parent is not None, "specify conn or parent"
 			conn = parent._root()._conn
 			kw['parent'] = parent
-			cls_getter = lambda: parent.subtype(name, pre=pre,recursive=recursive)
+			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive)
 			if isinstance(key,str):
 				key = parent.path+(name,)
 		else:
@@ -286,7 +283,7 @@ class EtcBase(object):
 		self._update_parent()
 		return self
 
-	def __init__(self, pre, name=None,parent=None, _no_update_parent=False, _fill=None, **kw):
+	def __init__(self, pre=None, name=None,parent=None, _no_update_parent=False, _fill=None, **kw):
 		super().__init__(**kw)
 
 		if parent is not None:
@@ -375,17 +372,39 @@ class EtcBase(object):
 			a = EtcAwaiter(parent=self,pre=c,name=n)
 			self._added.add(n)
 		
+		todo = {}
+		import pdb;pdb.set_trace()
 		for c in pre.child_nodes:
-			n = c.name
-			if c.dir and recursive is None:
-				pass
-			else:
-				# TODO: do this in parallel.
-				a = self._data[n]
-				if isinstance(a,EtcAwaiter):
-					an = await self._new(parent=self,key=n,recursive=recursive, pre=(c if recursive or not c.dir else None), _fill=a)
+			todo[c.name]=c
+		while todo:
+			pri = None
+			current = {}
+			for n,c in todo.items():
+				try:
+					t = self.subtype(n,dir=c.dir,pre=(c if recursive or not c.dir else None),recursive=recursive, raw=True)
+				except ReloadData:
+					c = await self.root._conn.read(self.path+(n,))
+					t = self.subtype(n,dir=c.dir,pre=c, recursive=False, raw=True)
+				if pri is None or t.pri > pri:
+					pri = t.pri
+					current = {}
+				elif t.pri < pri:
+					continue
+				current[n] = (t,c)
+			for n,tc in current.items():
+				t,c = tc
+				del todo[n]
+				if c.dir and recursive is None:
+					pass
+				else:
+					a = self._data[n]
+					if isinstance(a,EtcAwaiter):
+						an = await self._new(parent=self,key=n,recursive=recursive, pre=(c if recursive or not c.dir else None), _fill=a, typ=t.type)
 
-					await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
+						await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
+			if todo:
+				self.force_updated()
+				await self.ready
 
 		if recursive:
 			for k,v in list(self._data.items()):
@@ -1088,7 +1107,10 @@ class EtcDir(_EtcDir, MutableMapping):
 		self._data = {}
 		self._added = set()
 		self._deled = set()
-		super().__init__(**kw)
+		try:
+			super().__init__(**kw)
+		except TypeError:
+			import pdb;pdb.set_trace()
 		if self._types_from_parent is None:
 			self._types_from_parent = (self.name and self.name[0] != ':')
 
@@ -1275,6 +1297,9 @@ class EtcDir(_EtcDir, MutableMapping):
 						if type(value) is int and t.type is float:
 							pass
 						else:
+							if not isinstance(value,t.type):
+								import pdb;pdb.set_trace()
+								t = self.subtype(*path[keypath:], dir=False)
 							assert isinstance(value,t.type), (value,t.type, '/'.join(path))
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
@@ -1398,7 +1423,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			return self._types.step(*path)
 		return self._types.register(*path, cls=cls, **kw)
 		
-	def subtype(self,*path,dir=None,pre=None,recursive=None, default=True):
+	def subtype(self,*path,dir=None,pre=None,recursive=None, default=True,raw=False):
 		"""\
 			Decide which type to use for a new entry.
 			@path is the path to the sub-entry.
@@ -1423,20 +1448,25 @@ class EtcDir(_EtcDir, MutableMapping):
 				raise ReloadData
 		types = self._types
 		if types is not None:
-			cls = types.lookup(*path,dir=dir)
-			if cls is not None:
-				return cls
+			cls = types.lookup(*path,dir=dir,raw=True)
+			if cls is not None and cls.type is not None:
+				return cls if raw else cls.type
 		for sup in type(self).mro():
 			types = sup.__dict__.get('_types',None)
 			if types is None:
 				continue
-			cls = types.lookup(*path,dir=dir)
-			if cls is not None:
-				return cls
+			cls = types.lookup(*path,dir=dir,raw=True)
+			if cls is not None and cls.type is not None:
+				return cls if raw else cls.type
 		p = self.parent if self._types_from_parent else None
 		if p is None:
-			return None if not default else (EtcDir if dir else EtcValue)
-		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive)
+			if not default:
+				return None
+			res = EtcDir if dir else EtcValue
+			if raw:
+				res = DummyType(res)
+			return res
+		return p.subtype(*((self.name,)+path),dir=dir,pre=pre,recursive=recursive,raw=raw)
 	
 	@hybridmethod
 	def registrations(self):
@@ -1460,6 +1490,11 @@ class EtcDir(_EtcDir, MutableMapping):
 			self = type(self)
 		for k in self.__mro__:
 			yield from show((),getattr(k,'_types',None))
+
+class DummyType:
+	def __init__(self, t):
+		self.type = t
+		self.pri = 0
 
 ##############################################################################
 

@@ -65,6 +65,9 @@ yours. Thus, if Fred already corrected the mistake but you didn't yet get
 the update, your change will fail and any later changes will be ignored.
 Thus, you should avoid the synchronous-code version if possible.
 
+The order of instantiation is undefined but can be changed with the
+``pri=NUM`` argument when registering types; see below.
+
 Setting up
 ----------
 
@@ -152,8 +155,8 @@ registration without the '**' component.
 More specific matches are preferred. However, if you do something like
 registering both ``('**','three')`` and ``('*',two,'*')`` to different
 classes, matching ``('one','two','three')`` to that will result in one or
-the other, but which one is undefined and may change without notice.
-Use a typed subdirectory to resolve the conflict (below).
+the other. Register with ``pri=NUM`` if you want deterministic behavior
+(NUM > 0: prefer; <0: avoid). This also affects instantiation.
 
 Wildcards do not apply to names starting with a colon.
 
@@ -300,7 +303,7 @@ also register the thing's type for that tag.
 
 ``etcd_tree`` supports this convention:
 
-* Type lookups don't propagate beyond tagged nodes.
+* Type lookups don't descend beyond tagged nodes.
   You can override this by setting the node's ``_types_from_parent``
   attribute.
 

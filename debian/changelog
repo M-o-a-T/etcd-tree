@@ -1,3 +1,9 @@
+etcd-tree (0.30.0.0) unstable; urgency=medium
+
+  * Implement priorities for conflict resolution / loading subordinate items
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Aug 2017 10:04:16 +0200
+
 etcd-tree (0.28.0.0) unstable; urgency=medium
 
   * Enable .set() to work with etcd-stored values

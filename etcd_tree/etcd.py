@@ -502,6 +502,7 @@ class EtcWatcher(object):
 
 class EtcTypes(object):
 	doc = None
+	pri = 0
 
 	def __init__(self):
 		self.type = None
@@ -592,22 +593,28 @@ class EtcTypes(object):
 		self = self.step(path)
 		self._register(value)
 
-	def register(self, *path, dir=None, cls=None, doc=None):
+	def register(self, *path, dir=None, cls=None, **kw):
 		"""\
 			Teach this node that a sub-node named @name is to be of type @sub.
+
+			Set @doc to some doc string.
+			Set @pri to the priority of this entry. Higher is better.
 			"""
 		self = self.step(*path)
 		if cls is None:
+			assert not kw
 			return self._register
 		else:
-			return self._register(cls,doc=doc)
+			return self._register(cls,**kw)
 
-	def _register(self, cls,doc=None):
+	def _register(self, cls,doc=None,pri=0):
 		"""Register a class for this node"""
 		if doc is None:
 			doc = cls.__doc__
 		if doc:
 			self.doc = doc
+		if pri:
+			self.pri = pri
 		self.type = cls
 		return cls
 
@@ -640,7 +647,11 @@ class EtcTypes(object):
 			if not cn:
 				return None
 			nodes = cn
-		for p,n in nodes:
+
+		def by_pri(k):
+			k=k[1].type
+			return -getattr(k,'pri',0)
+		for p,n in sorted(nodes, key=by_pri):
 			t = n.type
 			if t is not None:
 				if isinstance(t,str):
