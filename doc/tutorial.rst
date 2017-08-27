@@ -231,12 +231,12 @@ node.
             self._types = EtcTypes()
             self._types.register(…)
 
-        def subtype(self,*path,dir=None,pre=None): ##*
+        def subtype(self,*path,dir=None,pre=None,raw=False): ##*
             if path == ('special','subdir') and pre['data'] == 'hello':
-                return HelloData
+                return DummyType(HelloData) if raw else HelloData
                 # This will use HelloData for <self>/special/subdir
                 # if its 'data' entry contains 'hello'
-            return super().subtype(*path,dir=dir,pre=pre) ##*
+            return super().subtype(*path,dir=dir,pre=pre,raw=raw) ##*
 
 ``.subtype()`` is called for each entry below your node for which a type
 needs to be looked up. ``pre`` is the content of the etcd tree *relative to
@@ -247,6 +247,10 @@ up entries relative to your class.
 raise ``ReloadData`` if you need that. The ``recursive`` parameter tells
 you whether ``pre`` contains just the top-level directory or the whole
 sub-hierarchy; raise ``ReloadRecursive`` if you need the latter.
+
+If ``raw`` is set, the type needs to be wrapped in a class that holds it 
+and (optionally) the type's priority value. This will be the default in a
+future version.
 
 ``.subtype()`` recurses to the parent directory when the first
 character of the entry's name is not a colon. You can
