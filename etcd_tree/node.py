@@ -1491,9 +1491,11 @@ class EtcDir(_EtcDir, MutableMapping):
 			yield from show((),getattr(k,'_types',None))
 
 class DummyType:
-	def __init__(self, t):
+	"""This is a stub type encapsulation, suitable for returning a type
+		from an overridden .subtype(…, raw=True)"""
+	def __init__(self, t, pri=0):
 		self.type = t
-		self.pri = 0
+		self.pri = pri
 
 ##############################################################################
 

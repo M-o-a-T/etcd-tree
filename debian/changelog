@@ -1,3 +1,9 @@
+etcd-tree (0.30.1.0) unstable; urgency=medium
+
+  * Allow priority in DummyType
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Aug 2017 10:31:06 +0200
+
 etcd-tree (0.30.0.1) unstable; urgency=medium
 
   * Left a debug statement
