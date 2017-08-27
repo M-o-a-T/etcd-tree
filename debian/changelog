@@ -1,3 +1,9 @@
+etcd-tree (0.30.0.1) unstable; urgency=medium
+
+  * Left a debug statement
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Aug 2017 10:21:22 +0200
+
 etcd-tree (0.30.0.0) unstable; urgency=medium
 
   * Implement priorities for conflict resolution / loading subordinate items

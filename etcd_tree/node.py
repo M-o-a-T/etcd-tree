@@ -373,7 +373,6 @@ class EtcBase(object):
 			self._added.add(n)
 		
 		todo = {}
-		import pdb;pdb.set_trace()
 		for c in pre.child_nodes:
 			todo[c.name]=c
 		while todo:
