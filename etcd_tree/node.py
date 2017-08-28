@@ -240,7 +240,7 @@ class EtcBase(object):
 			assert parent is not None, "specify conn or parent"
 			conn = parent._root()._conn
 			kw['parent'] = parent
-			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive)
+			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive, raw=False)
 			if isinstance(key,str):
 				key = parent.path+(name,)
 		else:
@@ -1221,7 +1221,7 @@ class EtcDir(_EtcDir, MutableMapping):
 					for k,v in val.items():
 						t_set(path,k,v)
 				else:
-					t = self.subtype(path, dir=False)
+					t = self.subtype(path, dir=False, raw=False)
 					root._task_do(self._task_set,path, t._dump(val))
 			t_set((),key, val)
 		else:
@@ -1288,7 +1288,7 @@ class EtcDir(_EtcDir, MutableMapping):
 						r = await root._set(path, None, dir=True, **kw)
 						mod = r.modifiedIndex
 				else:
-					t = self.subtype(*path[keypath:], dir=False)
+					t = self.subtype(*path[keypath:], dir=False, raw=False)
 					if ext:
 						t._load(value) # raises an error if wrong
 					else:
@@ -1297,7 +1297,7 @@ class EtcDir(_EtcDir, MutableMapping):
 						else:
 							if not isinstance(value,t.type):
 								import pdb;pdb.set_trace()
-								t = self.subtype(*path[keypath:], dir=False)
+								t = self.subtype(*path[keypath:], dir=False, raw=False)
 							assert isinstance(value,t.type), (value,t.type, '/'.join(path))
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
@@ -1310,7 +1310,7 @@ class EtcDir(_EtcDir, MutableMapping):
 					if mod is None:
 						mod = r.modifiedIndex # pragma: no cover
 				else:
-					t = self.subtype(('0',), dir=False)
+					t = self.subtype(('0',), dir=False, raw=False)
 					if ext:
 						t._load(value) # raises an error if wrong
 					else:
