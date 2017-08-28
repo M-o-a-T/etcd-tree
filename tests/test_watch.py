@@ -294,6 +294,11 @@ async def test_subdir(client, loop):
     wd = await wd
     assert isinstance(wd,EtcValue), wd
 
+def ilen(gen):
+    n = 0
+    for x in gen:
+        n += 1
+    return n
 
 @pytest.mark.run_loop
 async def test_pri(client, loop):
@@ -309,10 +314,10 @@ async def test_pri(client, loop):
 
     class CheckFirst(EtcString):
         async def init(self):
-            assert len([x for x in self.parent.values() if not isinstance(x,EtcAwaiter)]) == 0, self.parent._data
+            assert ilen(self.parent.values()) == 1, self.parent._data
     class CheckLast(EtcString):
         async def init(self):
-            assert len([x for x in self.parent.values() if not isinstance(x,EtcAwaiter)]) >= 3, self.parent._data
+            assert ilen(self.parent.values()) == 5, self.parent._data
         
     types.register("pri","c",cls=CheckFirst,pri=1)
     types.register("pri","d",cls=CheckLast,pri=-1)

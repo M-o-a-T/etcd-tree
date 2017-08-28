@@ -367,11 +367,7 @@ class EtcBase(object):
 
 	async def _fill_data(self,pre,recursive):
 		"""Copy result data to the object. This may require re-reading recursively."""
-		for c in pre.child_nodes:
-			n = c.name
-			a = EtcAwaiter(parent=self,pre=c,name=n)
-			self._added.add(n)
-		
+		# Collect all names to be added, process highest-priority items first
 		todo = {}
 		for c in pre.child_nodes:
 			todo[c.name]=c
@@ -392,14 +388,17 @@ class EtcBase(object):
 				current[n] = (t,c)
 			for n,tc in current.items():
 				t,c = tc
+				if n not in self._data:
+					EtcAwaiter(parent=self,pre=c,name=n)
+				self._added.add(n)
+			for n,tc in current.items():
+				t,c = tc
 				del todo[n]
 				if c.dir and recursive is None:
 					pass
 				else:
 					a = self._data[n]
 					if isinstance(a,EtcAwaiter):
-						an = await self._new(parent=self,key=n,recursive=recursive, pre=(c if recursive or not c.dir else None), _fill=a, typ=t.type)
-
 						await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
 			if todo:
 				self.force_updated()
