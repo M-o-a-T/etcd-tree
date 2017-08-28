@@ -1,3 +1,9 @@
+etcd-tree (0.30.2.0) unstable; urgency=medium
+
+  * Pre-fill only same-priority entries
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 28 Aug 2017 04:09:44 +0200
+
 etcd-tree (0.30.1.0) unstable; urgency=medium
 
   * Allow priority in DummyType
