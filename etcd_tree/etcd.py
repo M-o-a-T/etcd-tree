@@ -166,6 +166,8 @@ class EtcClient(object):
 
 			@value: the value of the node, for non-directories
 
+			@create: new entry? True:yes / False:no / None:doesn't matter
+
 			@ttl: time-to-live in seconds.
 
 			@append=True: generate a new guaranteed-unique and sequential entry.

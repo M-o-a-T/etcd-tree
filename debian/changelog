@@ -1,3 +1,9 @@
+etcd-tree (0.30.3.0) unstable; urgency=medium
+
+  * raise KeyError instead of EtcdKeyNotFound (in node.py)
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 06 Sep 2017 13:31:53 +0200
+
 etcd-tree (0.30.2.0) unstable; urgency=medium
 
   * Pre-fill only same-priority entries

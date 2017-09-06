@@ -38,7 +38,7 @@ from itertools import chain
 from collections.abc import MutableMapping
 from contextlib import suppress
 import aio_etcd as etcd
-from etcd import EtcdResult
+from etcd import EtcdResult, EtcdKeyNotFound
 from functools import wraps
 from .util import hybridmethod
 from traceback import print_exc
@@ -256,28 +256,31 @@ class EtcBase(object):
 
 		self = None
 		try:
-			if recursive and not pre:
-				raise ReloadRecursive
 			try:
-				self = await get_cls()
-			except ReloadData:
-				assert pre is None
-				kw['pre'] = pre = await conn.read(key)
-				recursive = False
-				self = await get_cls()
-				# This way, if determining the class requires
-				# recursive content, we do not read twice
-			if pre is None:
-				kw['pre'] = pre = await conn.read(key)
-			if pre.dir:
-				await self._fill_data(pre=pre,recursive=irec)
-		except ReloadRecursive:
-			kw['pre'] = pre = await conn.read(key, recursive=True)
-			recursive = True
-			if self is None:
-				self = await get_cls()
-			if pre.dir:
-				await self._fill_data(pre=pre,recursive=True)
+				if recursive and not pre:
+					raise ReloadRecursive
+				try:
+					self = await get_cls()
+				except ReloadData:
+					assert pre is None
+					kw['pre'] = pre = await conn.read(key)
+					recursive = False
+					self = await get_cls()
+					# This way, if determining the class requires
+					# recursive content, we do not read twice
+				if pre is None:
+					kw['pre'] = pre = await conn.read(key)
+				if pre.dir:
+					await self._fill_data(pre=pre,recursive=irec)
+			except ReloadRecursive:
+				kw['pre'] = pre = await conn.read(key, recursive=True)
+				recursive = True
+				if self is None:
+					self = await get_cls()
+				if pre.dir:
+					await self._fill_data(pre=pre,recursive=True)
+		except EtcdKeyNotFound:
+			raise KeyError(key)
 
 		await self.init()
 		self._update_parent()
@@ -1168,7 +1171,7 @@ class EtcDir(_EtcDir, MutableMapping):
 
 	def add_monitor(self, callback):
 		res = super().add_monitor(callback)
-		if self.added and not self._later:
+		if not self._later:
 			self.added = set(self._data.keys())
 			self.deleted = set()
 			callback(self)
@@ -1179,6 +1182,8 @@ class EtcDir(_EtcDir, MutableMapping):
 		self.deleted,self._deled = self._deled,set()
 		if DEBUG_NOTIFY:
 			logger.debug("run_update CALL_MON %s add:%s del:%s",self,self.added,self.deleted)
+			if self.path[-1] == ':server':
+				import pdb;pdb.set_trace()
 
 		super()._call_monitors()
 
