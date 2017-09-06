@@ -1,3 +1,9 @@
+etcd-tree (0.30.4.0) unstable; urgency=medium
+
+  * Reader: close the connection!
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Wed, 06 Sep 2017 16:46:48 +0200
+
 etcd-tree (0.30.3.0) unstable; urgency=medium
 
   * raise KeyError instead of EtcdKeyNotFound (in node.py)

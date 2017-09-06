@@ -432,6 +432,8 @@ class EtcWatcher(object):
 			logger.debug("READER ended: %s", id(self))
 			if not self.stopped.done():
 				self.stopped.set_result("end")
+		finally:
+			conn.close()
 
 	async def _watch_write(self):
 		"""\
