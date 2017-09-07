@@ -1591,10 +1591,7 @@ class EtcRoot(EtcDir):
 				if res is not None:
 					self._task_done.set_exception(res)
 			if res is None:
-				self._task_done.set_exception(res)
-
-				
-			self._task_done.set_result(f.result() if f else None)
+				self._task_done.set_result(f.result() if f else None)
 			return
 		p,a,k = self._tasks.pop(0)
 		try:
