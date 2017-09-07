@@ -1562,6 +1562,8 @@ class EtcRoot(EtcDir):
 			return
 		if f is None:
 			f = self._task_now
+		elif f is not self._task_now:
+			raise RuntimeError("_task_next running twice?")
 		if self._task_done is None:
 			self._task_done = asyncio.Future(loop=self._loop)
 		if f is not None:
@@ -1573,12 +1575,25 @@ class EtcRoot(EtcDir):
 				return
 			exc = f.exception()
 			if exc is not None:
-				self._task_done.set_exception(exc)
-				self._task_now = None
-				return
+				#self._task_done.set_exception(exc)
+				#self._task_now = None
+				#return
+				logger.exception("ERROR in %s", f, exc_info=exc)
+				# TODO log somewhere accessible
 		# 
 		if not self._tasks:
 			self._task_now = None
+
+			# set exception/result
+			res = None
+			if f is not None:
+				res = f.exception()
+				if res is not None:
+					self._task_done.set_exception(res)
+			if res is None:
+				self._task_done.set_exception(res)
+
+				
 			self._task_done.set_result(f.result() if f else None)
 			return
 		p,a,k = self._tasks.pop(0)
@@ -1612,12 +1627,20 @@ class EtcRoot(EtcDir):
 		return self._watcher is not None and self._watcher.running
 
 	async def close(self):
+		from .etcd import WatchStopped
+		try:
+			await self.wait()
+		except WatchStopped:
+			logger.exception("Not Watching")
+		if self._task_now is not None:
+			self._task_now.cancel()
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			await w.close()
 
 	async def wait(self, mod=None):
-		# Here 
+		"""Delay until async processing is complete"""
+
 		while True:
 			if self._task_done is None:
 				if not self._tasks and self._task_now is None:

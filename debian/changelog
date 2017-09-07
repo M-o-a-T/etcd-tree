@@ -1,3 +1,9 @@
+etcd-tree (0.31.0.1) unstable; urgency=medium
+
+  * Fix exception handling in task runner
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 07 Sep 2017 14:54:28 +0200
+
 etcd-tree (0.31.0.0) unstable; urgency=medium
 
   * Rename EtcdRoot.task() from ._task_do() and make interface public
