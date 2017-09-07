@@ -448,7 +448,7 @@ class EtcBase(object):
 	async def wait(self,mod=None):
 		r = self.root
 		if r is not None:
-			await r.wait(mod=mod)
+			return await r.wait(mod=mod)
 
 	@property
 	def _later_p(self):
@@ -1625,6 +1625,7 @@ class EtcRoot(EtcDir):
 			if mod is None:
 				mod = self.last_mod
 			await self._watcher.sync(mod)
+		return mod
 
 	def __repr__(self): # pragma: no cover
 		try:
