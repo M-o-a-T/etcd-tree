@@ -847,7 +847,7 @@ class _EtcDir(EtcBase):
 
 		if create is False:
 			raise KeyError(n)
-		logger.info("NEW %s",n)
+		logger.debug("NEW %s",n)
 		try:
 			pre = await root._set(n, prevExist=False, dir=True, value=None)
 		except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
