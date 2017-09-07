@@ -442,8 +442,9 @@ class EtcBase(object):
 	def env(self):
 		return self.root.env
 
-	def _task(self,p,*a,**k):
-		self.root._task_do(p,*a,**k)
+	def task(self,p,*a,**k):
+		"""Enqueue an async job to run controlled by this tree"""
+		self.root.task(p,*a,**k)
 
 	async def wait(self,mod=None):
 		r = self.root
@@ -476,7 +477,7 @@ class EtcBase(object):
 		kw = {}
 		if not self._is_dir:
 			kw['index'] = self._seq
-		self._task(self.root._set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
+		self.root.task(self.root._set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
@@ -1001,9 +1002,9 @@ class EtcXValue(EtcBase):
 			raise RuntimeError("You did not sync")
 		return self._value
 	def _set_value(self,value):
-		self._task(self.root._set,self.path,self._dump(value), index=self._seq)
+		self.root.task(self.root._set,self.path,self._dump(value), index=self._seq)
 	def _del_value(self):
-		self._task(self.root._delete,self.path, index=self._seq)
+		self.root.task(self.root._delete,self.path, index=self._seq)
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for EtcDir.delete
 
@@ -1222,12 +1223,12 @@ class EtcDir(_EtcDir, MutableMapping):
 				path += (key,)
 
 				if isinstance(val,dict):
-					root._task_do(root._set,self.path+path, None, prevExist=False, dir=True)
+					root.task(root._set,self.path+path, None, prevExist=False, dir=True)
 					for k,v in val.items():
 						t_set(path,k,v)
 				else:
 					t = self.subtype(path, dir=False, raw=False)
-					root._task_do(self._task_set,path, t._dump(val))
+					root.task(self._task_set,path, t._dump(val))
 			t_set((),key, val)
 		else:
 			if isinstance(res,EtcXValue):
@@ -1354,7 +1355,7 @@ class EtcDir(_EtcDir, MutableMapping):
 			res = self._data[key]
 			res.__delitem__()
 			return
-		self._task(self.root._delete,self.path,dir=True, index=self._seq)
+		self.root.task(self.root._delete,self.path,dir=True, index=self._seq)
 
 	async def update(self, d1={}, _sync=True, **d2):
 		mod = None
@@ -1581,7 +1582,7 @@ class EtcRoot(EtcDir):
 		except Exception as exc:
 			self._task_done.set_exception(exc)
 
-	def _task_do(self,p,*a,**k):
+	def task(self,p,*a,**k):
 		self._tasks.append((p,a,k))
 		self._task_next()
 
