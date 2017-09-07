@@ -1626,7 +1626,7 @@ class EtcRoot(EtcDir):
 	async def close(self):
 		from .etcd import WatchStopped
 		try:
-			await self.wait()
+			await self.wait(tasks=True)
 		except WatchStopped:
 			logger.exception("Not Watching")
 		if self._task_now is not None:
@@ -1635,10 +1635,10 @@ class EtcRoot(EtcDir):
 		if w is not None:
 			await w.close()
 
-	async def wait(self, mod=None):
+	async def wait(self, mod=None, tasks=False):
 		"""Delay until async processing is complete"""
 
-		while True:
+		while tasks:
 			if self._task_done is None:
 				if not self._tasks and self._task_now is None:
 					break
