@@ -1008,7 +1008,7 @@ class EtcXValue(EtcBase):
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for EtcDir.delete
 
-	async def set(self, value, sync=True, ttl=None, ext=False):
+	async def set(self, value, sync=True, ttl=None, ext=False, force=False):
 		root = self.root
 		if root is None:
 			return # pragma: no cover
@@ -1016,7 +1016,13 @@ class EtcXValue(EtcBase):
 			self._load(value)
 		else:
 			assert isinstance(value,self.type), (value,self.type, '/'.join(self.path))
-		r = await root._set(self.path, value if ext else self._dump(value), index=self._seq, ttl=ttl)
+		if not ext:
+			if not force and self.value is not None and value == self.value:
+				return
+			value = self._dump(value)
+
+		r = await root._set(self.path, value, index=None if force else self._seq, ttl=ttl)
+
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
