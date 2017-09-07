@@ -1,4 +1,4 @@
-etcd-tree (0.31.0.1) unstable; urgency=medium
+etcd-tree (0.31.1.0) unstable; urgency=medium
 
   * Fix exception handling in task runner
 
