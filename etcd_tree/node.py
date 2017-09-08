@@ -1685,9 +1685,12 @@ class EtcRoot(EtcDir):
 		self.last_mod = r.modifiedIndex
 		return r
 
-	async def _delete(self, *a,**k):
-		r = await self._conn.delete(*a,**k)
-		self.last_mod = r.modifiedIndex
+	async def _delete(self, path,*a,**k):
+		try:
+			r = await self._conn.delete(path,*a,**k)
+			self.last_mod = r.modifiedIndex
+		except EtcdKeyNotFound:
+			raise KeyError(path) from None
 		return r
 
 	async def run_with_wait(self, p,*a,**k):
