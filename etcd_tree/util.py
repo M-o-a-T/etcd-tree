@@ -150,3 +150,44 @@ def import_string(name):
 			return getattr(import_string(module),obj)
 		except AttributeError:
 			raise AttributeError(name) from None
+
+
+# not actually used, but kept for reference
+class CancellableEvent(asyncio.Event):
+	_cancelled = False
+
+	def __repr__(self):
+		res = super().__repr__()
+		if self._cancelled:
+			res = res[:-1]+" cancelled"+res[-1]
+		return res
+
+	def is_set(self):
+		if self._cancelled:
+			raise asyncio.CancelledError
+		return super().is_set()
+
+	def set(self):
+		if self._cancelled:
+			raise asyncio.CancelledError
+		super().set()
+
+	def clear(self):
+		if self._cancelled:
+			raise asyncio.CancelledError
+		super().clear()
+
+	def is_cancelled(self):
+		return self._cancelled
+
+	@asyncio.coroutine
+	def wait(self):
+		if self._cancelled:
+			raise asyncio.CancelledError
+		return (yield from super().wait())
+
+	def cancel(self):
+		self._cancelled = True
+		for fut in self._waiters:
+			fut.cancel()
+
