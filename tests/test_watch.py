@@ -265,7 +265,7 @@ async def test_update_watch_direct(client):
     # etcd.EtcdNotFile is stupid. Bug in etcd (issue#4075).
     with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['zwei']
-        await wr.wait(m)
+        await wr.wait(m, tasks=True)
 
     m = await w.delete('zwei', recursive=True)
     await wr.wait(m)
@@ -402,15 +402,15 @@ async def test_update_watch(client, loop):
     # deleting a whole subtree is not yet implemented
     with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['vier']
-        await w.wait()
+        await w.wait(tasks=True)
     del w['vier']['oder']
-    await w.wait()
+    await w.wait(tasks=True)
     w['vier']
     s = w['vier']._get('auch')._cseq
     with pytest.raises(KeyError):
         w['vier']['oder']
     m = await w['vier']._get('auch').delete()
-    await w.wait(m)
+    await w.wait(m, tasks=True)
     with pytest.raises(KeyError):
         w['vier']['auch']
 
@@ -419,7 +419,7 @@ async def test_update_watch(client, loop):
     w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
-    await w['zwei'].wait(m)
+    await w['zwei'].wait(m,tasks=True)
     assert s != w['vier']._get('auch')._cseq
 
     from etcd_tree import client as rclient
@@ -449,7 +449,7 @@ async def test_update_watch(client, loop):
     assert w1['vier']['auch'] == "ja2"
     assert w2['vier']['auch'] == "ja2"
     w1['zwei']=d(und='noch weniger')
-    await w1.wait()
+    await w1.wait(tasks=True)
     assert w1['zwei']['und'] == "noch weniger"
     assert w1['zwei'].get('und') == "noch weniger"
 
@@ -470,11 +470,11 @@ async def test_update_watch(client, loop):
     types.register("**","new_a", cls=IntObj)
     types.register(("**","new_b"), cls=EtcInteger)
     mod = await t._f(d2,delete=True)
-    await w1.wait(mod)
+    await w1.wait(mod, tasks=True)
     w1['vier']['auch'] = "nein"
     #assert w1.vier.auch == "ja" ## should be, but too dependent on timing
     w1['vier']['new_a'] = 4242
-    await w1.wait()
+    await w1.wait(tasks=True)
     assert w1['vier']['auch'] == "nein"
     with pytest.raises(KeyError):
         assert w1['vier']['dud']
@@ -487,18 +487,18 @@ async def test_update_watch(client, loop):
 
     d1=d(two=d(vier=d(a="b",c="d")))
     mod = await t._f(d1)
-    await w1.wait(mod)
+    await w1.wait(mod, tasks=True)
     assert w1['vier']['a'] == "b"
     with pytest.raises(KeyError):
         w1['vier']['new_b']
 
     d1=d(two=d(vier=d(c="x",d="y",new_b=123)))
     mod = await t._f(d1)
-    await w1.wait(mod)
+    await w1.wait(mod, tasks=True)
     assert w1['vier']['c'] == "x"
     assert w1['vier']['d'] == "y"
     assert w1['vier']['new_b'] == 123
-    await w.wait(mod)
+    await w.wait(mod, tasks=True)
 
     assert len(w['vier']) == 7,list(w['vier'])
     s=set(w['vier'])
@@ -515,7 +515,7 @@ async def test_update_watch(client, loop):
     await w['vier'].delete('new_a')
     await w['vier'].delete('new_b')
     m = await w.delete('vier',recursive=False)
-    await w.wait(m)
+    await w.wait(m, tasks=True)
     with pytest.raises(KeyError):
         w['vier']
     with pytest.raises(RuntimeError):
@@ -550,11 +550,11 @@ async def test_update_ttl(client, loop):
     await w._get('t2').del_ttl()
     await w._get('nodes').set_ttl(1)
     logger.warning("_SYNC_TTL")
-    await w.wait()
+    await w.wait(tasks=True)
     logger.warning("_GET_TTL")
     assert w._get('timeout').ttl is not None
     assert w['nodes'] == "too"
-    await w.wait(mod)
+    await w.wait(mod, tasks=True)
     assert w['some'] == "data"
     assert w._get('nodes').ttl is not None
     del w._get('nodes').ttl
@@ -599,6 +599,28 @@ async def test_ready(client, loop):
     assert a == 7, a
     assert 0.95 <= t2-t1 <= 2
     await w.close()
+
+@pytest.mark.run_loop
+async def test_task(client, loop):
+    d=dict
+    t = client
+    w = await t.tree("/")
+
+    xx = [0]
+    async def one(x):
+        x[0] += 1
+    w.root.task(one,xx)
+
+    assert xx[0] == 0, xx
+    await w.wait(tasks=True)
+    assert xx[0] == 1, xx
+    w.root.task(one,xx)
+    w.root.task(one,xx)
+    await w.wait(tasks=True)
+    assert xx[0] == 3, xx
+    w.root.task(one,xx)
+    await w.close()
+    assert xx[0] == 4, xx
 
 @pytest.mark.run_loop
 async def test_create(client):

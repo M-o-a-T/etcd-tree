@@ -1,3 +1,9 @@
+etcd-tree (0.31.3.0) unstable; urgency=medium
+
+  * Getting task_next handling right. Hopefully.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 08 Sep 2017 14:10:21 +0200
+
 etcd-tree (0.31.2.0) unstable; urgency=medium
 
   * Need to wait for background tasks explicitly

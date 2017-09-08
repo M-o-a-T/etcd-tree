@@ -1502,6 +1502,15 @@ class DummyType:
 
 ##############################################################################
 
+class _DummyFuture:
+	def done(self):
+		return True
+	def __await__(self):
+		yield
+		return False
+
+_DummyFuture = _DummyFuture()
+
 class EtcRoot(EtcDir):
 	"""\
 		Root node for a (watched) config tree.
@@ -1517,7 +1526,7 @@ class EtcRoot(EtcDir):
 	_update_delay = 1
 	_tasks = None
 	_task_now = None
-	_task_done = None
+	_task_done = _DummyFuture
 	last_mod = None
 
 	def __init__(self,conn,watcher=None,key=(),types=None, update_delay=None, **kw):
@@ -1549,52 +1558,49 @@ class EtcRoot(EtcDir):
 	# * repeat as necessary.
 	# 
 	def _task_next(self,f=None):
-		if self._task_done is not None and self._task_done.done():
+		if self._task_done.done():
 			if not self._tasks:
 				logger.debug("Defer exit %s", self._task_done)
+				self._task_done = _DummyFuture
 				return
 			logger.debug("Defer restart, old=%s", self._task_done)
-			self._task_done = None
+			self._task_done = _DummyFuture
 		else:
 			logger.debug("Defer start")
+
 		if f is None:
 			f = self._task_now
 		elif f is not self._task_now:
 			raise RuntimeError("_task_next running twice?")
-		if self._task_done is None:
+		if self._task_done is _DummyFuture:
+			# first run
 			self._task_done = asyncio.Future(loop=self._loop)
 			logger.debug("Defer create TD %s",self._task_done)
+
+		res = None
 		if f is not None:
 			if not f.done():
-				logger.debug("Defer not done %s", self._task_now)
+				logger.debug("Defer not done %s", f)
 				return
-			logger.debug("Defer done %s", self._task_now)
+			self._task_now = None
+			logger.debug("Defer done %s", f)
 			if f.cancelled():
-				logger.debug("Defer cancel %s %s", self._task_now,self._task_done)
+				logger.debug("Defer cancel %s %s", f,self._task_done)
 				self._task_done.cancel()
-				self._task_now = None
 				return
 			exc = f.exception()
 			if exc is not None:
-				#self._task_done.set_exception(exc)
-				#self._task_now = None
-				#return
-				logger.exception("Defer ERROR %s", f, exc_info=exc)
-				# TODO log somewhere accessible
-		# 
-		if not self._tasks:
-			self._task_now = None
+				logger.error("Defer ERROR %s", f, exc_info=exc)
+				self._task_done.set_exception(exc)
+				return
+			res = f.result()
 
-			# set exception/result
-			res = None
-			if f is not None:
-				res = f.exception()
-				if res is not None:
-					self._task_done.set_exception(res)
-			if res is None:
-				self._task_done.set_result(f.result() if f else None)
+		if not self._tasks:
+			# no more tasks
+			self._task_done.set_result(res)
 			logger.debug("Defer DONE %s", self._task_done)
 			return
+
 		p,a,k = self._tasks.pop(0)
 		try:
 			self._task_now = asyncio.ensure_future(self.run_with_wait(p,*a,**k), loop=self._loop)
@@ -1643,24 +1649,22 @@ class EtcRoot(EtcDir):
 	async def wait(self, mod=None, tasks=False):
 		"""Delay until async processing is complete"""
 
-		while tasks:
-			if self._task_done is None:
-				if not self._tasks and self._task_now is None:
-					logger.debug("DeferWait done")
-					break
-				logger.debug("DeferWait start")
-				self._task_next()
-				continue
+		while tasks or self._task_done.done():
+			logger.debug("DeferWait do")
 			try:
-				logger.debug("DeferWait do")
 				await self._task_done
-				logger.debug("DeferWait did")
 			finally:
-				self._task_done = None
+				self._task_next()
+			logger.debug("DeferWait did")
+			if not tasks or not self._tasks:
+				break
+
 		if self._watcher is not None:
 			if mod is None:
 				mod = self.last_mod
+			logger.debug("DeferWait sync")
 			await self._watcher.sync(mod)
+		logger.debug("DeferWait end %s",mod)
 		return mod
 
 	def __repr__(self): # pragma: no cover
