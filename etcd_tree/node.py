@@ -446,10 +446,10 @@ class EtcBase(object):
 		"""Enqueue an async job to run controlled by this tree"""
 		self.root.task(p,*a,**k)
 
-	async def wait(self,mod=None):
+	async def wait(self, **kw):
 		r = self.root
 		if r is not None:
-			return await r.wait(mod=mod)
+			return await r.wait(**kw)
 
 	@property
 	def _later_p(self):
