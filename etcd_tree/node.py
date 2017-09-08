@@ -1550,8 +1550,10 @@ class EtcRoot(EtcDir):
 	# 
 	def _task_next(self,f=None):
 		if self._task_done is not None and self._task_done.done():
-			# wait for .wait()
-			return
+			if not self._tasks:
+				logger.debug("Defer exit %s", self._task_done)
+				return
+			self._task_done = None
 		if f is None:
 			f = self._task_now
 		elif f is not self._task_now:
