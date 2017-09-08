@@ -280,7 +280,7 @@ class EtcBase(object):
 				if pre.dir:
 					await self._fill_data(pre=pre,recursive=True)
 		except EtcdKeyNotFound:
-			raise KeyError(key)
+			raise KeyError(key) from None
 
 		await self.init()
 		self._update_parent()
