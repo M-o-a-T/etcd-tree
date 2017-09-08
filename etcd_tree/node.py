@@ -1593,6 +1593,7 @@ class EtcRoot(EtcDir):
 			self._task_done.set_exception(exc)
 
 	def task(self,p,*a,**k):
+		assert callable(p)
 		self._tasks.append((p,a,k))
 		self._task_next()
 
