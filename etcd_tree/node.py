@@ -1115,10 +1115,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		self._data = {}
 		self._added = set()
 		self._deled = set()
-		try:
-			super().__init__(**kw)
-		except TypeError:
-			import pdb;pdb.set_trace()
+		super().__init__(**kw)
 		if self._types_from_parent is None:
 			self._types_from_parent = (self.name and self.name[0] != ':')
 
@@ -1189,8 +1186,6 @@ class EtcDir(_EtcDir, MutableMapping):
 		self.deleted,self._deled = self._deled,set()
 		if DEBUG_NOTIFY:
 			logger.debug("run_update CALL_MON %s add:%s del:%s",self,self.added,self.deleted)
-			if self.path[-1] == ':server':
-				import pdb;pdb.set_trace()
 
 		super()._call_monitors()
 
@@ -1307,9 +1302,6 @@ class EtcDir(_EtcDir, MutableMapping):
 						if type(value) is int and t.type is float:
 							pass
 						else:
-							if not isinstance(value,t.type):
-								import pdb;pdb.set_trace()
-								t = self.subtype(*path[keypath:], dir=False, raw=False)
 							assert isinstance(value,t.type), (value,t.type, '/'.join(path))
 					r = await root._set(path, value if ext else t._dump(value), **kw)
 					mod = r.modifiedIndex
