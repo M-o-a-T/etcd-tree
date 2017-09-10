@@ -84,6 +84,7 @@ class EtcClient(object):
 		self.args = args
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 		self.client = Client(loop=loop, **args)
+		self._trees = set()
 #		self.watched = weakref.WeakValueDictionary()
 
 	async def start(self):
@@ -98,7 +99,10 @@ class EtcClient(object):
 		self._kill()
 
 	def _kill(self):
-		try: del self.client
+		try:
+			if self._trees:
+				raise RuntimeError("not closed cleanly",self,self._trees)
+			del self.client
 		except AttributeError: pass
 
 	async def stop(self):
@@ -306,6 +310,7 @@ class EtcWatcher(object):
 		self._writer = asyncio.ensure_future(self._watch_write(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
 		self.stopped.add_done_callback(lambda _: self.uptodate.notify_unlocked())
+		self.conn._trees.add(self)
 
 	def stop(self, exc,cause):
 		if not self.stopped.done():
@@ -346,6 +351,7 @@ class EtcWatcher(object):
 					pass
 
 	async def close(self):
+		self.conn._trees.remove(self)
 		if not self.stopped.done():
 			self.stopped.set_result("close")
 		for k in ("_reader","_writer"):
