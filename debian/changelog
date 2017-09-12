@@ -1,3 +1,9 @@
+etcd-tree (0.40.3.0) unstable; urgency=medium
+
+  * Add a timeout to protect against deadlocks
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 12 Sep 2017 18:12:34 +0200
+
 etcd-tree (0.40.2.0) unstable; urgency=medium
 
   * Reduce debug intensity

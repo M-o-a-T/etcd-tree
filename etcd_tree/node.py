@@ -1537,6 +1537,8 @@ class EtcRoot(EtcDir):
 			try:
 				runlogger.debug("run %s %s %s %s",self, p,a,k)
 				r = p(*a,**k)
+				if f is None:
+					r = asyncio.wait_for(r, self.max_update_delay+2*self.update_delay, loop=self._loop)
 				try:
 					r = await r
 				except TypeError as exc:
@@ -1559,6 +1561,12 @@ class EtcRoot(EtcDir):
 		runlogger.debug("Enq %s %s %s %s",self, p,a,k)
 		f = None if _die else asyncio.Future(loop=self._loop)
 		self._q.put_nowait((f,p,a,k))
+
+		if f is not None:
+			def timer(f):
+				if not f.done():
+					f.cancel()
+			self._loop.call_later(self.max_update_delay+2*self.update_delay, timer,f)
 		return f
 
 	@property
