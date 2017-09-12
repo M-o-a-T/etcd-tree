@@ -1,3 +1,9 @@
+etcd-tree (0.40.0.1) unstable; urgency=medium
+
+  * Release
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 12 Sep 2017 09:16:18 +0200
+
 etcd-tree (0.40.0.0) unstable; urgency=medium
 
   * Major refactoring: sequencer for updates
