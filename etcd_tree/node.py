@@ -25,9 +25,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##
 import logging
 logger = logging.getLogger(__name__)
+##BP
+
 updlogger = logging.getLogger(__name__+'.update')
 runlogger = logging.getLogger(__name__+'.run')
-##BP
 
 """\
 This declares nodes for the basic etcTree structure.
