@@ -101,7 +101,7 @@ class EtcClient(object):
 	def _kill(self):
 		try:
 			if self._trees:
-				raise RuntimeError("not closed cleanly",self,self._trees)
+				raise RuntimeError("Clients not closed cleanly",self,self._trees)
 			del self.client
 		except AttributeError: pass
 
@@ -468,7 +468,7 @@ class EtcWatcher(object):
 							# will not create an EtcAwaiter
 						except KeyError:
 							raise SkipAhead
-					r._ext_delete()
+					await r._ext_delete(seq=x.modifiedIndex)
 				else:
 #					if not x.createdIndex:
 #						pn = getattr(x,'_prev_node',None)
@@ -480,19 +480,19 @@ class EtcWatcher(object):
 								try:
 									r = r[k]
 								except KeyError:
-									r = await r._new(parent=r,key=k,recursive=None)
+									r = await r._ext_new(parent=r,key=k,recursive=None)
 						async with r._lock:
 							try:
 								# don't resolve EtcValue or EtcAwaiter
 								r = r._get(key[-1])
 							except KeyError:
-								r = await r._new(parent=r,key=key,pre=x,recursive=False)
+								r = await r._ext_new(parent=r,key=key,pre=x,recursive=False)
 						if type(r) is EtcAwaiter:
-							r = await r.load(pre=x,recursive=False)
+							await r._ext_load(pre=x,recursive=False)
 						else:
-							r._ext_update(x)
+							await r._ext_update(x)
 					else:
-						r._ext_update(x)
+						await r._ext_update(x)
 
 			except SkipAhead:
 				pass

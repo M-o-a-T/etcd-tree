@@ -53,7 +53,7 @@ async def test_basic_watch(client,loop):
     class rTwo(EtcDir):
         pass
     class rDie(EtcValue):
-        def has_update(self):
+        async def has_update(self):
             raise RuntimeError("RIP")
     @twotypes.register("die")
     class rPreDie(EtcValue):
@@ -135,7 +135,7 @@ async def test_basic_watch(client,loop):
     assert isinstance(w5['zwei']['und'],EtcAwaiter)
     assert (await w5['zwei']['und']).value == "drei"
     assert w5['vier'] == "true"
-    w5['zwei'].force_updated()
+    await w5['zwei'].force_updated()
     assert w5['zwei'].test_called
 
     # use typed subtrees
@@ -172,7 +172,7 @@ async def test_basic_watch(client,loop):
     await w4['two'].set('hello','one')
     await w4['two'].set('die','42')
     await asyncio.sleep(1.5, loop=loop)
-    with pytest.raises(WatchStopped):
+    with pytest.raises(RuntimeError):
         await w4['two'].set('hello','two')
     
     await w.close()
@@ -223,7 +223,7 @@ async def test_update_watch_direct(client):
     assert w['zwei']['zehn']['vierzig']['fuenfzig'] == "60"
     assert w['vier']['auch'] == "ja1"
     assert w['zwei']['drei']['der'][':tag']['hello'] == "kitty"
-    w.force_updated()
+    await w.force_updated()
     n=0
     for k in w.tagged(':tag'):
         if k['hello']=='kitty':
@@ -266,6 +266,7 @@ async def test_update_watch_direct(client):
     with pytest.raises((etcd.EtcdDirNotEmpty,etcd.EtcdNotFile)):
         del w['zwei']
         await wr.wait(m, tasks=True)
+    await wr.wait(m, tasks=True)
 
     m = await w.delete('zwei', recursive=True)
     await wr.wait(m)
@@ -293,6 +294,7 @@ async def test_subdir(client, loop):
     assert isinstance(wd,EtcAwaiter), wd
     wd = await wd
     assert isinstance(wd,EtcValue), wd
+    await w.close()
 
 def ilen(gen):
     n = 0
@@ -330,7 +332,7 @@ async def test_pri(client, loop):
     assert wd['a'] == "1"
     assert wd['b'] == "2"
     assert wd['c'] == "3"
-
+    await w.close()
 
 @pytest.mark.run_loop
 async def test_update_watch(client, loop):
@@ -631,6 +633,7 @@ async def test_create(client):
     w2 = await t.tree("/not/here", immediate=True, static=True, create=False)
     assert not w2.running
     assert w2.stopped.done()
+    await w2.close()
 
     w2 = await t.tree("/not/there", immediate=True, static=True)
     w3 = await t.tree(('not','there'), immediate=True, static=True, create=False)

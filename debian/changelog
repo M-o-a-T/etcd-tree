@@ -1,3 +1,10 @@
+etcd-tree (0.40.0.0) unstable; urgency=medium
+
+  * Major refactoring: sequencer for updates
+  * Interface change: has_update() and friends are now async
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 12 Sep 2017 08:42:46 +0200
+
 etcd-tree (0.31.3.0) unstable; urgency=medium
 
   * Getting task_next handling right. Hopefully.

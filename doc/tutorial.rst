@@ -187,31 +187,40 @@ Non-existing attributes will return None instead of raising an exception.
     class myDir(EtcDir):
         def some_test_method(self):
             assert self.env.my_data is the_data
-        def has_update(self):
+        async def has_update(self):
             the_data = self.env.my_data
             if the_data:
-                the_data.has_update(self) # or whatever
+                await the_data.has_update(self) # or whatever
 
 Monitoring for changes
 ----------------------
 
 Watching out for changes on your object is pretty straightforward: override
-the ``has_update()`` method. Alternately you can attach a monitor function
-to a node by using ``add_monitor()``, which expects a one-argument callback
-(the node you're attaching the callback to) and returns an object with a
-``.cancel()`` method if you're no longer interested.
+the ``async has_update()`` method. You can also attach a monitor function
+to a node by using ``add_monitor()``, which expects a one-argument async
+callback (the node you're attaching the callback to) and returns an object
+with a ``.cancel()`` method if you're no longer interested.
 
-Both methods will get called some time after "their" node, or any child node,
-is changed, which includes additions or deletions. You can recognize the
-first call after initialization by testing ``self.notify_seq`` for zero,
-and being deleted by checking ``self.seq`` for ``None``.
+These methods will get called some time after "their" node, or any child node,
+is changed. This includes additions or deletions. You can recognize the
+first call by testing ``self.is_new`` for ``True``.
 
-A node's update handlers will only get called some time after those of
-their child nodes have run. This can lead to starvation if you have a high
-rate of change. This problem will be addressed in a future update.
-You can call ``.tree(…, update_delay=x)`` with x somewhat lower than
-1 second (the default). This should be at least twice the time your etcd
-requires to update a value.
+Newly-created nodes can be further distinguished by the fact that their
+parent node's ``is_new`` flag is False.
+
+When a node is being deleted, ``is_new`` will be set to ``None``.
+
+A node's update handlers will get called some time after there are no more
+updates to its child nodes. This can lead to starvation if you have a high
+rate of change. To prevent that, you can
+
+  * set a maximum value (in ``.max_update_delay``), after which an update
+    run will be forced
+
+  * split your system into update domains by setting ``.propagate_updates``
+    to False.
+
+By default, all tagged nodes act as domain barriers.
 
 Dynamic types
 -------------

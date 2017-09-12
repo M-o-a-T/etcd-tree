@@ -25,6 +25,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##
 import logging
 logger = logging.getLogger(__name__)
+updlogger = logging.getLogger(__name__+'.update')
+runlogger = logging.getLogger(__name__+'.run')
 ##BP
 
 """\
@@ -54,6 +56,7 @@ DEBUG_NOTIFY = False
 class _NOTGIVEN:
 	pass
 _later_idx = 1
+_later_tag = 1
 
 class ReloadData(ReferenceError):
 	"""\
@@ -196,15 +199,19 @@ class EtcBase(object):
 		All mthods have a leading underscore, which is necessary because
 		non-underscored names are potential etcd node names.
 		"""
-	notify_seq = None
-
-	_later = 0
-	_later_wanted = None
+	_later_timer = None
+	_later_timer_max = None
+	_later_max = False
 	_env = _NOTGIVEN
 	_update_delay = None
+	_max_update_delay = None
 	_propagate_updates = None
 	is_new = True # for monitors: False after the first call to has_update()
 	busy = None
+
+	def _ext_new(self, **k):
+		"""Queue ._new call. Returns a Future."""
+		return self.root.task(self._new,**k)
 
 	@classmethod
 	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, typ=None, **kw):
@@ -337,7 +344,7 @@ class EtcBase(object):
 		name = self.name
 		x = parent._data.get(name,None)
 		if DEBUG_NOTIFY:
-			logger.debug("run_update %s add %s %s",parent._path, name, "KNOWN" if x is not None else "NEW")
+			updlogger.debug("run %s add %s %s",parent._path, name, "KNOWN" if x is not None else "NEW")
 
 		if x is not None:
 			assert not isinstance(self,EtcAwaiter)
@@ -404,8 +411,9 @@ class EtcBase(object):
 					if isinstance(a,EtcAwaiter):
 						await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
 			if todo:
-				self.force_updated()
+				await self._run_update_step()
 				await self.ready
+				# usually True after update but might be overridden
 
 		if recursive:
 			for k,v in list(self._data.items()):
@@ -424,6 +432,9 @@ class EtcBase(object):
 		"Nodes which are already loaded support lazy lookup by doing nothing."
 		yield
 		return self
+
+	def _ext_load(self, **k):
+		return self.root.task(self.load,**k)
 
 	async def load(self, recursive=None, pre=None):
 		"Loader stub for code that's too lazy for testing. Do nothing."
@@ -444,7 +455,7 @@ class EtcBase(object):
 
 	def task(self,p,*a,**k):
 		"""Enqueue an async job to run controlled by this tree"""
-		self.root.task(p,*a,**k)
+		return self.root.task(p,*a,**k)
 
 	async def wait(self, *a,**kw):
 		r = self.root
@@ -477,7 +488,7 @@ class EtcBase(object):
 		kw = {}
 		if not self._is_dir:
 			kw['index'] = self._seq
-		self.root.task(self.root._set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, **kw)
+		self.root.task(self.root._set,self.path,self._dump(self._value), ttl=ttl, dir=self._is_dir, create=False, _die=True, **kw)
 	def _del_ttl(self):
 		self._set_ttl('')
 	ttl = property(_get_ttl, _set_ttl, _del_ttl)
@@ -497,7 +508,7 @@ class EtcBase(object):
 	async def del_ttl(self, sync=True):
 		return (await self.set_ttl('', sync=True))
 
-	def has_update(self):
+	async def has_update(self):
 		"""\
 			Override this method to get notified after the value changes
 			(or that of a child node).
@@ -514,29 +525,27 @@ class EtcBase(object):
 			self._update_delay = self.parent.update_delay
 		return self._update_delay
 
+	@property
+	def max_update_delay(self):
+		if self._max_update_delay is None:
+			self._max_update_delay = self.parent.max_update_delay
+		return self._max_update_delay
+
 	@update_delay.setter
 	def update_delay(self,dly):
 		self._update_delay = dly
 
-	def force_updated(self, _sub=False):
-		"""\
-			Call all update handlers now.
-			"""
-		if not self._later:
+	@max_update_delay.setter
+	def max_update_delay(self,dly):
+		self._max_update_delay = dly
+
+	def force_updated(self):
+		"""Force updating ASAP. Returns a Future. Do not call from .init()"""
+		root = self.root
+		if root is None:
 			return
-		if type(self._later) is int:
-			# at least one child is blocked, thus run its update handlers
-			self._later = False
-			for v in self._data.values():
-				v.force_updated(_sub=True)
-			assert self._later == 0, self._later
-		if not isinstance(self._later, int):
-			self._later.cancel()
-			# will be set to zero in _run_update()
-			self._later = 'x'
-		self._run_update(_force=_sub)
-		assert self._later == 0
-		self._ready.set()
+		updlogger.debug("Force %s",self)
+		return self.task(self._run_update_base)
 
 	@property
 	def ready(self):
@@ -548,162 +557,136 @@ class EtcBase(object):
 		"""A flag indicating that no update calls are pending"""
 		return self._ready.is_set()
 
-	def updated(self, seq=None, _force=False):
+	def updated(self, seq=None):
 		"""\
 			Schedule a call to the update monitors.
-			@_force: False: schedule a call
-			         True: a child node's scheduler is done (INTERNAL)
 			"""
 		if DEBUG_NOTIFY:
-			logger.debug("run_update %s updated seq %s force %s later %s prop %s",self._path,seq,_force,self._later_p,self._propagate_updates)
+			logger.debug("run_update %s updated seq %s later %s prop %s",self._path,seq,self._later_p,self._propagate_updates)
 
-		if self._later_wanted is None:
-			self._later_wanted = time.monotonic()
-		# Invariant: _later is either the number of direct children which
-		# are blocked or, if there are none, an asyncio call_later token.
-		# (The token has a .cancel method, thus it cannot be an integer.)
-		# A node is blocked iff its _later attribute is not zero.
-		# ._ready mirrors "_later is zero".
-		#
-		# Thus, after adding a timer we walk up the parent chain.
-		# If the parent is blocked, increment the counter and stop.
-		# Otherwise, drop the timer if there is one, set the counter to 1, and continue.
-		#
-		# After a timer runs, it calls its parent's updated(_force=True),
-		# which decrements the counter and adds the timer if that reaches zero.
+		p = self
+		r = self.root
+		if r is None:
+			return
+		while p._propagate_updates and p is not r:
+			if not p._ready.is_set():
+				return
+			p._ready.clear()
+			p = p.parent
+		p._queue_update()
 
-		# ignore the parent when not propagating updates
-		p = self._parent if self._propagate_updates else None
+	## Update handler: Timeouts.
+	#
+	# - Initial state: _tag is zero, _timer and _maxtimer are None.
+	# - Starting timer: _tag >0, _timer started, _maxtimer started.
+	# - Restarting timer: _tag left alone, _timer cancelled and restarted.
+	# - Timer triggers: queues update, clears _timer and _tag.
+	# - Restarting timer: _tag updated, _timer started.
+	# - Queued update: notes that the tag has changed, doesn't run.
 
-		if self._later:
-			# Ignore the parent (p) if it was already blocked.
-			# Otherwise we'd block it again later, which would be Bad.
-			if type(self._later) is int:
-				if _force:
-					assert self._later > 0
-					self._later += -1
-					if self._later:
-						if DEBUG_NOTIFY:
-							logger.debug("run_update still_blocked %s, later %s",self._path,self._later_p)
-						self._check_later()
-						return
-					else:
-						self._ready.set()
-					p = None
-				elif self._later > 0:
-					if DEBUG_NOTIFY:
-						logger.debug("run_update %s already_blocked, later %s",self._path,self._later_p)
-					self._check_later()
-					return
-			else:
-				self._later.cancel()
-				p = None
-		else:
-			assert not _force, (self,self._later)
-		self.notify_seq = seq
+	def _queue_update(self):
+		updlogger.debug("queue %s",self._path)
+		self._ready.clear()
+		if self._later_max:
+			return
+		if self._later_timer is None or self._later_tag > 0:
+			global _later_tag
+			self._later_tag = _later_tag
+			_later_tag += 1
 
 		try:
 			delay = self.update_delay
+			max_delay = self.max_update_delay
+			if max_delay < 3*delay:
+				max_delay = 3*delay
 		except AttributeError:
 			# this happens when the root has gone away. Exit.
 			return
+		if self._later_timer is not None:
+			self._later_timer.cancel()
+		self._later_timer = self._loop.call_later(delay, self._run_update_reg, self._later_tag)
+
+		if self._later_timer_max is None:
+			self._later_timer_max = self._loop.call_later(max_delay, self._run_update_max)
+	
+	def _run_update_reg(self, tag):
+		self._later_timer = None
+		root = self.root
+		if root is None:
+			return
+		updlogger.debug("start %s",self._path)
+		root.task(self._run_update, tag, _die=True)
+
+	def _run_update_max(self):
+		updlogger.warn("start_max %s",self._path)
+		self._later_timer_max = None
+		root = self.root
+		if root is None:
+			return
+		self._later_tag = 0
+		self._later_max = True
+		root.task(self._run_update,0, _die=True)
+
+	async def _run_update(self, tag):
+		updlogger.warn("upd %s %d/%d %s",self._later_max, tag,self._later_tag, self._path)
+		if self._later_max:
+			if tag > 0: # overridden update
+				return
 		else:
-			self._ready.clear()
-			self._later = self._loop.call_later(delay, self._run_update)
-			if DEBUG_NOTIFY:
-				logger.debug("run_update %s schedule %s at %s",self._path,delay,time.time())
-
-		while p:
-			# Now block our parents, until we find one that's blocked
-			# already. In that case we increment its counter and stop.
-			p = p()
-			if p is None:
-				return # pragma: no cover
-			if DEBUG_NOTIFY:
-				logger.debug("run_update %s block later %s",p._path,p._later_p)
-			p._ready.clear()
-			if type(p._later) is int:
-				p._later += 1
-				if p._later > 1:
-					p._check_later()
-					return
-			else:
-				# this node has a running timer. By the invariant it cannot
-				# have (had) blocked children, therefore trying to unblock it
-				# now must be a bug.
-				assert not _force
-				p._later.cancel()
-				# The call will be re-scheduled later, when the node unblocks
-				p._later = 1
-				if DEBUG_NOTIFY:
-					logger.debug("run_update %s block %s",p._path,p._later_p)
-				p._check_later()
+			assert tag > 0
+			if self._later_tag != 0 and self._later_tag != tag:
+				# A change arrived before this could execute. Retry.
+				assert self._later_timer is not None
 				return
+		updlogger.debug("Base %s",self)
+		await self._run_update_base()
 
-			if not p._propagate_updates:
-				return
-			p = p._parent
-
-	def _run_update(self, _force=False):
-		"""\
-			Timer callback to run a node's callback.
-
-			If @force is True, this is called from force_update
-			which will update the parent.
-		"""
-		if DEBUG_NOTIFY:
-			logger.debug("run_update %s RUN, force %s later %s t %s",self._path,_force,self._later_p,time.time())
-		p = None
-		ls = self.notify_seq
-		self._later = 0
-		# At this point our parent's invariant is temporarily violated,
-		# but we fix that later: if this is the last blocked child and
-		# _call_monitors() triggers another update, we'd create and then
-		# immediately destroy a timer
-		try:
-			self._call_monitors()
-		except Exception as exc:
-			# A monitor died. The tree may be inconsistent.
-			logger.exception("Updating %s",self)
-			root = self.root
-			if root is not None:
-				root.propagate_exc(exc,self)
-
+	async def _run_update_base(self):
+		# clear subsequently-queued timers
+		if not self._propagate_updates:
+			self._later_tag = 0
+			if self._later_timer is not None:
+				self._later_timer.cancel()
+				self._later_timer = None
+			if self._later_timer_max is not None:
+				self._later_timer_max.cancel()
+				self._later_timer_max = None
+		await self._run_update_step()
+	
+	async def _run_update_step(self):
+		updlogger.debug("Step %s %s",self, not self._ready.is_set())
+		if self._ready.is_set():
+			return
+		vd = getattr(self,'_data',None)
+		if vd:
+			again = True
+			while again:
+				again = False
+				for v in list(vd.values()):
+					if not v._ready.is_set():
+						again = True
+						await v._run_update_step()
 		self._ready.set()
-		if _force or not self._propagate_updates:
-			return
-		p = self._parent
-		if p is None:
-			return
-		p = p()
-		if p is None:
-			return # pragma: no cover
-		# Now unblock the parent, restoring the invariant.
-		p.updated(seq=ls,_force=True)
+		try:
+			await self._call_monitors()
+		except Exception as exc:
+			updlogger.debug("Exc %s",self, exc_info=exc)
+			await self.root._err_q.put(exc)
 
-	def _check_later(self):
-		if self._later_wanted is False:
-			return
-		t = time.monotonic()
-		if self._later_wanted is None:
-			self._later_wanted = t
-			return
-		if t-self._later_wanted < 10*self._update_delay:
-			return
-		logger.warn("Notifier delayed for %s",self._path)
-		self._later_wanted = False
-
-	def _call_monitors(self):
+	async def _call_monitors(self):
 		"""\
 			Actually run the monitoring code.
 
 			Exceptions get propagated. They will kill the watcher."""
-		self._later_wanted = None
 		try:
-			self.has_update()
+			await self.has_update()
 			if self._later_mon:
 				for f in list(self._later_mon.values()):
-					f(self)
+					res = f(self)
+					try:
+						await res
+					except TypeError:
+						pass
 		finally:
 			if self.is_new:
 				self.is_new = False
@@ -733,19 +716,15 @@ class EtcBase(object):
 			token = token.i
 		self._later_mon.pop(token,None)
 
-	def _deleted(self):
+	async def _deleted(self):
 		#logger.debug("DELETE %s",self.path)
 		s = self._seq
-		self._seq = None
 		if not self.is_new:
 			self.is_new = None
-			self._call_monitors()
+			await self._call_monitors()
 		else: # just for safety (and debugging)'s sake
 			self.is_new = None # pragma: no cover
-		if self._later:
-			if type(self._later) is not int:
-				self._later.cancel()
-			self._ready.set() # sort of
+		self._ready.set() # sort of
 		p = self._parent
 		if p is None:
 			return # pragma: no cover
@@ -755,19 +734,25 @@ class EtcBase(object):
 		if DEBUG_NOTIFY:
 			logger.debug("run_update: deleted: %s",self._path)
 
-		p.updated(seq=s, _force=bool(self._later) if self._propagate_updates else False)
+		p.updated(seq=s)
 
-	def _ext_delete(self, seq=None):
+	def _ext_delete(self, **k):
+		return self.root.task(self._do_delete, **k)
+	async def _do_delete(self, seq=None):
 		#logger.debug("DELETE_ %s",self.path)
+		if seq is not None:
+			self._seq = seq
 		p = self._parent
 		if p is None:
 			return # pragma: no cover
 		p = p()
 		if p is None:
 			return # pragma: no cover
-		p._ext_del_node(self)
+		await p._do_del_node(self)
 
-	def _ext_update(self, pre):
+	def _ext_update(self,pre):
+		return self.root.task(self._do_update,pre)
+	async def _do_update(self, pre):
 		#logger.debug("UPDATE %s",self.path)
 		if pre.createdIndex is not None:
 			if self._cseq is None:
@@ -780,7 +765,7 @@ class EtcBase(object):
 				logger.info("Re-created %s: %s %s",self.path, self._cseq,pre.createdIndex)
 				if hasattr(self,'_data'):
 					for d in list(self._data.values()):
-						d._ext_delete()
+						await d._do_delete()
 		if pre.modifiedIndex:
 			# This can happen when we read a node (e.g. via EtcAwaiter)
 			# before the create or update arrives via our watcher.
@@ -963,7 +948,7 @@ class EtcAwaiter(_EtcDir):
 		assert p._data[self.name] is obj, (p._data[self.name],obj)
 		return obj
 
-	def _ext_del_node(self, child):
+	async def _do_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
 		self._data.pop(child.name)
 
@@ -1001,10 +986,17 @@ class EtcXValue(EtcBase):
 		if self._value is _NOTGIVEN: # pragma: no cover
 			raise RuntimeError("You did not sync")
 		return self._value
+
 	def _set_value(self,value):
-		self.root.task(self.root._set,self.path,self._dump(value), index=self._seq)
+		self.root.task(self._do_set,self._dump(value), _die=True)
+	async def _do_set(self,value):
+		await self.root._set(self.path,value, index=self._seq)
+
 	def _del_value(self):
-		self.root.task(self.root._delete,self.path, index=self._seq)
+		self.root.task(self._do_del, _die=True)
+	async def _do_del(self):
+		await self.root._delete(self.path, index=self._seq)
+
 	value = property(_get_value, _set_value, _del_value)
 	__delitem__ = _del_value # for EtcDir.delete
 
@@ -1038,20 +1030,20 @@ class EtcXValue(EtcBase):
 			await root.wait(r)
 		return r
 
-	def _ext_update(self, pre):
+	async def _do_update(self, pre):
 		"""\
 			An updated value arrives.
 			(It may be late.)
 			"""
-		if not super()._ext_update(pre): # pragma: no cover
+		if not (await super()._do_update(pre)): # pragma: no cover
 			return
 		self._value = self._load(pre.value)
 
 	def __repr__(self): ## pragma: no cover
 		try:
-			return "<{} @{} ={}>".format(self.__class__.__name__,'/'.join(self.path), repr(self._value))
+			return "<{} @{}:{} ={}>".format(self.__class__.__name__,'/'.join(self.path), self._seq, repr(self._value))
 		except AttributeError:
-			return "<{} @{} ?>".format(self.__class__.__name__,'/'.join(self.path))
+			return "<{} @{}:{} ?>".format(self.__class__.__name__,'/'.join(self.path), self._seq)
 		except Exception as e:
 			logger.exception(e)
 			res = super().__repr__()
@@ -1175,19 +1167,19 @@ class EtcDir(_EtcDir, MutableMapping):
 
 	def add_monitor(self, callback):
 		res = super().add_monitor(callback)
-		if not self._later:
+		if self._ready.is_set():
 			self.added = set(self._data.keys())
 			self.deleted = set()
 			callback(self)
 		return res
 
-	def _call_monitors(self):
+	async def _call_monitors(self):
 		self.added,self._added = self._added,set()
 		self.deleted,self._deled = self._deled,set()
 		if DEBUG_NOTIFY:
 			logger.debug("run_update CALL_MON %s add:%s del:%s",self,self.added,self.deleted)
 
-		super()._call_monitors()
+		await super()._call_monitors()
 
 	def tagged(self, tag=True, depth=0):
 		"""\
@@ -1224,12 +1216,12 @@ class EtcDir(_EtcDir, MutableMapping):
 				path += (key,)
 
 				if isinstance(val,dict):
-					root.task(root._set,self.path+path, None, prevExist=False, dir=True)
+					root.task(root._set,self.path+path, None, prevExist=False, dir=True, _die=True)
 					for k,v in val.items():
 						t_set(path,k,v)
 				else:
 					t = self.subtype(path, dir=False, raw=False)
-					root.task(self._task_set,path, t._dump(val))
+					root.task(self._task_set,path, t._dump(val), _die=True)
 			t_set((),key, val)
 		else:
 			if isinstance(res,EtcXValue):
@@ -1243,10 +1235,11 @@ class EtcDir(_EtcDir, MutableMapping):
 					res[k] = v
 
 	async def _task_set(self, path,val):
-		for p in path[:-1]:
-			self = self[p]
-		self = await self # in case it's an EtcAwaiter
-		res = await self.set(path[-1], val, sync=False, ext=True)
+		#for p in path[:-1]:
+			#self = self[p]
+		#self = await self # in case it's an EtcAwaiter
+		res = await self.root._set(self.path+path, val)
+		#res = await self.set(path[-1], val, sync=False, ext=True)
 		return res
 
 	async def set(self, key,value, sync=True, replace=True, ext=False, **kw):
@@ -1353,7 +1346,10 @@ class EtcDir(_EtcDir, MutableMapping):
 			res = self._data[key]
 			res.__delitem__()
 			return
-		self.root.task(self.root._delete,self.path,dir=True, index=self._seq)
+		self.root.task(self._delitem, _die=True)
+
+	async def _delitem(self):
+		await self.root._delete(self.path,dir=True, index=self._seq)
 
 	async def update(self, d1={}, _sync=True, **d2):
 		mod = None
@@ -1374,11 +1370,11 @@ class EtcDir(_EtcDir, MutableMapping):
 		self._data = None
 		return super().throw_away()
 
-	def _ext_delete(self):
+	async def _do_delete(self, seq=None):
 		"""We vanished. Oh well."""
 		for d in list(self._data.values()):
-			d._ext_delete()
-		super()._ext_delete()
+			await d._do_delete()
+		await super()._do_delete(seq=seq)
 
 	def __hash__(self):
 		return hash(self.path)
@@ -1392,17 +1388,19 @@ class EtcDir(_EtcDir, MutableMapping):
 			return False # pragma: no cover
 		return self.path == other.path
 
-	def _ext_update(self, pre, **kw):
+	def _ext_update(self,pre):
+		return self.root.task(self._do_update,pre)
+	async def _do_update(self, pre, **kw):
 		"""processed for doing a TTL update"""
 		if pre:
-			assert pre.value is None
-		super()._ext_update(pre=pre, **kw)
+			assert pre.value is None, pre
+		await super()._do_update(pre=pre, **kw)
 
-	def _ext_del_node(self, child):
+	async def _do_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
-		self._deled.add(child.name)
 		node = self._data.pop(child.name)
-		node._deleted()
+		self._deled.add(child.name)
+		await node._deleted()
 
 	# The following code implements type lookup.
 
@@ -1524,18 +1522,20 @@ class EtcRoot(EtcDir):
 	name = ''
 	_types = None
 	_update_delay = 1
-	_tasks = None
-	_task_now = None
-	_task_done = _DummyFuture
+	_max_update_delay = 5
 	last_mod = None
+	closed = False
+	job_error = None
 
-	def __init__(self,conn,watcher=None,key=(),types=None, update_delay=None, **kw):
+	def __init__(self,conn,watcher=None,key=(),types=None, update_delay=None, max_update_delay=None, **kw):
 		self._conn = conn
 		self._watcher = watcher
 		self.path = key
-		self._tasks = []
 		self._loop = conn._loop
 		self._lock = asyncio.Lock(loop=self._loop)
+		self._q = asyncio.Queue(loop=self._loop)
+		self._err_q = asyncio.Queue(loop=self._loop)
+		self._done = asyncio.Future(loop=self._loop)
 		if types is None:
 			from .etcd import EtcTypes
 			types = EtcTypes()
@@ -1543,77 +1543,51 @@ class EtcRoot(EtcDir):
 		self._env = Env()
 		if update_delay is not None:
 			self._update_delay = update_delay
+		if max_update_delay is not None:
+			self._max_update_delay = max_update_delay
+		self._conn._trees.add(self)
 		super().__init__(**kw)
+		self._propagate_updates = False
+		self._job = asyncio.ensure_future(self._run(), loop=self._loop)
+
+	async def _run(self):
+		while True:
+			r = await self._q.get()
+			if r is None:
+				runlogger.debug("end %s",self)
+				self._done.set_result(None)
+				return
+			f,p,a,k = r
+			try:
+				runlogger.debug("run %s %s %s %s",self, p,a,k)
+				r = p(*a,**k)
+				try:
+					r = await r
+				except TypeError as exc:
+					if not hasattr(p,"_async_warn"):
+						runlogger.warn("Queued call is not async: %s",p)
+						p._async_warn = True
+			except Exception as exc:
+				if f is None:
+					runlogger.exception("Queue error %s",self)
+					await self._err_q.put(exc)
+				else:
+					runlogger.exception("Set error %s",self)
+					f.set_exception(exc)
+			else:
+				runlogger.exception("Result %s %s",self,r)
+				if f is not None and not f.cancelled():
+					f.set_result(r)
+
+	def task(self, p,*a, _die=False, **k):
+		runlogger.debug("Enq %s %s %s %s",self, p,a,k)
+		f = None if _die else asyncio.Future(loop=self._loop)
+		self._q.put_nowait((f,p,a,k))
+		return f
 
 	@property
 	def env(self):
 		return self._env
-
-	# Progress of task handling:
-	# * _task_done is None.
-	# * _task_next() sets _done to a future and runs tasks.
-	# * An exception or running out of tasks sets _done to
-	#   the exception, or the last result / None.
-	# * wait() processed the result and sets _done to None.
-	# * repeat as necessary.
-	# 
-	def _task_next(self,f=None):
-		if self._task_done.done():
-			if not self._tasks:
-				logger.debug("Defer exit %s", self._task_done)
-				self._task_done = _DummyFuture
-				return
-			logger.debug("Defer restart, old=%s", self._task_done)
-			self._task_done = _DummyFuture
-		else:
-			logger.debug("Defer start")
-
-		if f is None:
-			f = self._task_now
-		elif f is not self._task_now:
-			raise RuntimeError("_task_next running twice?")
-		if self._task_done is _DummyFuture:
-			# first run
-			self._task_done = asyncio.Future(loop=self._loop)
-			logger.debug("Defer create TD %s",self._task_done)
-
-		res = None
-		if f is not None:
-			if not f.done():
-				logger.debug("Defer not done %s", f)
-				return
-			self._task_now = None
-			logger.debug("Defer done %s", f)
-			if f.cancelled():
-				logger.debug("Defer cancel %s %s", f,self._task_done)
-				self._task_done.cancel()
-				return
-			exc = f.exception()
-			if exc is not None:
-				logger.error("Defer ERROR %s", f, exc_info=exc)
-				self._task_done.set_exception(exc)
-				return
-			res = f.result()
-
-		if not self._tasks:
-			# no more tasks
-			self._task_done.set_result(res)
-			logger.debug("Defer DONE %s", self._task_done)
-			return
-
-		p,a,k = self._tasks.pop(0)
-		try:
-			self._task_now = asyncio.ensure_future(self.run_with_wait(p,*a,**k), loop=self._loop)
-			self._task_now.add_done_callback(self._task_next)
-			logger.debug("Defer start %s", self._task_now)
-		except Exception as exc:
-			logger.debug("Defer error %s", repr(exc))
-			self._task_done.set_exception(exc)
-
-	def task(self,p,*a,**k):
-		assert callable(p)
-		self._tasks.append((p,a,k))
-		self._task_next()
 
 	@property
 	def parent(self):
@@ -1635,41 +1609,60 @@ class EtcRoot(EtcDir):
 		return self._watcher is not None and self._watcher.running
 
 	async def close(self):
+		logger.debug("Closing %s",repr(self))
 		from .etcd import WatchStopped
+		self.closed = True
+
+		logger.debug("Closing A")
 		try:
 			await self.wait(tasks=True)
 		except WatchStopped:
 			logger.exception("Not Watching")
-		if self._task_now is not None:
-			self._task_now.cancel()
+		logger.debug("Closing B")
+		self._q.put_nowait(None)
+
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			await w.close()
+		logger.debug("Closing C")
+
+		while self._err_q.qsize():
+			exc = self._err_q.get_nowait()
+			logger.exception("Close: deferred exception", exc_info=exc)
+
+		logger.debug("Closing D")
+		await self._done
+		logger.debug("Closing E")
+		self._conn._trees.remove(self)
 
 	async def wait(self, mod=None, tasks=False):
 		"""Delay until async processing is complete"""
 
-		while tasks or self._task_done.done():
-			logger.debug("DeferWait do")
-			try:
-				await self._task_done
-			finally:
-				self._task_next()
-			logger.debug("DeferWait did")
-			if not tasks or not self._tasks:
-				break
+		logger.debug("DeferWait A %s %s", mod, tasks)
+		if self._err_q.qsize():
+			raise self._err_q.get_nowait()
+
+		if tasks:
+			async def noop():
+				pass
+			logger.debug("DeferWait T")
+			await self.task(noop)
 
 		if self._watcher is not None:
 			if mod is None:
 				mod = self.last_mod
 			logger.debug("DeferWait sync")
 			await self._watcher.sync(mod)
+
+		if self._err_q.qsize():
+			raise self._err_q.get_nowait()
+
 		logger.debug("DeferWait end %s",mod)
 		return mod
 
 	def __repr__(self): # pragma: no cover
 		try:
-			return "<{}:{}>".format(self.__class__.__name__,self._conn.root)
+			return "<{}:{} /{}>".format(self.__class__.__name__,self._conn.root,'/'.join(self.path))
 		except Exception as e:
 			logger.exception(e)
 			res = super().__repr__()
@@ -1677,26 +1670,28 @@ class EtcRoot(EtcDir):
 
 	def __del__(self):
 		self._kill()
-	def _kill(self):
-		if not hasattr(self,'_watcher'):
-			return # pragma: no cover
+	def _kill(self, ignore_q=True):
+		logger.debug("Force-Closing %s",repr(self))
+		self.closed = True
+		try:
+			self._conn._trees.remove(self)
+		except KeyError:
+			pass
+		if not ignore_q and self._q.qsize():
+			import pdb;pdb.set_trace()
+
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			w._kill() # pragma: no cover # as the tests call close()
 
-	def delete(self, key=_NOTGIVEN, **kw):
+	async def delete(self, key=_NOTGIVEN, **kw):
 		if key is _NOTGIVEN:
 			raise RuntimeError("You can't delete the root") # pragma: no cover
-		return super().delete(key=key, **kw)
+		return (await super().delete(key=key, **kw))
 
-	def _ext_delete(self):
+	async def _do_delete(self, seq=None):
 		if self._watcher:
 			self._watcher.stop(RuntimeError(),"deleted")
-
-	def propagate_exc(self, exc,node):
-		w = self._watcher
-		if w is not None:
-			w.stop(exc,node.path)
 
 	async def _set(self, *a,**k):
 		r = await self._conn.set(*a,**k)

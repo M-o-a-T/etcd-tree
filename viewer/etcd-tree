@@ -26,6 +26,7 @@ APPNAME="etcd-tree"
 
 class AssocUI(object):
 	tree_index = None
+	rev_sort = False
 
 	def __init__(self):
 		self.guid2acct = {}
@@ -55,10 +56,14 @@ class AssocUI(object):
 	def tree_sort(self,col,colnr):
 		v = self['dest_view']
 		m = v.get_model()
+		print("SORT",col,colnr)
+		print("HAS",m.get_sort_column_id(),self.rev_sort)
 		
 		if m.get_sort_column_id() == colnr:
-			pass # revert?
+			self.rev_sort = not self.rev_sort
+			m.set_sort_column_id(colnr, Gtk.SortType.DESCENDING if self.rev_sort else Gtk.SortType.ASCENDING)
 		else:
+			self.rev_sort = False
 			v.get_column(colnr).set_sort_column_id(0)
 			m.set_sort_column_id(colnr,Gtk.SortType.ASCENDING)
 
@@ -68,7 +73,7 @@ class AssocUI(object):
 		s = v.get_selection()
 		s.set_mode(Gtk.SelectionMode.SINGLE)
 
-		m = Gtk.TreeStore(GObject.TYPE_STRING, GObject.TYPE_STRING, GObject.TYPE_INT)
+		m = Gtk.TreeStore(GObject.TYPE_STRING, GObject.TYPE_STRING, GObject.TYPE_INT, GObject.TYPE_INT)
 		# name, value
 		v.set_model(m)
 		v.set_headers_visible(True)
@@ -97,10 +102,18 @@ class AssocUI(object):
 		cell = Gtk.CellRendererText()
 		column.pack_start(cell, True)
 
-		column = Gtk.TreeViewColumn('cID',r,text=2)
+		column = Gtk.TreeViewColumn('mID',r,text=2)
 		column.set_sizing (Gtk.TreeViewColumnSizing.FIXED)
 		column.set_clickable(True)
 		column.connect("clicked",self.tree_sort,2)
+		v.append_column(column)
+		cell = Gtk.CellRendererText()
+		column.pack_start(cell, True)
+
+		column = Gtk.TreeViewColumn('cID',r,text=3)
+		column.set_sizing (Gtk.TreeViewColumnSizing.FIXED)
+		column.set_clickable(True)
+		column.connect("clicked",self.tree_sort,3)
 		v.append_column(column)
 		cell = Gtk.CellRendererText()
 		column.pack_start(cell, True)
@@ -111,7 +124,7 @@ class AssocUI(object):
 
 ### The basic entry tree
 
-	def tree_node(self, name, value=None, node=None, cid=None):
+	def tree_node(self, name, value=None, node=None, cid=None, mid=None):
 		"""Set a single node, creating subdirectories where necessary and keeping expansion state"""
 		v = self['dest_view']
 		m = v.get_model()
@@ -127,7 +140,7 @@ class AssocUI(object):
 			e = node.get(n,None)
 			if e is None:
 				if value is DEL: return
-				p = m.append(node.get('_node',None),row=[n,'-dir-',cid])
+				p = m.append(node.get('_node',None),row=[n,'-dir-',mid,cid])
 				node[n] = e = {'_node':p}
 				if expanded and node and '_node' in node:
 					v.expand_row(m.get_path(node['_node']),False)
@@ -168,6 +181,7 @@ class AssocUI(object):
 			na = na[na.rindex('/')+1:]
 			v = nr.get('value','-dir-')
 			cid = nr.get('createdIndex',0)
+			mid = nr.get('modifiedIndex',0)
 			try:
 				vd = float(v)
 				if vd > tm1 and vd < tm2:
@@ -175,7 +189,7 @@ class AssocUI(object):
 					v = v.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
 			except ValueError:
 				pass
-			p = m.append(it,row=[na,v,cid])
+			p = m.append(it,row=[na,v,mid,cid])
 			#print("add",na,v,str(m.get_path(p)))
 			d[na] = nd = {'_node':p, '_value':v}
 			if nr.get('dir',False):
@@ -196,7 +210,7 @@ class AssocUI(object):
 		"""Reader for the background connection to etcd"""
 		res = pipe.recv()
 		#print(res)
-		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value, cid=res.modifiedIndex)
+		self.tree_node(res.key,DEL if res.action in ("delete","expire","compareAndDelete") else res.value, cid=res.createdIndex,mid=res.modifiedIndex)
 		return True
 
 	def listen_tree(self,start=None):
@@ -228,11 +242,16 @@ import sys
 if __name__ == "__main__":
 	widgets = AssocUI()
 
-	def icb(*a):
-		print("RECV",*a)
-	#def ti():
-	#	from signal import signal,SIGINT
-	#	signal(SIGINT,Gtk.main_quit)
+	exchook = sys.excepthook
+	def new_hook(type, value, traceback):
+		if isinstance(value, KeyboardInterrupt):
+			Gtk.main_quit()
+			return
+		return exchook(type, value, traceback)
+	sys.excepthook = new_hook
+
+	import signal
+	signal.signal(signal.SIGINT,signal.SIG_DFL)
 
 	Gtk.main()
 	print("done")
