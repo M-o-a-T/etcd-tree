@@ -480,15 +480,15 @@ class EtcWatcher(object):
 								try:
 									r = r[k]
 								except KeyError:
-									r = await r._ext_new(parent=r,key=k,recursive=None)
+									r = await r._new(parent=r,key=k,recursive=None)
 						async with r._lock:
 							try:
 								# don't resolve EtcValue or EtcAwaiter
 								r = r._get(key[-1])
 							except KeyError:
-								r = await r._ext_new(parent=r,key=key,pre=x,recursive=False)
+								r = await r._new(parent=r,key=key,pre=x,recursive=False)
 						if type(r) is EtcAwaiter:
-							await r._ext_load(pre=x,recursive=False)
+							await r.load(pre=x,recursive=False)
 						else:
 							await r._ext_update(x)
 					else:

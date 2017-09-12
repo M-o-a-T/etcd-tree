@@ -208,10 +208,6 @@ class EtcBase(object):
 	is_new = True # for monitors: False after the first call to has_update()
 	busy = None
 
-	def _ext_new(self, **k):
-		"""Queue ._new call. Returns a Future."""
-		return self.root.task(self._new,**k)
-
 	@classmethod
 	async def _new(cls, parent=None, conn=None, key=None, pre=None,recursive=None, typ=None, **kw):
 		"""\
@@ -597,7 +593,7 @@ class EtcBase(object):
 		root.task(self._run_update, tag, _die=True)
 
 	def _run_update_max(self):
-		updlogger.warn("start_max %s",self._path)
+		updlogger.warn("start_max %s %d %d",self._path, self.update_delay,self.max_update_delay)
 		self._later_timer_max = None
 		root = self.root
 		if root is None:
@@ -624,6 +620,7 @@ class EtcBase(object):
 		# clear subsequently-queued timers
 		if not self._propagate_updates:
 			self._later_tag = 0
+			self._later_max = False
 			if self._later_timer is not None:
 				self._later_timer.cancel()
 				self._later_timer = None
@@ -715,9 +712,7 @@ class EtcBase(object):
 
 		p.updated(seq=s)
 
-	def _ext_delete(self, **k):
-		return self.root.task(self._do_delete, **k)
-	async def _do_delete(self, seq=None):
+	async def _ext_delete(self, seq=None):
 		#logger.debug("DELETE_ %s",self.path)
 		if seq is not None:
 			self._seq = seq
@@ -729,9 +724,7 @@ class EtcBase(object):
 			return # pragma: no cover
 		await p._do_del_node(self)
 
-	def _ext_update(self,pre):
-		return self.root.task(self._do_update,pre)
-	async def _do_update(self, pre):
+	async def _ext_update(self,pre):
 		#logger.debug("UPDATE %s",self.path)
 		if pre.createdIndex is not None:
 			if self._cseq is None:
@@ -744,7 +737,7 @@ class EtcBase(object):
 				logger.info("Re-created %s: %s %s",self.path, self._cseq,pre.createdIndex)
 				if hasattr(self,'_data'):
 					for d in list(self._data.values()):
-						await d._do_delete()
+						await d._ext_delete()
 		if pre.modifiedIndex:
 			# This can happen when we read a node (e.g. via EtcAwaiter)
 			# before the create or update arrives via our watcher.
@@ -1009,12 +1002,12 @@ class EtcXValue(EtcBase):
 			await root.wait(r)
 		return r
 
-	async def _do_update(self, pre):
+	async def _ext_update(self, pre):
 		"""\
 			An updated value arrives.
 			(It may be late.)
 			"""
-		if not (await super()._do_update(pre)): # pragma: no cover
+		if not (await super()._ext_update(pre)): # pragma: no cover
 			return
 		self._value = self._load(pre.value)
 
@@ -1355,11 +1348,11 @@ class EtcDir(_EtcDir, MutableMapping):
 		self._data = None
 		return super().throw_away()
 
-	async def _do_delete(self, seq=None):
+	async def _ext_delete(self, seq=None):
 		"""We vanished. Oh well."""
 		for d in list(self._data.values()):
-			await d._do_delete()
-		await super()._do_delete(seq=seq)
+			await d._ext_delete()
+		await super()._ext_delete(seq=seq)
 
 	def __hash__(self):
 		return hash(self.path)
@@ -1373,13 +1366,11 @@ class EtcDir(_EtcDir, MutableMapping):
 			return False # pragma: no cover
 		return self.path == other.path
 
-	def _ext_update(self,pre):
-		return self.root.task(self._do_update,pre)
-	async def _do_update(self, pre, **kw):
+	async def _ext_update(self,pre):
 		"""processed for doing a TTL update"""
 		if pre:
 			assert pre.value is None, pre
-		await super()._do_update(pre=pre, **kw)
+		await super()._ext_update(pre)
 
 	async def _do_del_node(self, child):
 		"""Called by the child to tell us that it vanished"""
@@ -1535,6 +1526,7 @@ class EtcRoot(EtcDir):
 
 	async def _run(self):
 		while True:
+			runlogger.debug("wait %s",self)
 			r = await self._q.get()
 			if r is None:
 				runlogger.debug("end %s",self)
@@ -1558,7 +1550,7 @@ class EtcRoot(EtcDir):
 					runlogger.exception("Set error %s",self)
 					f.set_exception(exc)
 			else:
-				runlogger.exception("Result %s %s",self,r)
+				runlogger.debug("Result %s %s",self,r)
 				if f is not None and not f.cancelled():
 					f.set_result(r)
 
@@ -1672,7 +1664,7 @@ class EtcRoot(EtcDir):
 			raise RuntimeError("You can't delete the root") # pragma: no cover
 		return (await super().delete(key=key, **kw))
 
-	async def _do_delete(self, seq=None):
+	async def _ext_delete(self, seq=None):
 		if self._watcher:
 			self._watcher.stop(RuntimeError(),"deleted")
 

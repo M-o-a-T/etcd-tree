@@ -1,3 +1,9 @@
+etcd-tree (0.40.1.0) unstable; urgency=medium
+
+  * Change sequencing code to apply updates directly
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 12 Sep 2017 16:40:26 +0200
+
 etcd-tree (0.40.0.1) unstable; urgency=medium
 
   * Release
