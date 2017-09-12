@@ -214,13 +214,19 @@ A node's update handlers will get called some time after there are no more
 updates to its child nodes. This can lead to starvation if you have a high
 rate of change. To prevent that, you can
 
+  * decrease the delay (in ``.update_delay``) between events from etcd and
+    runnign the update handler; this may expose partial changes
+
   * set a maximum value (in ``.max_update_delay``), after which an update
     run will be forced
 
   * split your system into update domains by setting ``.propagate_updates``
-    to False.
+    to False
 
-By default, all tagged nodes act as domain barriers.
+All tagged nodes act as domain borders (unless you set their
+``.propagate_updates`` to True).
+
+The defaults for the delay variables are one and five seconds.
 
 Dynamic types
 -------------

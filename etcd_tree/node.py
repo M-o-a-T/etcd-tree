@@ -203,8 +203,6 @@ class EtcBase(object):
 	_later_timer_max = None
 	_later_max = False
 	_env = _NOTGIVEN
-	_update_delay = None
-	_max_update_delay = None
 	_propagate_updates = None
 	is_new = True # for monitors: False after the first call to has_update()
 	busy = None
@@ -518,26 +516,6 @@ class EtcBase(object):
 			If .is_new is None, the node is being deleted.
 			"""
 		pass
-
-	@property
-	def update_delay(self):
-		if self._update_delay is None:
-			self._update_delay = self.parent.update_delay
-		return self._update_delay
-
-	@property
-	def max_update_delay(self):
-		if self._max_update_delay is None:
-			self._max_update_delay = self.parent.max_update_delay
-		return self._max_update_delay
-
-	@update_delay.setter
-	def update_delay(self,dly):
-		self._update_delay = dly
-
-	@max_update_delay.setter
-	def max_update_delay(self,dly):
-		self._max_update_delay = dly
 
 	def force_updated(self):
 		"""Force updating ASAP. Returns a Future. Do not call from .init()"""
@@ -1099,11 +1077,17 @@ class EtcDir(_EtcDir, MutableMapping):
 		"""
 	_value = None
 	_is_dir = True
+	update_delay = 1
+	max_update_delay = 5
 	added = ()
 	deleted = ()
 
-	def __init__(self, value=None, **kw):
+	def __init__(self, value=None, update_delay=None, max_update_delay=None, **kw):
 		assert value is None
+		if update_delay is not None:
+			self.update_delay = update_delay
+		if max_update_delay is not None:
+			self.max_update_delay = max_update_delay
 		self._data = {}
 		self._added = set()
 		self._deled = set()
@@ -1521,8 +1505,6 @@ class EtcRoot(EtcDir):
 	_parent = None
 	name = ''
 	_types = None
-	_update_delay = 1
-	_max_update_delay = 5
 	last_mod = None
 	closed = False
 	job_error = None
@@ -1542,9 +1524,9 @@ class EtcRoot(EtcDir):
 		self._types = types
 		self._env = Env()
 		if update_delay is not None:
-			self._update_delay = update_delay
+			self.update_delay = update_delay
 		if max_update_delay is not None:
-			self._max_update_delay = max_update_delay
+			self.max_update_delay = max_update_delay
 		self._conn._trees.add(self)
 		super().__init__(**kw)
 		self._propagate_updates = False
