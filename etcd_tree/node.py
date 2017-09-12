@@ -408,8 +408,6 @@ class EtcBase(object):
 						await a.load(pre=(c if recursive or not c.dir else None), recursive=recursive)
 			if todo:
 				await self._run_update_step()
-				await self.ready
-				# usually True after update but might be overridden
 
 		if recursive:
 			for k,v in list(self._data.items()):
