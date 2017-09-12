@@ -203,6 +203,7 @@ class EtcBase(object):
 	_later_timer = None
 	_later_timer_max = None
 	_later_max = False
+	_later_warned = False
 	_env = _NOTGIVEN
 	_propagate_updates = None
 	is_new = True # for monitors: False after the first call to has_update()
@@ -593,7 +594,9 @@ class EtcBase(object):
 		root.task(self._run_update, tag, _die=True)
 
 	def _run_update_max(self):
-		updlogger.warn("start_max %s %d %d",self._path, self.update_delay,self.max_update_delay)
+		(updlogger.info if self._later_warned else updlogger.warn) \
+			("start_max %s %d %d",self._path, self.update_delay,self.max_update_delay)
+		self._later_warned = True
 		self._later_timer_max = None
 		root = self.root
 		if root is None:
@@ -603,7 +606,7 @@ class EtcBase(object):
 		root.task(self._run_update,0, _die=True)
 
 	async def _run_update(self, tag):
-		updlogger.warn("upd %s %d/%d %s",self._later_max, tag,self._later_tag, self._path)
+		updlogger.debug("upd %s %d/%d %s",self._later_max, tag,self._later_tag, self._path)
 		if self._later_max:
 			if tag > 0: # overridden update
 				return
