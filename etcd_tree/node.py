@@ -328,7 +328,6 @@ class EtcBase(object):
 			rs = weakref.ref(self)
 			for k,v in getattr(_fill,'_data',{}).items():
 				if k not in self._data and type(v) is EtcAwaiter:
-					logger.info("%d:SET3 %s %s %s", self.root._debug_id,self,k,v)
 					self._data[k] = v
 					v._parent = rs
 			_fill._done = self
@@ -351,7 +350,6 @@ class EtcBase(object):
 			assert isinstance(x,EtcAwaiter), (id(self),self,"vs.",id(x),x)
 		elif hasattr(parent,'_added'):
 			parent._added.add(name)
-		logger.info("%d:SET1 %s %s %s", self.root._debug_id,parent,name,self)
 		parent._data[name] = self
 
 		if not self._propagate_updates:
@@ -872,7 +870,6 @@ class EtcAwaiter(_EtcDir):
 			super().__init__(self, parent=parent,pre=pre,name=name,_no_update_parent=True)
 			self._data = {}
 			assert name not in parent._data
-			logger.info("%d:SET2 %s %s %s", self.root._debug_id,parent,name,self)
 			parent._data[name] = self
 		return self
 
