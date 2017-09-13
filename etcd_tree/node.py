@@ -322,11 +322,13 @@ class EtcBase(object):
 		self._timestamp = time.time()
 		self._later_mon = weakref.WeakValueDictionary()
 		self._ready = asyncio.Event(loop=self._loop)
+		self._ready_not = True
 
 		if _fill is not None:
 			rs = weakref.ref(self)
 			for k,v in getattr(_fill,'_data',{}).items():
 				if k not in self._data and type(v) is EtcAwaiter:
+					logger.info("%d:SET3 %s %s %s", self.root._debug_id,self,k,v)
 					self._data[k] = v
 					v._parent = rs
 			_fill._done = self
@@ -340,7 +342,7 @@ class EtcBase(object):
 		parent = self._parent()
 		name = self.name
 		x = parent._data.get(name,None)
-		updlogger.debug("%d:run %s add %s %s",self.root._debug_id if self.root else 0, parent, name, "KNOWN" if x is not None else "NEW")
+		updlogger.debug("%d:run %s add %s %s",self.root._debug_id if self.root else 0, parent, name, x if x is not None else "NEW")
 
 		if x is not None:
 			assert not isinstance(self,EtcAwaiter)
@@ -349,6 +351,7 @@ class EtcBase(object):
 			assert isinstance(x,EtcAwaiter), (id(self),self,"vs.",id(x),x)
 		elif hasattr(parent,'_added'):
 			parent._added.add(name)
+		logger.info("%d:SET1 %s %s %s", self.root._debug_id,parent,name,self)
 		parent._data[name] = self
 
 		if not self._propagate_updates:
@@ -458,7 +461,7 @@ class EtcBase(object):
 
 	@property
 	def _ready_p(self):
-		return 'R' if self._ready.is_set() else 'nr'
+		return 'R' if self._ready.is_set() else 'r' if self._ready_not else 'nr'
 
 	@property
 	def _path(self):
@@ -534,18 +537,21 @@ class EtcBase(object):
 
 	def updated(self, seq=None):
 		"""\
+			This node has been updated.
 			Schedule a call to the update monitors.
 			"""
-		updlogger.debug("%d:updated seq %s rdy %s prop %s",self.root._debug_id,seq,self._ready_p,self._propagate_updates)
-
-		p = self
 		r = self.root
 		if r is None:
 			return
+		updlogger.debug("%d:updated %s seq %s rdy %s prop %s",r._debug_id,self,seq,self._ready_p,self._propagate_updates)
+
+		p = self
 		while p._propagate_updates and p is not r:
-			if not p._ready.is_set():
+			if not p._ready_not and not p._ready.is_set():
+				updlogger.debug("%d:waiting %s",r._debug_id,p)
 				return
 			p._ready.clear()
+			p._ready_not = False
 			p = p.parent
 		p._queue_update()
 
@@ -866,6 +872,7 @@ class EtcAwaiter(_EtcDir):
 			super().__init__(self, parent=parent,pre=pre,name=name,_no_update_parent=True)
 			self._data = {}
 			assert name not in parent._data
+			logger.info("%d:SET2 %s %s %s", self.root._debug_id,parent,name,self)
 			parent._data[name] = self
 		return self
 
