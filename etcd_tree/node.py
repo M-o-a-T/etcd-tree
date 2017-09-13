@@ -57,6 +57,9 @@ class _NOTGIVEN:
 _later_idx = 1
 _later_tag = 1
 
+def EtcNull(*a,**k):
+	raise RuntimeError("You can't assemble an etcd-tree node from scratch")
+
 class ReloadData(ReferenceError):
 	"""\
 		The data type of a subtree cannot be decided without having the
@@ -460,6 +463,9 @@ class EtcBase(object):
 	@property
 	def _path(self):
 		return self.__class__.__name__+":"+"/".join(x for x in self.path)
+
+	def __reduce__(self):
+		return EtcNull,(self.__class__.__module__+'.'+self.__class__.__name__,),{'path':self.path}
 
 	def __repr__(self): ## pragma: no cover
 		try:
@@ -1012,6 +1018,11 @@ class EtcXValue(EtcBase):
 		if not (await super()._ext_update(pre)): # pragma: no cover
 			return
 		self._value = self._load(pre.value)
+
+	def __reduce__(self):
+		res = super().__reduce__()
+		res[2]['value'] = self.value
+		return res
 
 	def __repr__(self): ## pragma: no cover
 		try:
@@ -1649,6 +1660,13 @@ class EtcRoot(EtcDir):
 
 		logger.debug("%d:DeferWait end %s",self._debug_id,mod)
 		return mod
+
+	def __reduce__(self):
+		res = super().__reduce__()
+		res[2]['debug_id'] = self._debug_id
+		res[2]['root'] = self._conn.root
+		res[2]['path'] = self.path
+		return res
 
 	def __repr__(self): # pragma: no cover
 		try:
