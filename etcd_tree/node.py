@@ -865,7 +865,7 @@ class EtcAwaiter(_EtcDir):
 	def __init__(self,parent,pre=None,name=None):
 		pass
 
-	def _deleted(self):
+	async def _deleted(self):
 		"""no-op, can't hook an EtcAwaiter"""
 		pass
 
