@@ -356,7 +356,7 @@ async def test_update_watch(client, loop):
             assert x.added == {'und','oder'}
             assert x.deleted == {'oder'}
         elif s == 1:
-            assert x.added == {'zehn'}
+            assert x.added == {':zehn'}
             assert not x.deleted
         else:
             assert 0,s
@@ -388,6 +388,7 @@ async def test_update_watch(client, loop):
 
     logger.debug("Waiting for _update 1")
     await f
+    assert w['zwei'].test_step == 1
     f = asyncio.Future(loop=loop)
     assert m1.call_count # may be >1
     assert m2.call_count
@@ -418,7 +419,8 @@ async def test_update_watch(client, loop):
 
     # Now test that adding a node does the right thing
     m = await w['vier'].set('auch',"ja2")
-    w['zwei']['zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
+    logger.debug("Set :zehn")
+    w['zwei'][':zehn'] = d(zwanzig=30,vierzig=d(fuenfzig=60))
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
     await w['zwei'].wait(m,tasks=True)
@@ -446,8 +448,8 @@ async def test_update_watch(client, loop):
     with pytest.raises(KeyError):
         w1['zwei']._get('huhuhu')
     assert w2['zwei']['und'] == "weniger"
-    assert w1['zwei']['zehn']['zwanzig'] == "30"
-    assert w2['zwei']['zehn']['zwanzig'] == "30"
+    assert w1['zwei'][':zehn']['zwanzig'] == "30"
+    assert w2['zwei'][':zehn']['zwanzig'] == "30"
     assert w1['vier']['auch'] == "ja2"
     assert w2['vier']['auch'] == "ja2"
     w1['zwei']=d(und='noch weniger')
@@ -457,6 +459,7 @@ async def test_update_watch(client, loop):
 
     logger.debug("Waiting for _update 2")
     await f
+    assert w['zwei'].test_step == 2
     assert m1.call_count == mc1
     assert m2.call_count == mc2+1
 
