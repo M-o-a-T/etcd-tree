@@ -580,7 +580,7 @@ class EtcBase(object):
 	def _run_update_reg(self, tag):
 		self._later_timer = None
 		root = self.root
-		if root is None:
+		if root is None or root.closed:
 			return
 		updlogger.debug("%d:start %s",root._debug_id,self)
 		root.task(self._run_update, tag, _die=True)
@@ -589,7 +589,7 @@ class EtcBase(object):
 		self._later_warned = True
 		self._later_timer_max = None
 		root = self.root
-		if root is None:
+		if root is None or root.closed:
 			return
 		(updlogger.info if self._later_warned else updlogger.warn) \
 			("%d:start_max %s %d %d",root._debug_id, self, self.update_delay,self.max_update_delay)
@@ -680,6 +680,8 @@ class EtcBase(object):
 		return mon
 
 	def remove_monitor(self, token):
+		if self.root is None:
+			return
 		updlogger.debug("%d:del_mon %s %s",self.root._debug_id,self,token)
 		if isinstance(token,MonitorCallback):
 			token = token.i
@@ -1552,6 +1554,8 @@ class EtcRoot(EtcDir):
 
 	def task(self, p,*a, _die=False, **k):
 		runlogger.debug("%d:Enq %s %s %s",self._debug_id, p,a,k)
+		if self.closed:
+			raise asyncio.CancelledError
 		f = None if _die else asyncio.Future(loop=self._loop)
 		self._q.put_nowait((f,p,a,k))
 
