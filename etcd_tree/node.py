@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 updlogger = logging.getLogger(__name__+'.update')
 runlogger = logging.getLogger(__name__+'.run')
+debug_id = 0
 
 """\
 This declares nodes for the basic etcTree structure.
@@ -50,9 +51,6 @@ __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
 	'EtcString','EtcFloat','EtcInteger','EtcBoolean',
 	'ReloadData','ReloadRecursive',
 	)
-
-# debug the update-runner code?
-DEBUG_NOTIFY = False
 
 class _NOTGIVEN:
 	pass
@@ -339,8 +337,7 @@ class EtcBase(object):
 		parent = self._parent()
 		name = self.name
 		x = parent._data.get(name,None)
-		if DEBUG_NOTIFY:
-			updlogger.debug("run %s add %s %s",parent._path, name, "KNOWN" if x is not None else "NEW")
+		updlogger.debug("%d:run %s add %s %s",self.root._debug_id if self.root else 0, parent, name, "KNOWN" if x is not None else "NEW")
 
 		if x is not None:
 			assert not isinstance(self,EtcAwaiter)
@@ -457,10 +454,8 @@ class EtcBase(object):
 			return await r.wait(*a,**kw)
 
 	@property
-	def _later_p(self):
-		if type(self._later) in (int,str):
-			return str(self._later)
-		return "TM"
+	def _ready_p(self):
+		return 'R' if self._ready.is_set() else 'nr'
 
 	@property
 	def _path(self):
@@ -518,7 +513,7 @@ class EtcBase(object):
 		root = self.root
 		if root is None:
 			return
-		updlogger.debug("Force %s",self)
+		updlogger.debug("%d:Force %s",root._debug_id, self)
 		return self.task(self._run_update_base)
 
 	@property
@@ -535,8 +530,7 @@ class EtcBase(object):
 		"""\
 			Schedule a call to the update monitors.
 			"""
-		if DEBUG_NOTIFY:
-			logger.debug("run_update %s updated seq %s later %s prop %s",self._path,seq,self._later_p,self._propagate_updates)
+		updlogger.debug("%d:updated seq %s rdy %s prop %s",self.root._debug_id,seq,self._ready_p,self._propagate_updates)
 
 		p = self
 		r = self.root
@@ -559,7 +553,7 @@ class EtcBase(object):
 	# - Queued update: notes that the tag has changed, doesn't run.
 
 	def _queue_update(self):
-		updlogger.debug("queue %s",self._path)
+		updlogger.debug("%d:queue %s",self.root._debug_id if self.root else 0, self)
 		self._ready.clear()
 		if self._later_max:
 			return
@@ -588,23 +582,23 @@ class EtcBase(object):
 		root = self.root
 		if root is None:
 			return
-		updlogger.debug("start %s",self._path)
+		updlogger.debug("%d:start %s",root._debug_id,self)
 		root.task(self._run_update, tag, _die=True)
 
 	def _run_update_max(self):
-		(updlogger.info if self._later_warned else updlogger.warn) \
-			("start_max %s %d %d",self._path, self.update_delay,self.max_update_delay)
 		self._later_warned = True
 		self._later_timer_max = None
 		root = self.root
 		if root is None:
 			return
+		(updlogger.info if self._later_warned else updlogger.warn) \
+			("%d:start_max %s %d %d",root._debug_id, self, self.update_delay,self.max_update_delay)
 		self._later_tag = 0
 		self._later_max = True
 		root.task(self._run_update,0, _die=True)
 
 	async def _run_update(self, tag):
-		updlogger.debug("upd %s %d/%d %s",self._later_max, tag,self._later_tag, self._path)
+		updlogger.debug("%d:upd %s %s %d/%d",self.root._debug_id, self, self._later_max, tag,self._later_tag)
 		if self._later_max:
 			if tag > 0: # overridden update
 				return
@@ -614,7 +608,7 @@ class EtcBase(object):
 				# A change arrived before this could execute. Retry.
 				assert self._later_timer is not None
 				return
-		updlogger.debug("Base %s",self)
+		updlogger.debug("%d:Base %s",self.root._debug_id, self)
 		await self._run_update_base()
 
 	async def _run_update_base(self):
@@ -631,7 +625,7 @@ class EtcBase(object):
 		await self._run_update_step()
 	
 	async def _run_update_step(self):
-		updlogger.debug("Step %s %s",self, not self._ready.is_set())
+		updlogger.debug("%d:Step %s %s",self.root._debug_id, self, not self._ready.is_set())
 		if self._ready.is_set():
 			return
 		vd = getattr(self,'_data',None)
@@ -647,7 +641,7 @@ class EtcBase(object):
 		try:
 			await self._call_monitors()
 		except Exception as exc:
-			updlogger.debug("Exc %s",self, exc_info=exc)
+			updlogger.debug("%d:Exc %s",self.root._debug_id, self, exc_info=exc)
 			await self.root._err_q.put(exc)
 
 	async def _call_monitors(self):
@@ -682,13 +676,11 @@ class EtcBase(object):
 		global _later_idx
 		i,_later_idx = _later_idx,_later_idx+1
 		self._later_mon[i] = mon = MonitorCallback(self,i,callback)
-		if DEBUG_NOTIFY:
-			logger.debug("run_update add_mon %s %s %s",self._path,i,callback)
+		updlogger.debug("%d:add_mon %s %s %s",self.root._debug_id,self,i,callback)
 		return mon
 
 	def remove_monitor(self, token):
-		if DEBUG_NOTIFY:
-			logger.debug("run_update del_mon %s %s",self._path,token)
+		updlogger.debug("%d:del_mon %s %s",self.root._debug_id,self,token)
 		if isinstance(token,MonitorCallback):
 			token = token.i
 		self._later_mon.pop(token,None)
@@ -708,8 +700,7 @@ class EtcBase(object):
 		p = p()
 		if p is None:
 			return # pragma: no cover
-		if DEBUG_NOTIFY:
-			logger.debug("run_update: deleted: %s",self._path)
+		updlogger.debug("%d:deleted: %s",self.root._debug_id,self)
 
 		p.updated(seq=s)
 
@@ -1155,8 +1146,7 @@ class EtcDir(_EtcDir, MutableMapping):
 	async def _call_monitors(self):
 		self.added,self._added = self._added,set()
 		self.deleted,self._deled = self._deled,set()
-		if DEBUG_NOTIFY:
-			logger.debug("run_update CALL_MON %s add:%s del:%s",self,self.added,self.deleted)
+		updlogger.debug("%d:CALL_MON %s add:%s del:%s",self.root._debug_id,self,self.added,self.deleted)
 
 		await super()._call_monitors()
 
@@ -1501,8 +1491,11 @@ class EtcRoot(EtcDir):
 	last_mod = None
 	closed = False
 	job_error = None
+	_debug_id = 0
 
 	def __init__(self,conn,watcher=None,key=(),types=None, update_delay=None, max_update_delay=None, **kw):
+		global debug_id; debug_id+=1
+		self._debug_id = debug_id
 		self._conn = conn
 		self._watcher = watcher
 		self.path = key
@@ -1527,15 +1520,15 @@ class EtcRoot(EtcDir):
 
 	async def _run(self):
 		while True:
-			runlogger.debug("wait %s",self)
+			runlogger.debug("%d:wait",self._debug_id)
 			r = await self._q.get()
 			if r is None:
-				runlogger.debug("end %s",self)
+				runlogger.debug("%d:end",self._debug_id)
 				self._done.set_result(None)
 				return
 			f,p,a,k = r
 			try:
-				runlogger.debug("run %s %s %s %s",self, p,a,k)
+				runlogger.debug("%d:run %s %s %s",self._debug_id, p,a,k)
 				r = p(*a,**k)
 				if f is None:
 					r = asyncio.wait_for(r, self.max_update_delay+2*self.update_delay, loop=self._loop)
@@ -1543,22 +1536,22 @@ class EtcRoot(EtcDir):
 					r = await r
 				except TypeError as exc:
 					if not hasattr(p,"_async_warn"):
-						runlogger.warn("Queued call is not async: %s",p)
+						runlogger.warn("%d:Queued call is not async: %s", self._debug_id,p)
 						p._async_warn = True
 			except Exception as exc:
 				if f is None:
-					runlogger.exception("Queue error %s",self)
+					runlogger.exception("%d:Queue error",self._debug_id)
 					await self._err_q.put(exc)
 				else:
-					runlogger.exception("Set error %s",self)
+					runlogger.exception("%d:Set error",self._debug_id)
 					f.set_exception(exc)
 			else:
-				runlogger.debug("Result %s %s",self,r)
+				runlogger.debug("%d:Result %s",self._debug_id, r)
 				if f is not None and not f.cancelled():
 					f.set_result(r)
 
 	def task(self, p,*a, _die=False, **k):
-		runlogger.debug("Enq %s %s %s %s",self, p,a,k)
+		runlogger.debug("%d:Enq %s %s %s",self._debug_id, p,a,k)
 		f = None if _die else asyncio.Future(loop=self._loop)
 		self._q.put_nowait((f,p,a,k))
 
@@ -1593,60 +1586,60 @@ class EtcRoot(EtcDir):
 		return self._watcher is not None and self._watcher.running
 
 	async def close(self):
-		logger.debug("Closing %s",repr(self))
+		logger.debug("%d:Closing %s",self._debug_id,repr(self))
 		from .etcd import WatchStopped
-		self.closed = True
 
-		logger.debug("Closing A")
+		logger.debug("%d:Closing A",self._debug_id)
 		try:
 			await self.wait(tasks=True)
 		except WatchStopped:
 			logger.exception("Not Watching")
-		logger.debug("Closing B")
+		logger.debug("%d:Closing B",self._debug_id)
+		self.closed = True
 		self._q.put_nowait(None)
 
 		w,self._watcher = self._watcher,None
 		if w is not None:
 			await w.close()
-		logger.debug("Closing C")
+		logger.debug("%d:Closing C",self._debug_id)
 
 		while self._err_q.qsize():
 			exc = self._err_q.get_nowait()
 			logger.exception("Close: deferred exception", exc_info=exc)
 
-		logger.debug("Closing D")
+		logger.debug("%d:Closing D",self._debug_id)
 		await self._done
-		logger.debug("Closing E")
+		logger.debug("%d:Closing E",self._debug_id)
 		self._conn._trees.remove(self)
 
 	async def wait(self, mod=None, tasks=False):
 		"""Delay until async processing is complete"""
 
-		logger.debug("DeferWait A %s %s", mod, tasks)
+		logger.debug("%d:DeferWait A %s %s", self._debug_id,mod, tasks)
 		if self._err_q.qsize():
 			raise self._err_q.get_nowait()
 
 		if tasks:
 			async def noop():
 				pass
-			logger.debug("DeferWait T")
+			logger.debug("%d:DeferWait T",self._debug_id)
 			await self.task(noop)
 
 		if self._watcher is not None:
 			if mod is None:
 				mod = self.last_mod
-			logger.debug("DeferWait sync")
+			logger.debug("%d:DeferWait sync",self._debug_id)
 			await self._watcher.sync(mod)
 
 		if self._err_q.qsize():
 			raise self._err_q.get_nowait()
 
-		logger.debug("DeferWait end %s",mod)
+		logger.debug("%d:DeferWait end %s",self._debug_id,mod)
 		return mod
 
 	def __repr__(self): # pragma: no cover
 		try:
-			return "<{}:{} /{}>".format(self.__class__.__name__,self._conn.root,'/'.join(self.path))
+			return "<{}:{}:{} /{}>".format(self._debug_id,self.__class__.__name__,self._conn.root,'/'.join(self.path))
 		except Exception as e:
 			logger.exception(e)
 			res = super().__repr__()
@@ -1655,7 +1648,7 @@ class EtcRoot(EtcDir):
 	def __del__(self):
 		self._kill()
 	def _kill(self, ignore_q=True):
-		logger.debug("Force-Closing %s",repr(self))
+		logger.debug("%d:Force-Closing %s",self._debug_id,repr(self))
 		self.closed = True
 		try:
 			self._conn._trees.remove(self)
