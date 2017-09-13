@@ -621,7 +621,6 @@ class EtcBase(object):
 			assert tag > 0
 			if self._later_tag != 0 and self._later_tag != tag:
 				# A change arrived before this could execute. Retry.
-				assert self._later_timer is not None
 				return
 		updlogger.debug("%d:Base %s",self.root._debug_id, self)
 		await self._run_update_base()
