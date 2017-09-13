@@ -579,6 +579,7 @@ class EtcBase(object):
 	
 	def _run_update_reg(self, tag):
 		self._later_timer = None
+
 		root = self.root
 		if root is None or root.closed:
 			return
@@ -586,13 +587,17 @@ class EtcBase(object):
 		root.task(self._run_update, tag, _die=True)
 
 	def _run_update_max(self):
-		self._later_warned = True
 		self._later_timer_max = None
+
 		root = self.root
 		if root is None or root.closed:
 			return
 		(updlogger.info if self._later_warned else updlogger.warn) \
 			("%d:start_max %s %d %d",root._debug_id, self, self.update_delay,self.max_update_delay)
+		if self._later_timer is not None:
+			self._later_timer.cancel()
+			self._later_timer = None
+		self._later_warned = True
 		self._later_tag = 0
 		self._later_max = True
 		root.task(self._run_update,0, _die=True)
