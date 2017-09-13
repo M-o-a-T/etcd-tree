@@ -650,15 +650,18 @@ class EtcBase(object):
 
 			Exceptions get propagated. They will kill the watcher."""
 		try:
+			updlogger.debug("%d:has_ %s",self.root._debug_id, self)
 			await self.has_update()
 			if self._later_mon:
 				for f in list(self._later_mon.values()):
+					updlogger.debug("%d:mon %s %s",self.root._debug_id, self,f)
 					res = f(self)
 					try:
 						await res
 					except TypeError:
 						pass
 		finally:
+			updlogger.debug("%d:done %s",self.root._debug_id, self)
 			if self.is_new:
 				self.is_new = False
 
@@ -1519,6 +1522,7 @@ class EtcRoot(EtcDir):
 		super().__init__(**kw)
 		self._propagate_updates = False
 		self._job = asyncio.ensure_future(self._run(), loop=self._loop)
+		runlogger.debug("%d:init %s",self._debug_id,self)
 
 	async def _run(self):
 		while True:
