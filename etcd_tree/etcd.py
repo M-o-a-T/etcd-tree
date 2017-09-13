@@ -138,6 +138,7 @@ class EtcClient(object):
 
 	async def get(self, key, _prefix=False, **kw):
 		key = self._extkey(key, _prefix=_prefix)
+		logger.debug("get %s %s",key, repr(kw))
 		return (await retry_conn(self.client.get,key, **kw))
 
 	async def read(self, key, _prefix=False, **kw):
@@ -153,11 +154,12 @@ class EtcClient(object):
 
 			@prev: current value
 			"""
+		key = self._extkey(key, _prefix=_prefix)
+		logger.debug("del %s prev=%s index=%s %s",key, prev,index, repr(kw))
 		if prev is not _NOTGIVEN:
 			kw['prevValue'] = prev
 		if index is not None:
 			kw['prevIndex'] = index
-		key = self._extkey(key, _prefix=_prefix)
 		res = await retry_conn(self.client.delete,key,**kw)
 		self.last_mod = res.modifiedIndex
 		return res
@@ -184,7 +186,7 @@ class EtcClient(object):
 
 			"""
 		key = self._extkey(key, _prefix=_prefix)
-		logger.debug("Write %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
+		logger.debug("set %s to %s prev=%s index=%s %s",value,key, prev,index, repr(kw))
 		if kw.get('append',False):
 			assert prev is None, prev
 			assert index is None, index
@@ -203,7 +205,6 @@ class EtcClient(object):
 
 		res = await retry_conn(self.client.write,key, value=value, **kw)
 		self.last_mod = res.modifiedIndex
-		logger.debug("WROTE: %s",repr(res.__dict__))
 		return res
 
 	async def tree(self, key, sub=_NOTGIVEN, _prefix=False, root_cls=None, types=None, immediate=True, static=False, create=None, **kw):
