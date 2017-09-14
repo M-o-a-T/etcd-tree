@@ -1316,12 +1316,12 @@ class EtcDir(_EtcDir, MutableMapping):
 				if isinstance(value,dict):
 					raise ValueError("Cannot replace a terminal node with a mapping",self.path)
 				if replace:
-					res = mod = await sub.set(value, ext=ext, **kw)
+					res = mod = await sub.set(value, ext=ext, force=force, sync=False, **kw)
 			else:
 				if not isinstance(value,dict):
 					raise ValueError("Cannot replace a mapping with a terminal node",self.path)
 				for k,v in value.items():
-					res = mod = await sub.set(k,v, replace=replace, ext=ext, **kw)
+					res = mod = await sub.set(k,v, replace=replace, ext=ext, force=force, sync=False, **kw)
 
 		if sync and mod and root is not None:
 			await root.wait(mod)
