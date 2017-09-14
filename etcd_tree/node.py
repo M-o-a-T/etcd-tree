@@ -785,7 +785,7 @@ class _EtcDir(EtcBase):
 		name = _make_name(_name,name)
 
 		for n in name:
-			self = self[n]
+			self = self._get(n)
 		return self
 
 	async def subdir(self, *_name, name=(), create=None, recursive=None):
