@@ -1003,11 +1003,11 @@ class EtcXValue(EtcBase):
 			await root.wait(r)
 		return r
 
-	async def delete(self, sync=True, recursive=None, **kw):
+	async def delete(self, sync=True, recursive=None, force=False, **kw):
 		root = self.root
 		if root is None:
 			return # pragma: no cover
-		r = await root._delete(self.path, index=self._seq, **kw)
+		r = await root._delete(self.path, index=None if force else self._seq, **kw)
 		r = r.modifiedIndex
 		if sync:
 			await root.wait(r)
@@ -1235,7 +1235,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		#res = await self.set(path[-1], val, sync=False, ext=True)
 		return res
 
-	async def set(self, key,value, sync=True, replace=True, ext=False, **kw):
+	async def set(self, key,value, sync=True, replace=True, ext=False, force=False, **kw):
 		"""\
 			Update a node. This is the coroutine version of assignment.
 			Returns the operation's modification index.
