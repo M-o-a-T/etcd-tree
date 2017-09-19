@@ -73,7 +73,9 @@ async def test_basic_watch(client,loop):
     i = types.register("*/vierixx")(EtcInteger)
     assert i is EtcInteger
     types['what/ever'] = EtcFloat
+    types['what/ever'] = rTwo
     assert types.lookup('what','ever', dir=False) is EtcFloat
+    assert types.lookup('what','ever', dir=True) is rTwo
     assert types['what/ever'] is EtcFloat
     with pytest.raises(AssertionError):
         types['/what/ever']
@@ -100,14 +102,14 @@ async def test_basic_watch(client,loop):
     w = await t.tree("/two", immediate=False, static=True, types=types)
     w.env.foobar="Foo Bar"
     assert sorted(dict((a,b) for a,b,c in w.registrations()).items()) == sorted([
-           (('.',),xRoot),
-           (('.', 'something', 'else'), EtcInteger),
-           (('.', '*', 'vierixx'), EtcInteger),
-           (('.', 'what', 'ever'), EtcFloat),
-           (('.', 'two'), rTwo),
-           (('.', 'two', 'die'), rPreDie),
-           (('.', 'two', 'vier'), EtcBoolean),
-           (('zwei', 'und'), xUnd),
+           (('.',),[None,xRoot]),
+           (('.', 'something', 'else'), [EtcInteger,None]),
+           (('.', '*', 'vierixx'), [EtcInteger,None]),
+           (('.', 'what', 'ever'), [EtcFloat,rTwo]),
+           (('.', 'two'), [None,rTwo]),
+           (('.', 'two', 'die'), [rPreDie,None]),
+           (('.', 'two', 'vier'), [EtcBoolean,None]),
+           (('zwei', 'und'), [xUnd,None]),
     ]), list(w.registrations())
     assert isinstance(w,xRoot)
     assert w.env.foobar == "Foo Bar"

@@ -1,3 +1,9 @@
+etcd-tree (0.43.0.0) unstable; urgency=medium
+
+  * Re-added support for registering dir and scalar types on the same node
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 19 Sep 2017 08:31:05 +0200
+
 etcd-tree (0.42.0.0) unstable; urgency=medium
 
   * EtcDir.lookup now always returns an EtcBase subclass

@@ -1256,6 +1256,8 @@ class EtcDir(_EtcDir, MutableMapping):
 			"""
 		root = self.root
 		res = mod = None
+		if key is not None and '/' in key:
+			key = tuple(k for k in key.split('/') if k != "")
 		if isinstance(key,(tuple,list)):
 			self = await self.subdir(key[:-1])
 			key = key[-1]
@@ -1441,14 +1443,14 @@ class EtcDir(_EtcDir, MutableMapping):
 		if types is not None:
 			cls = types.lookup(*path,dir=dir,raw=True)
 			if cls is not None and cls.type is not None:
-				return cls if raw else cls.type
+				return cls if raw else cls.type[dir]
 		for sup in type(self).mro():
 			types = sup.__dict__.get('_types',None)
 			if types is None:
 				continue
 			cls = types.lookup(*path,dir=dir,raw=True)
 			if cls is not None and cls.type is not None:
-				return cls if raw else cls.type
+				return cls if raw else cls.type[dir]
 		p = self.parent if self._types_from_parent else None
 		if p is None:
 			if not default:
@@ -1471,7 +1473,7 @@ class EtcDir(_EtcDir, MutableMapping):
 		def show(p,e):
 			if e is None:
 				return
-			if e.type is not None:
+			if e.type[0] is not None or e.type[1] is not None:
 				yield (p,e.type,e.doc)
 			for a,b in e.items():
 				yield from show(p+(a,),b)
