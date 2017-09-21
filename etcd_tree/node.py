@@ -244,7 +244,7 @@ class EtcBase(object):
 			assert parent is not None, "specify conn or parent"
 			conn = parent._root()._conn
 			kw['parent'] = parent
-			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive, raw=False)
+			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive, raw=False, dir=None if pre is None else pre.dir)
 			if isinstance(key,str):
 				key = parent.path+(name,)
 		else:
