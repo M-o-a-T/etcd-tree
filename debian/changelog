@@ -1,3 +1,11 @@
+etcd-tree (0.44.0.0) unstable; urgency=medium
+
+  * return NotConverted object on ValueError from etcd
+  * allow float vs. int
+  * pass dir=true/false to parent.subtype in _new()
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 22 Sep 2017 00:11:56 +0200
+
 etcd-tree (0.43.0.0) unstable; urgency=medium
 
   * Re-added support for registering dir and scalar types on the same node
