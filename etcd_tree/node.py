@@ -999,7 +999,8 @@ class EtcXValue(EtcBase):
 		if ext:
 			self._load(value)
 		else:
-			assert isinstance(value,self.type), (value,self.type, '/'.join(self.path))
+			if not isinstance(value,(float,int)) or self.type not in (float,int):
+				assert isinstance(value,self.type), (value,self.type, '/'.join(self.path))
 		if not ext:
 			if not force and self.value is not None and value == self.value:
 				return
