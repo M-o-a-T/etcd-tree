@@ -46,6 +46,7 @@ from etcd import EtcdResult, EtcdKeyNotFound
 from functools import wraps
 from .util import hybridmethod
 from traceback import print_exc
+import attr
 
 __all__ = ('EtcBase','EtcAwaiter','EtcDir','EtcRoot','EtcValue','EtcXValue',
 	'EtcString','EtcFloat','EtcInteger','EtcBoolean',
@@ -56,6 +57,10 @@ class _NOTGIVEN:
 	pass
 _later_idx = 1
 _later_tag = 1
+
+@attr.s
+class NotConverted:
+	value = attr.ib()
 
 def EtcNull(*a,**k):
 	raise RuntimeError("You can't assemble an etcd-tree node from scratch")
@@ -945,7 +950,11 @@ class EtcXValue(EtcBase):
 	_seq = None
 	def __init__(self, pre=None,**kw):
 		super().__init__(pre=pre, **kw)
-		self._value = self._load(pre.value)
+		try:
+			self._value = self._load(pre.value)
+		except ValueError:
+			logger.error("Wrong type: %s in %s" % (repr(pre.value), '/'.join(self.path),))
+			self._value = NotConverted(pre.value)
 		self.updated(0)
 
 	def __hash__(self):
