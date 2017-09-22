@@ -145,9 +145,16 @@ class MonitorCallback(object):
 
 class _tagged_iter:
 	def __init__(self,tree,tag, depth=0):
-		assert type(tag) is bool or tag[0] == ':'
 		self.trees = [(tree,0)]
 		self.tag = tag
+		if tag is False:
+			self.pred = lambda v: v.name[0] != ':'
+		elif tag is True:
+			self.pred = lambda v: v.name[0] == ':'
+		elif tag is None:
+			self.pred = lambda v: isinstance(v,EtcXValue)
+		else:
+			self.pred = lambda v: v.name == self.tag
 		self.depth = depth
 		self.dirs = []
 	async def __aiter__(self):
@@ -161,8 +168,8 @@ class _tagged_iter:
 			t,d = self.trees.pop()
 			t = await t
 			d += 1
-			for k,v in t.items():
-				if self.tag == (k[0] == ':') if type(self.tag) is bool else (k == self.tag):
+			for k,v in t._items():
+				if self.pred(v):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
 				elif k[0] == ':':
@@ -1187,7 +1194,15 @@ class EtcDir(_EtcDir, MutableMapping):
 	def tagged(self, tag=True, depth=0):
 		"""\
 			async generator to recursively find all sub-nodes with a specific tag
-			(or any tag)
+			(or any tag).
+
+			@tag can be
+			- True: return any tag
+			- False: return any non-tag
+			- None: return any non-directory
+			- a string: return all child nodes with that name (usually a tag)
+
+			If @depth is >0, only return entries at exactly that depth.
 			"""
 		return _tagged_iter(self,tag, depth=depth)
 
