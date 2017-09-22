@@ -1,3 +1,10 @@
+etcd-tree (0.45.0.0) unstable; urgency=medium
+
+  * replaced _get and _keys/_valeus/_items
+  * added .tagged(tag=None) to enumerate non-directories
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 22 Sep 2017 13:31:50 +0200
+
 etcd-tree (0.44.0.0) unstable; urgency=medium
 
   * return NotConverted object on ValueError from etcd
