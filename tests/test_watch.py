@@ -118,7 +118,7 @@ async def test_basic_watch(client,loop):
     assert w['zwei']['a']['b'].env is w.env
 
     assert w['zwei']['und'] == "drei"
-    assert type(w['zwei']._get('und')) is xUnd
+    assert type(w['zwei'].get('und', raw=True)) is xUnd
     assert w['vier'] == "true"
     with pytest.raises(KeyError):
         w['x']
@@ -366,7 +366,7 @@ async def test_update_watch(client, loop):
     i0 = w.add_monitor(wake)
     i1 = w['zwei'].add_monitor(m1)
     ix = w['zwei'].add_monitor(mx)
-    i2 = w['zwei']._get('und').add_monitor(m2)
+    i2 = w['zwei'].get('und', raw=True).add_monitor(m2)
 
     assert w['sechs'] == "sieben"
     acht = w['acht']
@@ -411,10 +411,10 @@ async def test_update_watch(client, loop):
     del w['vier']['oder']
     await w.wait(tasks=True)
     w['vier']
-    s = w['vier']._get('auch')._cseq
+    s = w['vier'].get('auch', raw=True)._cseq
     with pytest.raises(KeyError):
         w['vier']['oder']
-    m = await w['vier']._get('auch').delete()
+    m = await w['vier'].get('auch', raw=True).delete()
     await w.wait(m, tasks=True)
     with pytest.raises(KeyError):
         w['vier']['auch']
@@ -426,7 +426,7 @@ async def test_update_watch(client, loop):
     w['zwei']['und'] = "weniger"
     logger.debug("WAIT FOR ME")
     await w['zwei'].wait(m,tasks=True)
-    assert s != w['vier']._get('auch')._cseq
+    assert s != w['vier'].get('auch', raw=True)._cseq
 
     from etcd_tree import client as rclient
     from .util import cfgpath
@@ -440,15 +440,15 @@ async def test_update_watch(client, loop):
     assert w1 is not w2
     assert w1['zwei']['und'] == "weniger"
     assert w1['zwei'].get('und') == "weniger"
-    assert w1['zwei']._get('und').value == "weniger"
+    assert w1['zwei'].get('und', raw=True).value == "weniger"
     assert w1['zwei'].get('und','nix') == "weniger"
-    assert w1['zwei']._get('und','nix').value == "weniger"
+    assert w1['zwei'].get('und','nix', raw=True).value == "weniger"
     assert w1['zwei'].get('huhuhu','nixi') == "nixi"
-    assert w1['zwei']._get('huhuhu','nixo') == "nixo"
+    assert w1['zwei'].get('huhuhu','nixo', raw=True) == "nixo"
     with pytest.raises(KeyError):
         w1['zwei'].get('huhuhu')
     with pytest.raises(KeyError):
-        w1['zwei']._get('huhuhu')
+        w1['zwei'].get('huhuhu', raw=True)
     assert w2['zwei']['und'] == "weniger"
     assert w1['zwei'][':zehn']['zwanzig'] == "30"
     assert w2['zwei'][':zehn']['zwanzig'] == "30"
@@ -472,7 +472,7 @@ async def test_update_watch(client, loop):
     i2.cancel()
     assert not w._later_mon
     assert not w['zwei']._later_mon
-    assert not w['zwei']._get('und')._later_mon
+    assert not w['zwei'].get('und', raw=True)._later_mon
 
     types.register("**","new_a", cls=IntObj)
     types.register(("**","new_b"), cls=EtcInteger)
@@ -550,21 +550,21 @@ async def test_update_ttl(client, loop):
     assert w['timeout'].ttl is None
     assert w['nodes'] == "too"
     mod = await w.set('some','data',ttl=2)
-    assert w._get('nodes').ttl is None
+    assert w.get('nodes', raw=True).ttl is None
     logger.warning("_SET_TTL")
-    w._get('timeout').ttl = 1
-    await w._get('t2').set_ttl(1)
-    await w._get('t2').del_ttl()
-    await w._get('nodes').set_ttl(1)
+    w.get('timeout', raw=True).ttl = 1
+    await w.get('t2', raw=True).set_ttl(1)
+    await w.get('t2', raw=True).del_ttl()
+    await w.get('nodes', raw=True).set_ttl(1)
     logger.warning("_SYNC_TTL")
     await w.wait(tasks=True)
     logger.warning("_GET_TTL")
-    assert w._get('timeout').ttl is not None
+    assert w.get('timeout', raw=True).ttl is not None
     assert w['nodes'] == "too"
     await w.wait(mod, tasks=True)
     assert w['some'] == "data"
-    assert w._get('nodes').ttl is not None
-    del w._get('nodes').ttl
+    assert w.get('nodes', raw=True).ttl is not None
+    del w.get('nodes', raw=True).ttl
     await asyncio.sleep(1.5, loop=loop)
     with pytest.raises(KeyError):
         w['timeout']
@@ -572,8 +572,8 @@ async def test_update_ttl(client, loop):
     with pytest.raises(KeyError):
         w['some']
     assert w['nodes'] == "too"
-    assert w._get('nodes').ttl is None
-    assert w._get('t2').ttl is None
+    assert w.get('nodes', raw=True).ttl is None
+    assert w.get('t2', raw=True).ttl is None
 
     await w.close()
 
@@ -587,8 +587,8 @@ async def test_ready(client, loop):
     mod = await w.set('some','data')
     mod = await w.set('other','data2')
     t1 = time.monotonic()
-    x = w._get('some')
-    y = w._get('other')
+    x = w.get('some', raw=True)
+    y = w.get('other', raw=True)
     assert not x.is_ready
     assert not y.is_ready
     assert not w.is_ready
@@ -729,10 +729,10 @@ async def do_typed(client,loop, subtyped,recursed):
     d1=d(types=d(here=d(my_value='10',a=d(b=d(c=d(d=d(e='20')))))))
     await t._f(d1)
     w = await t.tree("/types", immediate=recursed, static=True, types=types)
-    v = await w['here']._get('my_value')
-    assert v.value == 10,w['here']._get('my_value')
+    v = await w['here'].get('my_value', raw=True)
+    assert v.value == 10,w['here'].get('my_value', raw=True)
     v = await w['here']
-    assert v['my_value'] == 10, v._get('my_value')
+    assert v['my_value'] == 10, v.get('my_value', raw=True)
     assert (recursed is None) == (type(v['a']['b']['c']) is EtcAwaiter)
     await v['a']['b']['c']
     assert not type(v['a']['b']['c']) is EtcAwaiter

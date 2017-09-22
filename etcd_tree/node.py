@@ -168,7 +168,7 @@ class _tagged_iter:
 			t,d = self.trees.pop()
 			t = await t
 			d += 1
-			for k,v in t._items():
+			for k,v in t.items(raw=True):
 				if self.pred(v):
 					if not self.depth or self.depth == d:
 						self.dirs.append(v)
@@ -178,6 +178,7 @@ class _tagged_iter:
 					continue
 				elif isinstance(v,_EtcDir): # dir or awaiter
 					self.trees.append((v,d))
+
 		return (await self.dirs.pop())
 
 	def __next__(self):
@@ -797,7 +798,7 @@ class _EtcDir(EtcBase):
 		name = _make_name(_name,name)
 
 		for n in name:
-			self = self._get(n)
+			self = self.get(n, raw=True)
 		return self
 
 	async def subdir(self, *_name, name=(), create=None, recursive=None):
@@ -895,14 +896,14 @@ class EtcAwaiter(_EtcDir):
 		"""no-op"""
 		return self
 
-	def __getitem__(self,key):
+	def __getitem__(self,key, raw=None):
 		v = self._data.get(key,_NOTGIVEN)
 		if v is _NOTGIVEN:
 			v = EtcAwaiter(self, name=key)
 		else:
 			assert isinstance(v,EtcAwaiter)
 		return v
-	_get = __getitem__
+	get = __getitem__
 
 	def __len__(self):
 		raise RuntimeError("You need to await on %s first" % (str(self),))
@@ -1137,14 +1138,20 @@ class EtcDir(_EtcDir, MutableMapping):
 		assert value is None, value
 		return None
 
-	def keys(self):
+	def keys(self, raw=False):
 		return self._data.keys()
-	def values(self):
+	def values(self, raw=False):
+		if raw:
+			yield from self._data.values()
+			return
 		for v in list(self._data.values()):
 			if isinstance(v,EtcValue):
 				v = v.value
 			yield v
-	def items(self):
+	def items(self, raw=False):
+		if raw:
+			yield from self._data.items()
+			return
 		for k,v in list(self._data.items()):
 			if k not in self:
 				continue # pragma: no cover ## possible race condition
@@ -1152,28 +1159,17 @@ class EtcDir(_EtcDir, MutableMapping):
 				v = v.value
 			yield k,v
 
-	_keys = keys
-	@property
-	def _items(self):
-		return self._data.items
-	@property
-	def _values(self):
-		return self._data.values
-
-	def _get(self,key,default=_NOTGIVEN):
-		if default is _NOTGIVEN:
-			try:
-				return self._data[key]
-			except KeyError:
+	def get(self,key,default=_NOTGIVEN, raw=False):
+		try:
+			res = self._data[key]
+		except KeyError:
+			if default is _NOTGIVEN:
 				raise KeyError(self.path+(key,)) from None
-		else:
-			return self._data.get(key,default)
+			res = default
+		if not raw and isinstance(res, EtcValue):
+			res = res.value
+		return res
 
-	def get(self,key,default=_NOTGIVEN):
-		v = self._get(key,default)
-		if isinstance(v,EtcValue):
-			v = v.value
-		return v
 	__getitem__ = get
 
 	def add_monitor(self, callback):

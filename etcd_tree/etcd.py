@@ -463,7 +463,7 @@ class EtcWatcher(object):
 				if x.action in {'compareAndDelete','delete','expire'}:
 					for k in key:
 						try:
-							r = r._get(k)
+							r = r.get(k, raw=True)
 							# will not create an EtcAwaiter
 						except KeyError:
 							raise SkipAhead
@@ -483,7 +483,7 @@ class EtcWatcher(object):
 						async with r._lock:
 							try:
 								# don't resolve EtcValue or EtcAwaiter
-								r = r._get(key[-1])
+								r = r.get(key[-1], raw=True)
 							except KeyError:
 								r = await r._new(parent=r,key=key,pre=x,recursive=False)
 						if type(r) is EtcAwaiter:
