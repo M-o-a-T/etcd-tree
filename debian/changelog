@@ -1,3 +1,10 @@
+etcd-tree (0.46.0.0) unstable; urgency=medium
+
+  * Added wait= argument to .subtree()
+    defaults to False, waits for all tasks to run when true
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 24 Sep 2017 19:17:44 +0200
+
 etcd-tree (0.45.0.0) unstable; urgency=medium
 
   * replaced _get and _keys/_valeus/_items

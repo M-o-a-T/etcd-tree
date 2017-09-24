@@ -801,7 +801,7 @@ class _EtcDir(EtcBase):
 			self = self.get(n, raw=True)
 		return self
 
-	async def subdir(self, *_name, name=(), create=None, recursive=None):
+	async def subdir(self, *_name, name=(), create=None, recursive=None, wait=False):
 		"""\
 			Utility function to find/create a sub-node.
 			@recursive decides what to do if the node thus encountered
@@ -834,8 +834,10 @@ class _EtcDir(EtcBase):
 			pre = await root._set(n, prevExist=False, dir=True, value=None)
 		except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
 			pre = await root._conn.get(n)
-		await root.wait(pre.modifiedIndex)
-		return await self.lookup(*_name, name=name)
+		await root.wait(pre.modifiedIndex, tasks=wait)
+		res = await self.lookup(*_name, name=name)
+		await root.wait(pre.modifiedIndex, tasks=wait)
+		return res
 
 	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
 		"""\
