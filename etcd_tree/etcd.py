@@ -306,7 +306,6 @@ class EtcWatcher(object):
 		self.q = asyncio.Queue(loop=conn._loop)
 		self.uptodate = asyncio.Condition(loop=conn._loop)
 		self._reader = asyncio.ensure_future(self._watch_read(), loop=conn._loop)
-		self._writer = asyncio.ensure_future(self._watch_write(), loop=conn._loop)
 		self.stopped = asyncio.Future(loop=conn._loop)
 		self.stopped.add_done_callback(lambda _: self.uptodate.notify_unlocked())
 		self.conn._trees.add(self)
@@ -318,10 +317,6 @@ class EtcWatcher(object):
 			self.stopped.set_exception(err)
 		try:
 			self._reader.cancel()
-		except Exception:
-			pass
-		try:
-			self._writer.cancel()
 		except Exception:
 			pass
 
@@ -340,23 +335,20 @@ class EtcWatcher(object):
 				self.stopped.set_result("_kill")
 			except RuntimeError: # pragma: no cover ## event loop might be closed
 				pass
-		for k in ("_reader","_writer"):
-			r = getattr(self,k)
-			if r is not None:
-				setattr(self,k, None)
-				try:
-					r.cancel()
-				except RuntimeError: # pragma: no cover ## event loop might be closed
-					pass
+
+		r,self._reader = self._reader,None
+		if r is not None:
+			try:
+				r.cancel()
+			except RuntimeError: # pragma: no cover ## event loop might be closed
+				pass
 
 	async def close(self):
 		self.conn._trees.remove(self)
 		if not self.stopped.done():
 			self.stopped.set_result("close")
-		for k in ("_reader","_writer"):
-			r = getattr(self,k)
+			r,self._reader = self._reader,None
 			if r is not None:
-				setattr(self,k, None)
 				r.cancel()
 				try:
 					await r
@@ -367,7 +359,7 @@ class EtcWatcher(object):
 		self.root = weakref.ref(root)
 		self.extkey = self.conn._extkey(root.path)
 
-	async def sync(self, mod=None):
+	async def sync(self, mod=None, force=False):
 		"""Wait for pending updates"""
 		root = self.root
 		if root is None:
@@ -381,18 +373,24 @@ class EtcWatcher(object):
 			mod = root.last_mod
 		if mod is None: # nothing has yet happened
 			return
+		if force:
+			mod = max(mod, self.last_read, self.last_seen, self.conn.last_mod)
+		more = False
 		if self._reader is not None and self.last_seen < mod:
-			logger.debug("Syncing, wait for %d: %s",mod, id(self))
 			w = None
 			async with self.uptodate:
 				while self._reader is not None and self.last_seen < mod:
+					logger.debug("Syncing, wait for %d")
 					if self.stopped.done():
 						raise WatchStopped() from self.stopped.exception()
 					await self.uptodate.wait()
-													# processing got done during .acquire()
+					if force:
+						mod = max(mod, self.last_read, self.last_seen, self.conn.last_mod)
+					more = True
 			logger.debug("Syncing, done, at %d: %s",self.last_seen, id(self))
 		if self.stopped.done():
 			raise WatchStopped() from self.stopped.exception()
+		return more
 
 	async def _watch_read(self): # pragma: no cover
 		"""\
@@ -413,7 +411,9 @@ class EtcWatcher(object):
 				if x.modifiedIndex <= self.last_read:
 					raise RuntimeError("not in sequence: %s %s",self.last_read,x.modifiedIndex)
 				self.last_read = x.modifiedIndex
-				self.q.put_nowait(x)
+				r = self.root()
+				if r is not None:
+					r.task(self._write,x, _die=True)
 
 			while not self.stopped.done():
 				logger.debug("INW: %s after %s",id(self),self.last_read)
@@ -440,7 +440,7 @@ class EtcWatcher(object):
 		finally:
 			conn.close()
 
-	async def _watch_write(self):
+	async def _write(self,x):
 		"""\
 			Callback which processes incoming events
 			"""
@@ -448,66 +448,69 @@ class EtcWatcher(object):
 
 		# Drop references so that termination works
 
-		while True:
-			try:
-				x = await self.q.get()
-				if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
-					raise SkipAhead # sometimes we get the parent
-				r = self.root()
-				if r is None: # pragma: no cover
-					return
+		try:
+			logger.debug("Write has %s", x)
+			if not x.key.startswith(self.extkey+'/') and x.key != self.extkey:
+				raise SkipAhead # sometimes we get the parent
+			r = self.root()
+			if r is None: # pragma: no cover
+				logger.debug("Write ending")
+				return
 
-				key = x.key[len(self.extkey):]
-				key = tuple(k for k in key.split('/') if k != '')
+			key = x.key[len(self.extkey):]
+			key = tuple(k for k in key.split('/') if k != '')
 
-				if x.action in {'compareAndDelete','delete','expire'}:
-					for k in key:
-						try:
-							r = r.get(k, raw=True)
-							# will not create an EtcAwaiter
-						except KeyError:
-							raise SkipAhead
-					await r._ext_delete(seq=x.modifiedIndex)
-				else:
+			if x.action in {'compareAndDelete','delete','expire'}:
+				for k in key:
+					try:
+						r = r.get(k, raw=True)
+						# will not create an EtcAwaiter
+					except KeyError:
+						raise SkipAhead
+				await r._ext_delete(seq=x.modifiedIndex)
+			else:
 #					if not x.createdIndex:
 #						pn = getattr(x,'_prev_node',None)
 #						if pn is not None:
 #							x.createdIndex = pn.createdIndex
-					if key:
-						for k in key[:-1]:
-							async with r._lock:
-								try:
-									r = r[k]
-								except KeyError:
-									r = await r._new(parent=r,key=k,recursive=None)
-						async with r._lock:
-							try:
-								# don't resolve EtcValue or EtcAwaiter
-								r = r.get(key[-1], raw=True)
-							except KeyError:
-								r = await r._new(parent=r,key=key,pre=x,recursive=False)
-						if type(r) is EtcAwaiter:
-							await r.load(pre=x,recursive=False)
-						else:
-							await r._ext_update(x)
+				if key:
+					for k in key[:-1]:
+						logger.debug("Write on %s",r)
+						try:
+							r = r[k]
+						except KeyError:
+							r = await r._new(parent=r,key=k,recursive=None)
+					logger.debug("Write on %s",r)
+					try:
+						# don't resolve EtcValue or EtcAwaiter
+						r = r.get(key[-1], raw=True)
+					except KeyError:
+						logger.debug("Write new %s %s",r,key)
+						r = await r._new(parent=r,key=key,pre=x,recursive=False)
+					logger.debug("Write done %s",r)
+					if type(r) is EtcAwaiter:
+						await r.load(pre=x,recursive=False)
 					else:
 						await r._ext_update(x)
+				else:
+					logger.debug("Write upd %s",r)
+					await r._ext_update(x)
 
-			except SkipAhead:
-				pass
-			except asyncio.CancelledError as e:
-				logger.debug("Write watcher cancelled")
-				raise
-			except Exception as e:
-				logger.exception("Error in write watcher")
-				if not self.stopped.done():
-					self.stopped.set_exception(e)
-				return
+		except SkipAhead:
+			pass
+		except asyncio.CancelledError as e:
+			logger.debug("Write watcher cancelled")
+			raise
+		except Exception as e:
+			logger.exception("Error in write watcher")
+			if not self.stopped.done():
+				self.stopped.set_exception(e)
+			return
 
-			async with self.uptodate:
-				self.last_seen = x.modifiedIndex
-				self.uptodate.notify_all()
-				logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
+		async with self.uptodate:
+			self.last_seen = x.modifiedIndex
+			self.uptodate.notify_all()
+			logger.debug("DONE %d: %s",x.modifiedIndex,id(self))
 
 class EtcTypes(object):
 	doc = None

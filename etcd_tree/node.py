@@ -252,56 +252,71 @@ class EtcBase(object):
 		else:
 			name = key.rsplit('/',1)[-1]
 
-		if conn is None:
-			assert name
-			assert parent is not None, "specify conn or parent"
-			conn = parent._root()._conn
-			kw['parent'] = parent
-			cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive, raw=False, dir=None if pre is None else pre.dir)
-			if isinstance(key,str):
-				key = parent.path+(name,)
-		else:
-			assert parent is None, "specify either conn or parent, not both"
-			cls_getter = lambda: cls
-			kw['conn'] = conn
-			kw['key'] = key
+		p = (parent if parent is not None else conn)
+		if not hasattr (p,'_locks'):
+			p._locks = weakref.WeakValueDictionary()
+		lock = p._locks.get(name, None)
+		if lock is None:
+			lock = asyncio.Lock(loop=p._loop)
+			p._locks[name] = lock
+		async with lock:
+			if parent is not None:
+				r = parent._data.get(name, None)
+				if r is not None and type(r) is not EtcAwaiter:
+					self._done = r
+					return r
+				# _fill carries over any monitors and existing EtcAwaiter children
 
-		async def get_cls():
-			cls = cls_getter()
-			cls = await cls.this_obj(recursive=recursive, **kw)
-			return cls
+			if conn is None:
+				assert name
+				assert parent is not None, "specify conn or parent"
+				conn = parent._root()._conn
+				kw['parent'] = parent
+				cls_getter = lambda: typ if typ is not None else parent.subtype(name, pre=pre,recursive=recursive, raw=False, dir=None if pre is None else pre.dir)
+				if isinstance(key,str):
+					key = parent.path+(name,)
+			else:
+				assert parent is None, "specify either conn or parent, not both"
+				cls_getter = lambda: cls
+				kw['conn'] = conn
+				kw['key'] = key
 
-		self = None
-		try:
+			async def get_cls():
+				cls = cls_getter()
+				cls = await cls.this_obj(recursive=recursive, **kw)
+				return cls
+
+			self = None
 			try:
-				if recursive and not pre:
-					raise ReloadRecursive
 				try:
-					self = await get_cls()
-				except ReloadData:
-					assert pre is None
-					kw['pre'] = pre = await conn.read(key)
-					recursive = False
-					self = await get_cls()
-					# This way, if determining the class requires
-					# recursive content, we do not read twice
-				if pre is None:
-					kw['pre'] = pre = await conn.read(key)
-				if pre.dir:
-					await self._fill_data(pre=pre,recursive=irec)
-			except ReloadRecursive:
-				kw['pre'] = pre = await conn.read(key, recursive=True)
-				recursive = True
-				if self is None:
-					self = await get_cls()
-				if pre.dir:
-					await self._fill_data(pre=pre,recursive=True)
-		except EtcdKeyNotFound:
-			raise KeyError(key) from None
+					if recursive and not pre:
+						raise ReloadRecursive
+					try:
+						self = await get_cls()
+					except ReloadData:
+						assert pre is None
+						kw['pre'] = pre = await conn.read(key)
+						recursive = False
+						self = await get_cls()
+						# This way, if determining the class requires
+						# recursive content, we do not read twice
+					if pre is None:
+						kw['pre'] = pre = await conn.read(key)
+					if pre.dir:
+						await self._fill_data(pre=pre,recursive=irec)
+				except ReloadRecursive:
+					kw['pre'] = pre = await conn.read(key, recursive=True)
+					recursive = True
+					if self is None:
+						self = await get_cls()
+					if pre.dir:
+						await self._fill_data(pre=pre,recursive=True)
+			except EtcdKeyNotFound:
+				raise KeyError(key) from None
 
-		await self.init()
-		self._update_parent()
-		return self
+			await self.init()
+			self._update_parent()
+			return self
 
 	def __init__(self, pre=None, name=None,parent=None, _no_update_parent=False, _fill=None, **kw):
 		super().__init__(**kw)
@@ -813,7 +828,9 @@ class _EtcDir(EtcBase):
 		root=self.root
 		r = None
 		async def _end():
+			logger.debug("END1 %s",d)
 			await root.wait(r, tasks=wait)
+			logger.debug("END2 %s",d)
 
 		try:
 			d = self.lookup(*_name, name=name)
@@ -840,11 +857,14 @@ class _EtcDir(EtcBase):
 			pre = await root._set(n, prevExist=False, dir=True, value=None)
 		except etcd.EtcdAlreadyExist: # pragma: no cover ## timing
 			pre = await root._conn.get(n)
+		logger.debug("XX1 %s %s",pre.modifiedIndex, wait)
 		await root.wait(pre.modifiedIndex, tasks=wait)
-		res = await self.lookup(*_name, name=name)
+		logger.debug("XX2 %s",n)
+		d = await self.lookup(*_name, name=name)
+		logger.debug("XX3 %s",d)
 		r = pre.modifiedIndex
 		await _end()
-		return res
+		return d
 
 	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
 		"""\
@@ -936,16 +956,10 @@ class EtcAwaiter(_EtcDir):
 				# but it is resolved twice.
 			if type(p) is EtcAwaiter:
 				p = await p
-			async with p._lock:
 				if self._done is not None:
 					return self._done
-				r = p._data.get(self.name,self)
-				if type(r) is not EtcAwaiter:
-					self._done = r
-					return r
-				# _fill carries over any monitors and existing EtcAwaiter children
 				
-				obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
+			obj = await p._new(parent=p,key=self.name,recursive=recursive, pre=pre, _fill=self)
 		except (KeyError,etcd.EtcdKeyNotFound):
 			del p._data[self.name]
 			raise
@@ -1556,7 +1570,6 @@ class EtcRoot(EtcDir):
 		self._watcher = watcher
 		self.path = key
 		self._loop = conn._loop
-		self._lock = asyncio.Lock(loop=self._loop)
 		self._q = asyncio.Queue(loop=self._loop)
 		self._err_q = asyncio.Queue(loop=self._loop)
 		if types is None:
@@ -1719,17 +1732,23 @@ class EtcRoot(EtcDir):
 			logger.debug("%d:DeferWait Err1 %s", self._debug_id,exc)
 			raise exc
 
-		if tasks:
-			f = asyncio.Future(loop=self._loop)
-			self._q.put_nowait(f)
-			logger.debug("%d:DeferWait T",self._debug_id)
-			await f
+		if mod is None or mod < self.last_mod:
+			mod = self.last_mod
+		while self._watcher is not None:
+			if tasks:
+				f = asyncio.Future(loop=self._loop)
+				self._q.put_nowait(f)
+				logger.debug("%d:DeferWait T %s",self._debug_id,mod)
+				await f
 
-		if self._watcher is not None:
-			if mod is None:
-				mod = self.last_mod
 			logger.debug("%d:DeferWait sync",self._debug_id)
-			await self._watcher.sync(mod)
+			more = await self._watcher.sync(mod, force=tasks)
+
+			if not more:
+				break
+			if self.last_mod is not None:
+				if mod is None or mod < self.last_mod:
+					mod = self.last_mod
 
 		if self._err_q.qsize():
 			exc = self._err_q.get_nowait()

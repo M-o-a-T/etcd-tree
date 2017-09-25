@@ -373,7 +373,7 @@ async def test_update_watch(client, loop):
     assert acht['neun'] =="zehn"
     d2=d(two=d(zwei=d(und="mehr"),vier=d(auch="xxy",oder="fünfe")))
     mod = await t._f(d2,delete=True)
-    await w.wait(mod=mod)
+    await w.wait(mod=mod, tasks=True)
     assert w['zwei']['und']=="mehr"
     assert w['vier']['oder']=="fünfe"
     assert w['vier']['auch']=="xxy"
@@ -383,7 +383,7 @@ async def test_update_watch(client, loop):
     # Directly insert "deep" entries
     await t.client.write(client._extkey('/two/three/four/five/six/seven'),value=None,dir=True)
     mod = (await t.client.write(client._extkey('/two/three/four/fiver'),"what")).modifiedIndex
-    await w.wait(mod)
+    await w.wait(mod, tasks=True)
     # and check that they're here
     assert w['three']['four']['fiver'] == "what"
     assert isinstance(w['three']['four']['five']['six']['seven'], EtcDir)

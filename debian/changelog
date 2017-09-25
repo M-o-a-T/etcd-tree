@@ -1,3 +1,11 @@
+etcd-tree (0.47.1.0) unstable; urgency=medium
+
+  * Even more asyncronicity
+
+    Moved locking into ._new()
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 25 Sep 2017 10:00:09 +0200
+
 etcd-tree (0.47.0.0) unstable; urgency=medium
 
   * Go back to async task running
