@@ -1732,7 +1732,7 @@ class EtcRoot(EtcDir):
 			logger.debug("%d:DeferWait Err1 %s", self._debug_id,exc)
 			raise exc
 
-		if mod is None or mod < self.last_mod:
+		if self.last_mod is not None and (mod is None or mod < self.last_mod):
 			mod = self.last_mod
 		while self._watcher is not None:
 			if tasks:
@@ -1746,9 +1746,8 @@ class EtcRoot(EtcDir):
 
 			if not more:
 				break
-			if self.last_mod is not None:
-				if mod is None or mod < self.last_mod:
-					mod = self.last_mod
+			if self.last_mod is not None and (mod is None or mod < self.last_mod):
+				mod = self.last_mod
 
 		if self._err_q.qsize():
 			exc = self._err_q.get_nowait()
