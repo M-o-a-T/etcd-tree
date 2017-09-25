@@ -1,3 +1,11 @@
+etcd-tree (0.47.0.0) unstable; urgency=medium
+
+  * Go back to async task running
+
+    Deadlocks are too difficult to avoid otherwise
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 25 Sep 2017 06:42:48 +0200
+
 etcd-tree (0.46.0.0) unstable; urgency=medium
 
   * Added wait= argument to .subtree()

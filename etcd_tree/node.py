@@ -811,6 +811,10 @@ class _EtcDir(EtcBase):
 			for compatibility with some tagging schemes.
 			"""
 		root=self.root
+		r = None
+		async def _end():
+			await root.wait(r, tasks=wait)
+
 		try:
 			d = self.lookup(*_name, name=name)
 		except KeyError as e:
@@ -824,6 +828,8 @@ class _EtcDir(EtcBase):
 			if not isinstance(d,EtcAwaiter):
 				if create is True:
 					raise etcd.EtcdAlreadyExist(d.path)
+				r = d._seq
+				await _end()
 				return d
 			n = d.path
 
@@ -836,7 +842,8 @@ class _EtcDir(EtcBase):
 			pre = await root._conn.get(n)
 		await root.wait(pre.modifiedIndex, tasks=wait)
 		res = await self.lookup(*_name, name=name)
-		await root.wait(pre.modifiedIndex, tasks=wait)
+		r = pre.modifiedIndex
+		await _end()
 		return res
 
 	async def delete(self, key=_NOTGIVEN, sync=True, recursive=None, **kw):
@@ -1552,7 +1559,6 @@ class EtcRoot(EtcDir):
 		self._lock = asyncio.Lock(loop=self._loop)
 		self._q = asyncio.Queue(loop=self._loop)
 		self._err_q = asyncio.Queue(loop=self._loop)
-		self._done = asyncio.Future(loop=self._loop)
 		if types is None:
 			from .etcd import EtcTypes
 			types = EtcTypes()
@@ -1569,36 +1575,76 @@ class EtcRoot(EtcDir):
 		runlogger.debug("%d:init %s",self._debug_id,self)
 
 	async def _run(self):
-		while True:
-			runlogger.debug("%d:wait",self._debug_id)
-			r = await self._q.get()
-			if r is None:
-				runlogger.debug("%d:end",self._debug_id)
-				self._done.set_result(None)
-				return
-			f,p,a,k = r
-			try:
-				runlogger.debug("%d:run %s %s %s",self._debug_id, p,a,k)
-				r = p(*a,**k)
-				if f is None:
-					r = asyncio.wait_for(r, self.max_update_delay+2*self.update_delay, loop=self._loop)
-				try:
-					r = await r
-				except TypeError as exc:
-					if not hasattr(p,"_async_warn"):
-						runlogger.warn("%d:Queued call is not async: %s", self._debug_id,p)
-						p._async_warn = True
-			except Exception as exc:
-				if f is None:
-					runlogger.exception("%d:Queue error",self._debug_id)
-					await self._err_q.put(exc)
+		jobs = set()
+		dones = set()
+		qr = asyncio.ensure_future(self._q.get(), loop=self._loop)
+		jobs.add(qr)
+
+		try:
+			while jobs:
+				if len(jobs) > (qr is not None):
+					timeout = self.max_update_delay+2*self.update_delay
 				else:
-					runlogger.exception("%d:Set error",self._debug_id)
-					f.set_exception(exc)
-			else:
-				runlogger.debug("%d:Result %s",self._debug_id, r)
-				if f is not None and not f.cancelled():
-					f.set_result(r)
+					timeout = None
+					for d in dones:
+						runlogger.debug("%d:done- %s",self._debug_id, d)
+						d.set_result(None)
+					dones = set()
+				runlogger.debug("%d:wait %d %s %s",self._debug_id, len(jobs), timeout, jobs)
+				done,jobs = await asyncio.wait(jobs, timeout=timeout, loop=self._loop, return_when=asyncio.FIRST_COMPLETED)
+				runlogger.debug("%d:res %d %d",self._debug_id, len(done),len(jobs))
+
+				if not done: # no progress due to timeout
+					runlogger.debug("%d:timeout",self._debug_id)
+
+					for j in jobs:
+						if j is qr:
+							continue
+						runlogger.debug("%d:timeout:%d",self._debug_id, j.__debug_id)
+						j.cancel()
+					continue
+
+				for j in done:
+					if j is qr:
+						continue
+					runlogger.debug("%d:end:%d",self._debug_id, j.__debug_id)
+					try:
+						res = j.result()
+					except Exception as exc:
+						if j.__f is not None:
+							runlogger.exception("%d:Set error",self._debug_id)
+							j.__f.set_exception(exc)
+						else:
+							runlogger.exception("%d:Queue error",self._debug_id)
+							await self._err_q.put(exc)
+					else:
+						runlogger.debug("%d:Result %s",self._debug_id, res)
+						if j.__f:
+							j.__f.set_result(res)
+
+				if qr is not None and qr.done():
+					qr = qr.result()
+					if qr is not None:
+						if isinstance(qr,asyncio.Future):
+							runlogger.debug("%d:done+ %s",self._debug_id, qr)
+							dones.add(qr)
+						else:
+							f,p,a,k = qr
+							global debug_id; debug_id+=1
+							d_id = debug_id
+							runlogger.debug("%d:run:%d %s %s %s",self._debug_id,d_id, p,a,k)
+
+							j = asyncio.ensure_future(p(*a,**k), loop=self._loop)
+							j.__f = f
+							j.__debug_id = d_id
+							jobs.add(j)
+						qr = asyncio.ensure_future(self._q.get(), loop=self._loop)
+						jobs.add(qr)
+
+		except BaseException:
+			logger.exception("ow")
+			raise
+		return
 
 	def task(self, p,*a, _die=False, **k):
 		runlogger.debug("%d:Enq %s %s %s",self._debug_id, p,a,k)
@@ -1660,7 +1706,7 @@ class EtcRoot(EtcDir):
 			logger.exception("Close: deferred exception", exc_info=exc)
 
 		logger.debug("%d:Closing D",self._debug_id)
-		await self._done
+		await self._job
 		logger.debug("%d:Closing E",self._debug_id)
 		self._conn._trees.remove(self)
 
@@ -1669,13 +1715,15 @@ class EtcRoot(EtcDir):
 
 		logger.debug("%d:DeferWait A %s %s", self._debug_id,mod, tasks)
 		if self._err_q.qsize():
-			raise self._err_q.get_nowait()
+			exc = self._err_q.get_nowait()
+			logger.debug("%d:DeferWait Err1 %s", self._debug_id,exc)
+			raise exc
 
 		if tasks:
-			async def noop():
-				pass
+			f = asyncio.Future(loop=self._loop)
+			self._q.put_nowait(f)
 			logger.debug("%d:DeferWait T",self._debug_id)
-			await self.task(noop)
+			await f
 
 		if self._watcher is not None:
 			if mod is None:
@@ -1684,7 +1732,9 @@ class EtcRoot(EtcDir):
 			await self._watcher.sync(mod)
 
 		if self._err_q.qsize():
-			raise self._err_q.get_nowait()
+			exc = self._err_q.get_nowait()
+			logger.debug("%d:DeferWait Err1 %s", self._debug_id,exc)
+			raise exc
 
 		logger.debug("%d:DeferWait end %s",self._debug_id,mod)
 		return mod
